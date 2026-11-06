@@ -274,3 +274,10 @@ a.fchip{display:inline-flex;align-items:center;text-decoration:none}
 .notice.error{background:var(--ribbon-soft);color:var(--ribbon-text)}
 .userbox{margin-left:auto;display:flex;align-items:center;gap:6px}
 .lcard .cover{cursor:pointer}
+.qs{background:var(--surface-2);border-radius:16px;padding:4px 14px 12px;margin:0 0 14px}
+.qs summary svg{width:20px;height:20px;color:var(--plum)}
+a.fchip{display:inline-flex;align-items:center;text-decoration:none}
+.imgprev{display:flex;align-items:center;gap:12px;margin-top:6px}
+.imgprev img{width:72px;height:72px;object-fit:cover;border-radius:12px}
+.field input[type=file]{font:inherit;font-size:.95rem}
+.wlist .empty{margin-top:0}
