@@ -23,6 +23,8 @@ export function countdownLabel(date: string | null): string | null {
 /** Verständliche Meldungen statt technischer Fehlertexte. */
 export function friendlyError(e: unknown): string {
   const msg = (e as { message?: string })?.message ?? "";
+       if (/database error saving new user|signups? not allowed|signup_not_allowed/i.test(msg))
+       return "Päckchen ist gerade nur für eingeladene Familien. Bitte frag die Person, die dich eingeladen hat, ob deine E-Mail-Adresse freigeschaltet ist.";
   if (/row-level security|permission|42501|forbidden/i.test(msg)) return "Dafür fehlt dir die Berechtigung.";
   if (/rate limit|too many/i.test(msg)) return "Zu viele Versuche. Bitte warte ein paar Minuten.";
   if (/failed to fetch|network/i.test(msg)) return "Keine Verbindung. Prüf bitte dein Internet.";
