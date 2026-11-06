@@ -1,0 +1,35 @@
+name: Update einspielen
+
+on:
+  push:
+    branches: [main]
+    paths: ["update*.zip"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Paket entpacken
+        run: |
+          shopt -s nullglob
+          files=(update*.zip)
+          if [ ${#files[@]} -eq 0 ]; then echo "Kein Update-Paket gefunden."; exit 0; fi
+          for f in "${files[@]}"; do
+            unzip -o -q "$f" -d .
+            git rm -q -- "$f"
+          done
+          git add -A
+          git config user.name "Päckchen Update"
+          git config user.email "actions@users.noreply.github.com"
+          git commit -m "Update eingespielt"
+          git push
+      - name: Veröffentlichung starten
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run deploy.yml --ref main
