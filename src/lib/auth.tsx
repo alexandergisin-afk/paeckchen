@@ -6,14 +6,16 @@ interface AuthState {
   session: Session | null;
   loading: boolean;
   displayName: string;
+  refreshProfile: () => void;
 }
 
-const AuthContext = createContext<AuthState>({ session: null, loading: true, displayName: "" });
+const AuthContext = createContext<AuthState>({ session: null, loading: true, displayName: "", refreshProfile: () => {} });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [displayName, setDisplayName] = useState("");
+  const [profileVersion, setProfileVersion] = useState(0);
 
   useEffect(() => {
     const client = db();
@@ -40,9 +42,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .eq("id", session.user.id)
       .maybeSingle()
       .then(({ data }) => setDisplayName(data?.display_name ?? session.user.email?.split("@")[0] ?? ""));
-  }, [session]);
+  }, [session, profileVersion]);
 
-  return <AuthContext.Provider value={{ session, loading, displayName }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ session, loading, displayName, refreshProfile: () => setProfileVersion((v) => v + 1) }}>{children}</AuthContext.Provider>;
 }
 
 export const useAuth = () => useContext(AuthContext);

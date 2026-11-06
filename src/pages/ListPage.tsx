@@ -5,7 +5,7 @@ import { useAuth } from "../lib/auth";
 import { LIST_SELECT, OCCASIONS, cover, sortWishes, type Reservation, type Wish, type WishList } from "../lib/types";
 import { countdownLabel, dateLabel, friendlyError, toast } from "../lib/format";
 import { removeImage } from "../lib/wishes";
-import { IconBack, IconEdit, IconExt, IconMore, IconPlus, IconShare, IconTrash, IconUndo } from "../components/Icons";
+import { IconBack, IconEdit, IconExt, IconMore, IconPlus, IconShare, IconTrash, IconUndo, IconUsers } from "../components/Icons";
 import { Sheet } from "../components/Sheet";
 import { ListForm, toRow, type ListInput } from "../components/ListForm";
 import { WishForm } from "../components/WishForm";
@@ -188,6 +188,7 @@ export function ListPage() {
         <h2>{list.title}</h2>
         <div className="menu">
           <button onClick={() => setSheet({ kind: "editList" })}><IconEdit /> Name, Anlass und Bild ändern</button>
+          <Link to={`/liste/${list.id}/mitglieder`} onClick={close}><IconUsers /> Mitglieder und Gast-Link</Link>
           {isOwner && <button className="danger" onClick={() => setSheet({ kind: "deleteList" })}><IconTrash /> Liste löschen</button>}
         </div>
       </Sheet>

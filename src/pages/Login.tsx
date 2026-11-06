@@ -3,7 +3,7 @@ import { appUrl, db } from "../lib/supabase";
 import { friendlyError } from "../lib/format";
 import { Logo } from "../components/Icons";
 
-export function Login({ linkError }: { linkError: string | null }) {
+export function Login({ linkError, invite = false }: { linkError: string | null; invite?: boolean }) {
   const [email, setEmail] = useState("");
   const [state, setState] = useState<"idle" | "sending" | "sent">("idle");
   const [error, setError] = useState<string | null>(linkError);
@@ -38,8 +38,12 @@ export function Login({ linkError }: { linkError: string | null }) {
         </>
       ) : (
         <>
-          <h1>Willkommen bei Päckchen</h1>
-          <p className="lead">Gib deine E-Mail-Adresse ein. Wir schicken dir einen Link zum Anmelden, ganz ohne Passwort. Beim ersten Mal wird dein Konto automatisch angelegt.</p>
+          <h1>{invite ? "Du bist eingeladen" : "Willkommen bei Päckchen"}</h1>
+          <p className="lead">
+            {invite
+              ? "Melde dich mit der E-Mail-Adresse an, an die die Einladung ging. Wir schicken dir einen Link, ganz ohne Passwort. Danach geht es direkt zur Liste."
+              : "Gib deine E-Mail-Adresse ein. Wir schicken dir einen Link zum Anmelden, ganz ohne Passwort. Beim ersten Mal wird dein Konto automatisch angelegt."}
+          </p>
           {error && <p className="notice error" role="alert">{error}</p>}
           <form onSubmit={submit} style={{ marginTop: 20 }}>
             <label className="field">

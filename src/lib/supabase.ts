@@ -23,3 +23,6 @@ export const appUrl = () => window.location.origin + window.location.pathname;
 
 /** Link für Schenkende. Funktioniert ohne Anmeldung. */
 export const guestLink = (token: string) => `${appUrl()}#/w/${token}`;
+
+/** Einladung zur Mitbearbeitung. Funktioniert nur einmal und 7 Tage lang. */
+export const inviteLink = (token: string) => `${appUrl()}#/einladung/${token}`;
