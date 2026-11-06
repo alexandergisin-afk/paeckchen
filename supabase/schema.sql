@@ -338,3 +338,46 @@ grant execute on function public.guest_list(text), public.reserve_wish(text, uui
 -- select cron.schedule('forget-reservations', '15 3 * * *',
 --   $$delete from public.reservations where forget_after < current_date$$);
 -- ---------------------------------------------------------------------
+
+-- ---------------------------------------------------------------------
+-- Zugangsliste (identisch mit 02_zugangsliste.sql)
+-- ---------------------------------------------------------------------
+create table public.allowed_emails (
+  email    text primary key check (email = lower(trim(email)) and email like '%@%'),
+  note     text,
+  added_at timestamptz not null default now()
+);
+
+-- Kein Zugriff aus der App. Pflege nur im Supabase-Dashboard (Table Editor oder SQL Editor).
+alter table public.allowed_emails enable row level security;
+
+create function public.check_allowed_email() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if not exists (select 1 from allowed_emails where email = lower(trim(new.email))) then
+    raise exception 'signup_not_allowed' using errcode = '42501';
+  end if;
+  return new;
+end $$;
+revoke execute on function public.check_allowed_email() from public, anon, authenticated;
+
+create trigger before_auth_user_created before insert on auth.users
+  for each row execute function public.check_allowed_email();
+
+-- Zum Abschalten, wenn Päckchen später für alle offen sein soll:
+--   drop trigger before_auth_user_created on auth.users;
+
+-- ---------------------------------------------------------------------
+-- Bildspeicher (identisch mit 03_bilder.sql)
+-- ---------------------------------------------------------------------
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('wish-images', 'wish-images', true, 2097152, array['image/jpeg', 'image/png', 'image/webp'])
+on conflict (id) do nothing;
+
+create policy "wish images upload" on storage.objects for insert to authenticated
+  with check (bucket_id = 'wish-images'
+              and public.my_role(((storage.foldername(name))[1])::uuid) is not null);
+
+create policy "wish images delete" on storage.objects for delete to authenticated
+  using (bucket_id = 'wish-images'
+         and public.my_role(((storage.foldername(name))[1])::uuid) is not null);
