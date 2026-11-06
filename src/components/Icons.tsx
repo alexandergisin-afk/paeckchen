@@ -23,3 +23,5 @@ export const Logo = () => (
     <circle cx="32" cy="22" r="6.5" fill="var(--plum)" />
   </svg>
 );
+export const IconExt = () => <Svg d="M15 3h6v6M10 14L21 3M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />;
+export const IconSearch = () => <Svg d="M11 18a7 7 0 100-14 7 7 0 000 14zM21 21l-4.3-4.3" />;
