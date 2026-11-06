@@ -25,3 +25,17 @@ export const Logo = () => (
 );
 export const IconExt = () => <Svg d="M15 3h6v6M10 14L21 3M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />;
 export const IconSearch = () => <Svg d="M11 18a7 7 0 100-14 7 7 0 000 14zM21 21l-4.3-4.3" />;
+export const IconShare = () => <Svg d="M4 12v7a1 1 0 001 1h14a1 1 0 001-1v-7M16 6l-4-4-4 4M12 2v13" />;
+export const IconMail = () => <Svg d="M3 5h18v14H3zM3 6l9 7 9-7" />;
+export const IconChat = () => <Svg d="M21 12a8 8 0 01-11.6 7.1L3 21l1.9-6.4A8 8 0 1121 12z" />;
+export const IconCheck = () => <Svg d="M20 6L9 17l-5-5" />;
+export const IconUndo = () => <Svg d="M9 14L4 9l5-5M4 9h11a5 5 0 010 10h-3" />;
+
+export const Bow = () => (
+  <svg className="bow" viewBox="0 0 64 44" aria-hidden="true">
+    <path d="M29 23l-9 18M35 23l9 18" stroke="var(--ribbon)" strokeWidth="6" strokeLinecap="round" />
+    <path d="M32 22C22 5 5 3 5 14.5S22 25 32 22z" fill="var(--ribbon)" stroke="rgba(0,0,0,.14)" />
+    <path d="M32 22c10-17 27-19 27-7.5S42 25 32 22z" fill="var(--ribbon)" stroke="rgba(0,0,0,.14)" />
+    <circle cx="32" cy="22" r="6.5" fill="var(--ribbon)" stroke="rgba(0,0,0,.18)" />
+  </svg>
+);

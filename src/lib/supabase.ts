@@ -20,3 +20,6 @@ export function db(): SupabaseClient {
 
 /** Adresse, zu der der Anmeldelink zurückführt (funktioniert auf github.io und eigener Domain). */
 export const appUrl = () => window.location.origin + window.location.pathname;
+
+/** Link für Schenkende. Funktioniert ohne Anmeldung. */
+export const guestLink = (token: string) => `${appUrl()}#/w/${token}`;

@@ -281,3 +281,5 @@ a.fchip{display:inline-flex;align-items:center;text-decoration:none}
 .imgprev img{width:72px;height:72px;object-fit:cover;border-radius:12px}
 .field input[type=file]{font:inherit;font-size:.95rem}
 .wlist .empty{margin-top:0}
+.mine-tag svg{width:18px;height:18px}
+.howto svg{width:26px;height:26px}

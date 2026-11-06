@@ -2,6 +2,9 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import "./styles.css";
+import { applyTextSize } from "./lib/device";
+
+applyTextSize();
 
 // Abgelaufene oder ungültige Anmeldelinks kommen als #error=… zurück. Das würde den Router verwirren,
 // deshalb lesen wir die Meldung vorher aus und räumen die Adresse auf.
