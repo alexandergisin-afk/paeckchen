@@ -6,7 +6,7 @@
   --t0:#FFE1EA; --t1:#DDEFFC; --t2:#E2F4DC; --t3:#FFF0C9; --t4:#ECE2FF; --t5:#FFE5D6;
   --shadow:0 1px 2px rgba(35,26,49,.06),0 10px 28px rgba(35,26,49,.07);
   --r-card:22px; --r-field:14px; --fs:17px;
-  --font-ui:"Atkinson Hyperlegible","Segoe UI",system-ui,-apple-system,sans-serif;
+  --font-ui:"Public Sans","Atkinson Hyperlegible","Segoe UI",system-ui,-apple-system,sans-serif;
   --font-display:"Bricolage Grotesque","Avenir Next","Segoe UI",system-ui,sans-serif;
   color-scheme:light;
   box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
@@ -539,3 +539,31 @@ dialog.fsheet::backdrop { background: rgba(20,12,30,.48); }
   .fs-bar h2 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); flex: none; }
   .fs-title-inline { display: block; font-size: 1.5rem; margin: 0 0 16px; }
 }
+
+/* Gästeansicht: Liste oder Kacheln */
+.guest-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 16px; }
+.guest-bar .filters { margin: 0; flex: 1 1 260px; min-width: 0; }
+.ggrid.tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (min-width: 640px) { .ggrid.tiles { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; } }
+:root[data-size="large"] .ggrid.tiles { grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); }
+.ggrid.tiles .gcard .tile { aspect-ratio: 1; }
+.ggrid.tiles .gcard .body { padding: 10px 12px 6px; gap: 6px; }
+.ggrid.tiles .gcard h3 { font-size: 1rem; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.ggrid.tiles .gcard .note { font-size: .85rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ggrid.tiles .gcard .price { font-size: 1.1rem; }
+.ggrid.tiles .gcard .shop-link { font-size: .85rem; min-height: 36px; }
+.ggrid.tiles .gcard .actions { padding: 4px 12px 12px; }
+.ggrid.tiles .gcard .btn.big { min-height: 48px; font-size: .95rem; padding: 0 10px; }
+.ggrid.tiles .gcard .badge { font-size: .74rem; justify-self: start; }
+.ggrid.rows { grid-template-columns: minmax(0, 1fr); gap: 12px; max-width: 760px; }
+.gcard.row { display: grid; grid-template-columns: 96px minmax(0, 1fr); column-gap: 14px; padding: 12px; align-items: start; }
+.gcard.row .tile { aspect-ratio: 1; border-radius: 14px; }
+.gcard.row .tile .emo { font-size: 2.4rem; }
+.gcard.row .body { padding: 0; gap: 6px; }
+.gcard.row .actions { grid-column: 1 / -1; padding: 12px 0 0; }
+/* Preisfilter passen auch auf schmale Handys in eine Zeile */
+.guest-bar .filters .fchip { min-height: 40px; padding: 0 10px; font-size: .88rem; }
+.guest-bar .filters { gap: 6px; }
+/* Shop-Link: Symbol bleibt beim Umbrechen am Text */
+.shop-link { display: inline; min-height: 0; padding: 8px 0; line-height: 1.35; }
+.shop-link svg { display: inline; vertical-align: -2px; margin-left: 3px; }

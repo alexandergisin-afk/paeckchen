@@ -6,7 +6,7 @@ import { OCCASIONS, cover, type GuestList, type GuestWish } from "../lib/types";
 import { dateLabel, friendlyError, toast } from "../lib/format";
 import { formatPrice } from "../lib/wishes";
 import { addCode, getCodes, getName, keepCodes, removeCode, setName } from "../lib/device";
-import { IconCheck, IconExt, IconGift } from "../components/Icons";
+import { IconCheck, IconExt, IconGift, IconGrid, IconRows } from "../components/Icons";
 import { Sheet } from "../components/Sheet";
 import { PriorityBadge, WishTile } from "../components/WishRow";
 
@@ -31,6 +31,13 @@ export function GuestPage() {
   const [price, setPrice] = useState<Price>("all");
   const [sheet, setSheet] = useState<GSheet>(null);
   const [busy, setBusy] = useState(false);
+  const [view, setView] = useState<"rows" | "grid">(() => {
+    try { return localStorage.getItem("paeckli-guest-view") === "rows" ? "rows" : "grid"; } catch { return "grid"; }
+  });
+  const chooseView = (v: "rows" | "grid") => {
+    setView(v);
+    try { localStorage.setItem("paeckli-guest-view", v); } catch { /* egal */ }
+  };
   const close = () => setSheet(null);
 
   const load = useCallback(async () => {
@@ -113,7 +120,7 @@ export function GuestPage() {
     const my = mineOf(w);
     const myQty = my.reduce((a, m) => a + m.quantity, 0);
     const shopLink = w.url && (
-      <a className="shop-link" href={w.url} target="_blank" rel="noopener noreferrer">{w.shop ? `Bei ${w.shop} ansehen` : "Im Shop ansehen"} <IconExt /></a>
+      <a className="shop-link" href={w.url} target="_blank" rel="noopener noreferrer">{view === "grid" ? "Zum Shop" : w.shop ? `Bei ${w.shop} ansehen` : "Im Shop ansehen"}<IconExt /></a>
     );
     if (mode === "taken") {
       return (
@@ -128,7 +135,7 @@ export function GuestPage() {
       );
     }
     return (
-      <article className="gcard" key={`${mode}-${w.id}`}>
+      <article className={`gcard ${view === "rows" ? "row" : ""}`} key={`${mode}-${w.id}`}>
         <WishTile wish={w} wrapped={mode === "mine"} />
         <div className="body">
           <PriorityBadge priority={w.priority} />
@@ -177,16 +184,22 @@ export function GuestPage() {
       {myWishes.length > 0 && (
         <>
           <h2 className="sec" style={{ marginTop: 6 }}>Deine Geschenke</h2>
-          <div className="ggrid">{myWishes.map((w) => card(w, "mine"))}</div>
+          <div className={`ggrid ${view === "grid" ? "tiles" : "rows"}`}>{myWishes.map((w) => card(w, "mine"))}</div>
           <h2 className="sec">Noch zu vergeben</h2>
         </>
       )}
 
-      <div className="filters scroll-x" role="group" aria-label="Nach Preis filtern">
-        {chip("all", "Alle")}{chip("20", "bis 20 €")}{chip("50", "bis 50 €")}{chip("more", "über 50 €")}
+      <div className="guest-bar">
+        <div className="filters scroll-x" role="group" aria-label="Nach Preis filtern">
+          {chip("all", "Alle")}{chip("20", "bis 20 €")}{chip("50", "bis 50 €")}{chip("more", "über 50 €")}
+        </div>
+        <div className="view-toggle" role="group" aria-label="Ansicht der Wünsche">
+          <button type="button" aria-pressed={view === "rows"} onClick={() => chooseView("rows")}><IconRows /> Liste</button>
+          <button type="button" aria-pressed={view === "grid"} onClick={() => chooseView("grid")}><IconGrid /> Kacheln</button>
+        </div>
       </div>
 
-      <div className="ggrid">
+      <div className={`ggrid ${view === "grid" ? "tiles" : "rows"}`}>
         {open.length ? open.map((w) => card(w, "open")) : (
           <div className="empty" style={{ gridColumn: "1/-1" }}>
             <p>{price !== "all" ? "In dieser Preisklasse ist gerade nichts frei." : list.wishes.length ? "Alle Wünsche sind schon vergeben. Wie schön!" : "Auf dieser Liste stehen noch keine Wünsche."}</p>
