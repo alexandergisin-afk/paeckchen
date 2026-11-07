@@ -1,5 +1,5 @@
 -- =====================================================================
--- Päckchen – Bildspeicher für Wunschbilder (Etappe 2a)
+-- Päckli – Bildspeicher für Wunschbilder (Etappe 2a)
 -- Einmal im Supabase SQL Editor ausführen.
 --
 -- Bilder sind öffentlich abrufbar, damit Gäste ohne Konto sie sehen.

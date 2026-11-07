@@ -52,11 +52,17 @@ export function WishForm({ listId, wish, onSaved }: Props) {
   const readShopPage = async (pageUrl: string, urlTitle: string, urlShop: string) => {
     setReading(true);
     setDetectMsg("Produktdaten werden gelesen …");
-    let p: { title?: string | null; image?: string | null; price_cents?: number | null; shop?: string | null; error?: string } | null = null;
+    let p: { title?: string | null; image?: string | null; price_cents?: number | null; shop?: string | null; error?: string; status?: number } | null = null;
+    let unreachable = "";
     try {
       const { data, error } = await db().functions.invoke("link-vorschau", { body: { url: pageUrl } });
-      if (!error) p = data;
-    } catch { /* Funktion nicht erreichbar: dann bleibt es bei den Angaben aus der Adresse */ }
+      if (error) {
+        const status = (error as { context?: { status?: number } }).context?.status;
+        unreachable = status === 401 ? "Anmeldung abgelehnt, Code 401" : status === 404 ? "Funktion nicht gefunden, Code 404" : status ? `Code ${status}` : "keine Verbindung";
+      } else p = data;
+    } catch {
+      unreachable = "keine Verbindung";
+    }
     setReading(false);
     if (lastFetched.current !== pageUrl) return; // inzwischen ein anderer Link
     const found: string[] = [];
@@ -66,14 +72,24 @@ export function WishForm({ listId, wish, onSaved }: Props) {
       if (p.price_cents != null) { setPrice((v) => v || priceInput(p!.price_cents!)); found.push("Preis"); }
       if (p.shop && p.shop.length <= 30) setShop((s) => (!s || s === urlShop ? p!.shop! : s));
     }
+    // Klare Rückmeldung, woran es lag. Die Angabe in Klammern hilft bei der Fehlersuche.
+    const reason = unreachable
+      ? `Die automatische Erkennung ist gerade nicht erreichbar (${unreachable}).`
+      : p?.error === "blocked"
+        ? `${urlShop} lässt das automatische Auslesen nicht zu${p.status && p.status !== 200 ? ` (${p.status})` : ""}.`
+        : p?.error === "timeout"
+          ? `${urlShop} hat zu lange nicht geantwortet.`
+          : p?.error
+            ? `Die Seite konnte nicht gelesen werden (${p.error}${p.status ? `, ${p.status}` : ""}).`
+            : `${urlShop} gibt keine Produktdaten heraus.`;
     if (found.length) {
       setDetectMsg(`Gefunden: ${found.join(", ")}. Kurz prüfen und speichern.`);
       if (!found.includes("Preis")) setTimeout(() => priceRef.current?.focus(), 0);
     } else if (urlTitle) {
-      setDetectMsg(`Erkannt: ${urlShop}. Der Shop gibt keine weiteren Daten heraus, ergänze bitte den Preis.`);
+      setDetectMsg(`${reason} Den Namen haben wir aus dem Link übernommen, ergänze bitte den Preis.`);
       setTimeout(() => priceRef.current?.focus(), 0);
     } else {
-      setDetectMsg(`Shop erkannt: ${urlShop}. Den Namen trägst du bitte selbst ein.`);
+      setDetectMsg(`${reason} Trag den Namen bitte selbst ein.`);
       setTimeout(() => titleRef.current?.focus(), 0);
     }
   };

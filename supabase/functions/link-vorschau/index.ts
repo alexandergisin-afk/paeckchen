@@ -1,7 +1,8 @@
-// Päckchen – Link-Vorschau
-// Liest aus einer Shop-Seite Name, Bild und Preis, so wie WhatsApp es für Link-Vorschauen tut
-// (Open-Graph-Angaben und strukturierte Produktdaten). Nur für angemeldete Eltern.
-// Viele Shops liefern diese Daten gern aus, manche (z. B. Amazon) blockieren solche Abrufe oft.
+// Päckli – Link-Vorschau
+// Liest aus einer Shop-Seite Name, Bild und Preis, so wie Messenger es für Link-Vorschauen tun
+// (Open-Graph-Angaben und strukturierte Produktdaten). Nur für angemeldete Eltern:
+// Die Funktion prüft die Anmeldung selbst, deshalb muss „Verify JWT“ in Supabase ausgeschaltet sein.
+// Manche Shops blockieren Abrufe aus Rechenzentren. Dann meldet die Funktion „blocked“ mit dem Statuscode.
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -144,31 +145,59 @@ async function readLimited(res: Response, max = 1_500_000): Promise<string> {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...CORS, "Content-Type": "application/json" } });
 
+/** Nur angemeldete Nutzer: fragt Supabase Auth, ob der mitgeschickte Zugang gültig ist. */
+async function isSignedIn(req: Request): Promise<boolean> {
+  const base = Deno.env.get("SUPABASE_URL");
+  const auth = req.headers.get("authorization");
+  const apikey = req.headers.get("apikey") ?? Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+  if (!base || !auth) return false;
+  try {
+    const r = await fetch(`${base}/auth/v1/user`, { headers: { authorization: auth, apikey } });
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
+
+const BROWSER_HEADERS = {
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+  "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+  "Accept-Language": "de-CH,de;q=0.9,en;q=0.6",
+  "Sec-Fetch-Dest": "document",
+  "Sec-Fetch-Mode": "navigate",
+  "Sec-Fetch-Site": "none",
+  "Upgrade-Insecure-Requests": "1",
+};
+
 if (typeof Deno !== "undefined") {
   Deno.serve(async (req) => {
     if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
     if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
+    if (!(await isSignedIn(req))) return json({ error: "not_signed_in" }, 401);
+
     let url: URL | null = null;
     try { url = allowedUrl(String((await req.json()).url ?? "")); } catch { /* leer */ }
     if (!url) return json({ error: "invalid_url" }, 400);
 
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 8000);
+    const timer = setTimeout(() => ctrl.abort(), 9000);
     try {
-      const res = await fetch(url.href, {
-        signal: ctrl.signal,
-        redirect: "follow",
-        headers: {
-          "User-Agent": "Mozilla/5.0 (compatible; Paeckchen-Linkvorschau/1.0; +https://github.com)",
-          "Accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.5",
-          "Accept-Language": "de-DE,de;q=0.9,en;q=0.5",
-        },
-      });
-      if (!res.ok || !(res.headers.get("content-type") ?? "").includes("html")) return json({ error: "not_readable", status: res.status });
+      const res = await fetch(url.href, { signal: ctrl.signal, redirect: "follow", headers: BROWSER_HEADERS });
+      const type = res.headers.get("content-type") ?? "";
+      console.log("link-vorschau", url.hostname, res.status, type);
+      if (!res.ok) return json({ error: "blocked", status: res.status });
+      if (!type.includes("html")) return json({ error: "not_html", status: res.status });
       const finalUrl = allowedUrl(res.url) ? res.url : url.href;
-      return json(parse(await readLimited(res), finalUrl));
-    } catch {
-      return json({ error: "not_readable" });
+      const html = await readLimited(res);
+      const result = parse(html, finalUrl);
+      // Schutzseiten (z. B. „Bitte bestätigen Sie, dass Sie kein Roboter sind“) liefern 200, aber keine Produktdaten.
+      if (!result.image && result.price_cents == null && /captcha|robot|access denied|zugriff verweigert|challenge/i.test(html.slice(0, 20000))) {
+        return json({ error: "blocked", status: 200 });
+      }
+      return json(result);
+    } catch (e) {
+      console.log("link-vorschau Fehler", url.hostname, String(e));
+      return json({ error: (e as Error).name === "AbortError" ? "timeout" : "not_readable" });
     } finally {
       clearTimeout(timer);
     }

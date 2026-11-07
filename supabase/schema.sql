@@ -1,5 +1,5 @@
 -- =====================================================================
--- Päckchen – Datenbankschema Version 1 (Supabase / PostgreSQL)
+-- Päckli – Datenbankschema Version 1 (Supabase / PostgreSQL)
 -- Einmal komplett im Supabase SQL Editor ausführen.
 --
 -- Prinzipien
@@ -364,7 +364,7 @@ revoke execute on function public.check_allowed_email() from public, anon, authe
 create trigger before_auth_user_created before insert on auth.users
   for each row execute function public.check_allowed_email();
 
--- Zum Abschalten, wenn Päckchen später für alle offen sein soll:
+-- Zum Abschalten, wenn Päckli später für alle offen sein soll:
 --   drop trigger before_auth_user_created on auth.users;
 
 -- ---------------------------------------------------------------------

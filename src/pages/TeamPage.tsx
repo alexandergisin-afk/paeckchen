@@ -193,7 +193,7 @@ function InviteFlow({ listId, listTitle, onDone }: { listId: string; listTitle: 
   };
 
   if (link) {
-    const text = `Hallo! Ich lade dich ein, die Wunschliste „${listTitle}“ bei Päckchen mit mir zu pflegen. Öffne diesen Link und melde dich mit ${email.trim()} an: ${link}`;
+    const text = `Hallo! Ich lade dich ein, die Wunschliste „${listTitle}“ bei Päckli mit mir zu pflegen. Öffne diesen Link und melde dich mit ${email.trim()} an: ${link}`;
     return (
       <>
         <h2>Einladung ist fertig</h2>

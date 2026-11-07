@@ -1,5 +1,5 @@
 -- =====================================================================
--- Päckchen – Etappe 3: E-Mail-Adresse beim Einladen direkt freischalten
+-- Päckli – Etappe 3: E-Mail-Adresse beim Einladen direkt freischalten
 -- Einmal im Supabase SQL Editor ausführen.
 --
 -- Wer mindestens eine eigene Liste besitzt, darf eine Adresse auf die

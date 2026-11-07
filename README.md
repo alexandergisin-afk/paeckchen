@@ -1,4 +1,4 @@
-# Päckchen
+# Päckli
 
 Wunschlisten für Familien: Eltern pflegen Listen, Gäste reservieren ohne Konto.
 

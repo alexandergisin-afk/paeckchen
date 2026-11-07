@@ -60,7 +60,7 @@ export function Login({ linkError, invite = false }: { linkError: string | null;
         </>
       ) : (
         <>
-          <h1>{invite ? "Du bist eingeladen" : "Willkommen bei Päckchen"}</h1>
+          <h1>{invite ? "Du bist eingeladen" : "Willkommen bei Päckli"}</h1>
           <p className="lead">
             {invite
               ? "Melde dich mit der E-Mail-Adresse an, an die die Einladung ging. Wir schicken dir eine Mail zum Anmelden, ganz ohne Passwort. Danach geht es direkt zur Liste."

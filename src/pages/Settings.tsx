@@ -58,15 +58,15 @@ export function Settings() {
         <section className="panel">
           <h2>Als App auf dem Startbildschirm</h2>
           {isInstalled() ? (
-            <p className="hint" style={{ marginTop: 6 }}>Päckchen ist auf diesem Gerät bereits als App installiert.</p>
+            <p className="hint" style={{ marginTop: 6 }}>Päckli ist auf diesem Gerät bereits als App installiert.</p>
           ) : installable ? (
             <>
-              <p className="hint" style={{ margin: "6px 0 12px" }}>Dann öffnest du Päckchen mit einem Tipp, ohne Browserleiste.</p>
+              <p className="hint" style={{ margin: "6px 0 12px" }}>Dann öffnest du Päckli mit einem Tipp, ohne Browserleiste.</p>
               <button className="btn" onClick={promptInstall}>App installieren</button>
             </>
           ) : isIOS() ? (
             <p className="hint" style={{ marginTop: 6 }}>
-              Öffne Päckchen in <b>Safari</b>, tippe unten auf das <b>Teilen-Symbol</b> (Quadrat mit Pfeil) und dann auf <b>„Zum Home-Bildschirm“</b>.
+              Öffne Päckli in <b>Safari</b>, tippe unten auf das <b>Teilen-Symbol</b> (Quadrat mit Pfeil) und dann auf <b>„Zum Home-Bildschirm“</b>.
               Zum Anmelden in der App gibst du am besten den Code aus der Mail ein.
             </p>
           ) : (
