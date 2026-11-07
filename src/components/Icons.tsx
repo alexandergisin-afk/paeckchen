@@ -44,3 +44,5 @@ export const IconGear = () => <Svg d="M12 15a3 3 0 100-6 3 3 0 000 6zM12 2v3M12 
 export const IconRefresh = () => <Svg d="M21 12a9 9 0 11-3-6.7L21 8M21 3v5h-5" />;
 export const IconChevron = () => <Svg d="M9 18l6-6-6-6" />;
 export const IconEye = () => <Svg d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12zM12 15a3 3 0 100-6 3 3 0 000 6z" />;
+export const IconRows = () => <Svg d="M4 6h16M4 12h16M4 18h16" />;
+export const IconGrid = () => <Svg d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z" />;

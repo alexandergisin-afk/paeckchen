@@ -508,3 +508,34 @@ dialog.fsheet::backdrop { background: rgba(20,12,30,.48); }
 .access-title { font-weight: 700; overflow-wrap: anywhere; }
 .person .member { padding-bottom: 6px; }
 .access-title .hint { font-weight: 400; }
+
+/* Formularleiste: Knöpfe behalten immer ihren Platz, der Titel nimmt nur den Rest (kein Überlappen) */
+.fs-bar { display: flex; align-items: center; gap: 6px; }
+.fs-bar .fs-cancel, .fs-bar .fs-save { flex: none; white-space: nowrap; }
+.fs-bar h2 { flex: 1 1 auto; min-width: 0; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 340px) { .fs-bar h2 { font-size: .95rem; } .fs-cancel { padding: 0 6px; } .fs-save { padding: 0 14px; } }
+
+/* Ansicht der Wünsche: Liste oder Kacheln */
+.wl-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 26px 2px 12px; max-width: 760px; }
+.wl-bar .section-title { margin: 0; }
+.view-toggle { display: inline-flex; padding: 3px; border-radius: 999px; background: var(--surface-2); gap: 2px; flex: none; }
+.view-toggle button { display: inline-flex; align-items: center; gap: 6px; min-height: 38px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; color: var(--ink-2); font: 700 .88rem var(--font-ui); cursor: pointer; }
+.view-toggle button svg { width: 18px; height: 18px; }
+.view-toggle button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(35,26,49,.12); }
+.wgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; max-width: 980px; }
+@media (min-width: 640px) { .wgrid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); } }
+.wcard { display: flex; flex-direction: column; min-width: 0; padding: 0; border: 0; border-radius: 18px; overflow: hidden; background: var(--surface); color: var(--ink); font: inherit; text-align: left; cursor: pointer; box-shadow: var(--shadow); }
+.wcard:active { transform: scale(.985); }
+.wcard .tile { aspect-ratio: 1; border-radius: 0; }
+.wcard .tile .emo { font-size: 2.8rem; }
+.wcard-body { display: grid; gap: 5px; padding: 10px 12px 12px; min-width: 0; }
+.wcard-title { font-weight: 700; font-size: .95rem; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.wcard-price { font-family: var(--font-display); font-weight: 700; font-size: 1.05rem; }
+.wcard .badge { justify-self: start; font-size: .74rem; }
+.wcard .status-line { font-size: .8rem; }
+.fs-title-inline { display: none; }
+@media (max-width: 420px) {
+  .fs-bar { justify-content: space-between; }
+  .fs-bar h2 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); flex: none; }
+  .fs-title-inline { display: block; font-size: 1.5rem; margin: 0 0 16px; }
+}

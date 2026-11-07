@@ -48,7 +48,11 @@ export function FormSheet({ open, onClose, title, formId, submitLabel = "Speiche
             <h2>{title}</h2>
             <button type="submit" form={formId} className="fs-save" disabled={busy}>{busy ? "Speichert …" : submitLabel}</button>
           </header>
-          <div className="fs-body">{children}</div>
+          <div className="fs-body">
+            {/* Auf schmalen Bildschirmen steht der Titel hier statt in der Leiste */}
+            <h2 className="fs-title-inline" aria-hidden="true">{title}</h2>
+            {children}
+          </div>
         </>
       )}
     </dialog>

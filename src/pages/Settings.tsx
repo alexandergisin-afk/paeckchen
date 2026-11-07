@@ -4,7 +4,7 @@ import { db } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { friendlyError, toast } from "../lib/format";
 import { getLargeText, setLargeText } from "../lib/device";
-import { IconChevron, IconLogout, IconUsers } from "../components/Icons";
+import { IconBack, IconChevron, IconLogout, IconUsers } from "../components/Icons";
 import { Link } from "react-router-dom";
 
 export function Settings() {
@@ -36,6 +36,7 @@ export function Settings() {
 
   return (
     <div className="wrap narrow">
+      <Link className="back" to="/"><IconBack /> Listen</Link>
       <h1>Einstellungen</h1>
       <div className="stack" style={{ marginTop: 22 }}>
         <section className="panel">

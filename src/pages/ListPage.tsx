@@ -5,12 +5,12 @@ import { useAuth } from "../lib/auth";
 import { LIST_SELECT, cover, sortWishes, type Reservation, type Wish, type WishList } from "../lib/types";
 import { countdownLabel, dateLabel, friendlyError, toast } from "../lib/format";
 import { removeImage } from "../lib/wishes";
-import { IconBack, IconEdit, IconExt, IconEye, IconPlus, IconShare, IconTrash, IconUndo, IconUsers } from "../components/Icons";
+import { IconBack, IconEdit, IconExt, IconEye, IconGrid, IconPlus, IconRows, IconShare, IconTrash, IconUndo, IconUsers } from "../components/Icons";
 import { Sheet } from "../components/Sheet";
 import { FormSheet } from "../components/FormSheet";
 import { ListForm, toRow, type ListInput } from "../components/ListForm";
 import { WishForm } from "../components/WishForm";
-import { WishRow } from "../components/WishRow";
+import { WishCard, WishRow } from "../components/WishRow";
 import { ShareContent } from "../components/ShareSheet";
 
 type SheetState =
@@ -34,6 +34,13 @@ export function ListPage() {
   const [sheet, setSheet] = useState<SheetState>(null);
   const [busy, setBusy] = useState(false);
   const [wishBusy, setWishBusy] = useState(false);
+  const [view, setView] = useState<"rows" | "grid">(() => {
+    try { return localStorage.getItem("paeckli-wish-view") === "grid" ? "grid" : "rows"; } catch { return "rows"; }
+  });
+  const chooseView = (v: "rows" | "grid") => {
+    setView(v);
+    try { localStorage.setItem("paeckli-wish-view", v); } catch { /* egal */ }
+  };
   const close = () => setSheet(null);
 
   const load = useCallback(async () => {
@@ -176,18 +183,32 @@ export function ListPage() {
           </section>
         )}
 
-        <h2 className="section-title">Wünsche</h2>
-        <div className="wlist">
-          {wishes.length === 0 ? (
-            <div className="empty">
-              <p>Noch keine Wünsche. Tippe unten auf „Wunsch hinzufügen“ und such direkt nach einem Produkt.</p>
+        <div className="wl-bar">
+          <h2 className="section-title">Wünsche</h2>
+          {wishes.length > 0 && (
+            <div className="view-toggle" role="group" aria-label="Ansicht der Wünsche">
+              <button type="button" aria-pressed={view === "rows"} onClick={() => chooseView("rows")}><IconRows /> Liste</button>
+              <button type="button" aria-pressed={view === "grid"} onClick={() => chooseView("grid")}><IconGrid /> Kacheln</button>
             </div>
-          ) : (
-            wishes.map((w) => (
-              <WishRow key={w.id} wish={w} reservations={resOf(w)} showReservations={showRes} onOpen={() => setSheet({ kind: "editWish", wish: w })} />
-            ))
           )}
         </div>
+        {wishes.length === 0 ? (
+          <div className="empty">
+            <p>Noch keine Wünsche. Tippe unten auf „Wunsch hinzufügen“ und such direkt nach einem Produkt.</p>
+          </div>
+        ) : view === "grid" ? (
+          <div className="wgrid">
+            {wishes.map((w) => (
+              <WishCard key={w.id} wish={w} reservations={resOf(w)} showReservations={showRes} onOpen={() => setSheet({ kind: "editWish", wish: w })} />
+            ))}
+          </div>
+        ) : (
+          <div className="wlist">
+            {wishes.map((w) => (
+              <WishRow key={w.id} wish={w} reservations={resOf(w)} showReservations={showRes} onOpen={() => setSheet({ kind: "editWish", wish: w })} />
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="bottom-bar">

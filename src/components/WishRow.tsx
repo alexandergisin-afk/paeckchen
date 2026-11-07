@@ -75,3 +75,25 @@ export function WishRow({ wish, reservations, showReservations, onOpen }: {
     </button>
   );
 }
+
+/** Kachel-Ansicht: großes Bild, Name, Preis und Status. Antippen öffnet den Wunsch zum Bearbeiten. */
+export function WishCard({ wish, reservations, showReservations, onOpen }: {
+  wish: Wish;
+  reservations: Reservation[];
+  showReservations: boolean;
+  onOpen: () => void;
+}) {
+  const taken = reservations.reduce((a, r) => a + r.quantity, 0);
+  const status = reservationStatus(wish, reservations);
+  return (
+    <button type="button" className="wcard" onClick={onOpen} aria-label={`${wish.title} bearbeiten`}>
+      <WishTile wish={wish} wrapped={showReservations && taken >= wish.quantity} />
+      <span className="wcard-body">
+        <PriorityBadge priority={wish.priority} />
+        <span className="wcard-title">{wish.title}</span>
+        {wish.price_cents != null && <span className="wcard-price">{formatPrice(wish.price_cents)}{wish.quantity > 1 ? ` × ${wish.quantity}` : ""}</span>}
+        {showReservations && <span className={`status-line ${status.free ? "is-free" : "is-res"}`}>{status.text}</span>}
+      </span>
+    </button>
+  );
+}
