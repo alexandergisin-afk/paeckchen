@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { canPrompt, isInstalled, isIOS, onInstallChange, promptInstall } from "../lib/install";
 import { db } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { friendlyError, toast } from "../lib/format";
@@ -10,6 +11,8 @@ export function Settings() {
   const [name, setNameValue] = useState(displayName);
   const [large, setLarge] = useState(getLargeText());
   const [busy, setBusy] = useState(false);
+  const [installable, setInstallable] = useState(canPrompt());
+  useEffect(() => onInstallChange(() => setInstallable(canPrompt())), []);
 
   useEffect(() => setNameValue(displayName), [displayName]);
 
@@ -51,6 +54,26 @@ export function Settings() {
             <button className="fchip" aria-pressed={!large} onClick={() => toggle(false)}>Normale Schrift</button>
             <button className="fchip" aria-pressed={large} onClick={() => toggle(true)}>Große Schrift</button>
           </div>
+        </section>
+        <section className="panel">
+          <h2>Als App auf dem Startbildschirm</h2>
+          {isInstalled() ? (
+            <p className="hint" style={{ marginTop: 6 }}>Päckchen ist auf diesem Gerät bereits als App installiert.</p>
+          ) : installable ? (
+            <>
+              <p className="hint" style={{ margin: "6px 0 12px" }}>Dann öffnest du Päckchen mit einem Tipp, ohne Browserleiste.</p>
+              <button className="btn" onClick={promptInstall}>App installieren</button>
+            </>
+          ) : isIOS() ? (
+            <p className="hint" style={{ marginTop: 6 }}>
+              Öffne Päckchen in <b>Safari</b>, tippe unten auf das <b>Teilen-Symbol</b> (Quadrat mit Pfeil) und dann auf <b>„Zum Home-Bildschirm“</b>.
+              Zum Anmelden in der App gibst du am besten den Code aus der Mail ein.
+            </p>
+          ) : (
+            <p className="hint" style={{ marginTop: 6 }}>
+              Öffne im Browser-Menü (⋮) den Punkt <b>„App installieren“</b> oder <b>„Zum Startbildschirm hinzufügen“</b>.
+            </p>
+          )}
         </section>
         <section className="panel">
           <h2>Datenschutz</h2>

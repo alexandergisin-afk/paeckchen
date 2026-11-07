@@ -106,7 +106,7 @@ export function TeamPage() {
           {isOwner ? (
             <>
               <div style={{ marginTop: 14 }}>
-                <button className="btn" onClick={() => setSheet({ kind: "invite" })}><IconUsers /> Jemanden zum Mitbearbeiten einladen</button>
+                <button className="btn" onClick={() => setSheet({ kind: "invite" })}><IconUsers /> Zum Mitbearbeiten einladen</button>
               </div>
               {pending.length > 0 && (
                 <>

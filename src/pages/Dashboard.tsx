@@ -4,9 +4,16 @@ import { db } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { LIST_SELECT, cover, type WishList } from "../lib/types";
 import { countdownLabel, dateLabel, daysUntil, friendlyError, toast } from "../lib/format";
-import { IconPlus } from "../components/Icons";
+import { IconPlus, IconShare } from "../components/Icons";
+import { ShareContent } from "../components/ShareSheet";
 import { Sheet } from "../components/Sheet";
 import { ListForm, toRow, type ListInput } from "../components/ListForm";
+
+/** „julia.weber“ oder „Julia Weber“ → „Julia“ */
+const firstName = (n: string) => {
+  const f = n.trim().split(/[\s._+-]+/)[0] ?? "";
+  return f ? f.charAt(0).toUpperCase() + f.slice(1) : "";
+};
 
 export function Dashboard() {
   const { session, displayName } = useAuth();
@@ -15,6 +22,7 @@ export function Dashboard() {
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [sharing, setSharing] = useState<WishList | null>(null);
 
   const load = useCallback(async () => {
     const { data, error } = await db().from("lists").select(LIST_SELECT).order("created_at", { ascending: false });
@@ -52,7 +60,7 @@ export function Dashboard() {
     <div className="wrap">
       <div className="dash-head">
         <div>
-          <h1>Hallo {displayName}</h1>
+          <h1>Hallo {firstName(displayName)}</h1>
           <p className="lead">
             {upcoming ? `Als Nächstes: ${upcoming.title} in ${daysUntil(upcoming.event_date)} Tagen.` : "Hier findest du alle deine Wunschlisten."}
           </p>
@@ -89,6 +97,9 @@ export function Dashboard() {
                     {n} {n === 1 ? "Wunsch" : "Wünsche"} {cd && <span className="badge">{cd}</span>}{" "}
                     {role === "editor" && <span className="badge">Mitbearbeitung</span>}
                   </p>
+                  <div className="foot">
+                    <button className="btn soft small" onClick={() => setSharing(l)}><IconShare /> Teilen</button>
+                  </div>
                 </div>
               </article>
             );
@@ -99,6 +110,10 @@ export function Dashboard() {
           </button>
         </div>
       )}
+
+      <Sheet open={!!sharing} onClose={() => setSharing(null)} label="Liste teilen">
+        {sharing && <ShareContent list={sharing} onNavigate={() => setSharing(null)} />}
+      </Sheet>
 
       <Sheet open={creating} onClose={() => setCreating(false)} label="Neue Wunschliste">
         <h2>Neue Wunschliste</h2>

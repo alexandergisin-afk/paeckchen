@@ -16,10 +16,15 @@ export function WishTile({ wish, wrapped = false, animate = false, className = "
     const t = window.setTimeout(() => setOn(wrapped), 60);
     return () => window.clearTimeout(t);
   }, [wrapped, animate]);
-  const img = imageUrl(wish.image_path);
+  const [broken, setBroken] = useState(false);
+  const img = broken ? null : imageUrl(wish.image_path);
   return (
     <div className={`tile t${tintFor(wish.id)} ${on ? "wrapped" : ""} ${className}`}>
-      {img ? <img src={img} alt="" loading="lazy" /> : <span className="emo" aria-hidden="true">{guessEmoji(wish.title)}</span>}
+      {img ? (
+        <img src={img} alt="" loading="lazy" referrerPolicy="no-referrer" className={/^https?:/.test(wish.image_path ?? "") ? "shopimg" : ""} onError={() => setBroken(true)} />
+      ) : (
+        <span className="emo" aria-hidden="true">{guessEmoji(wish.title)}</span>
+      )}
       <i className="wrap-v" />
       <i className="wrap-h" />
       <Bow />

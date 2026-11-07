@@ -48,7 +48,7 @@ export function ListPage() {
     let rs: Reservation[] = [];
     if (ws.length) {
       const r = await db().from("reservations").select("id,wish_id,quantity,guest_name,created_at").in("wish_id", ws.map((x) => x.id));
-      if (!r.error) rs = r.data as Reservation[];
+      if (!r.error && Array.isArray(r.data)) rs = r.data as Reservation[];
     }
     setList(l.data as WishList);
     setWishes(sortWishes(ws));
@@ -158,7 +158,7 @@ export function ListPage() {
           <input type="checkbox" checked={showRes} onChange={(e) => toggleShow(e.target.checked)} />
           <span>
             <b>Reservierungen anzeigen</b><br />
-            <span className="hint">Zeigt dir, was schon vergeben ist und von wem. Schalte das aus, wenn die Liste für dich selbst ist. Die Einstellung gilt nur für dich.</span>
+            <span className="hint">Was schon vergeben ist und von wem. Ausschalten, wenn die Liste für dich ist. Gilt nur für dich.</span>
           </span>
         </label>
         {showRes && wishes.length > 0 && (

@@ -17,7 +17,7 @@ export function TopBar() {
         {session && !guestView && (
           <div className="userbox">
             <Link className="btn quiet" to="/einstellungen" aria-current={path === "/einstellungen" ? "page" : undefined}>
-              <IconGear /> Einstellungen
+              <IconGear /> <span className="label">Einstellungen</span>
             </Link>
           </div>
         )}

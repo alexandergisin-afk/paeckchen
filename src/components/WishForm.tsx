@@ -23,10 +23,13 @@ export function WishForm({ listId, wish, onSaved }: Props) {
   const [note, setNote] = useState(wish?.note ?? "");
   const [shop, setShop] = useState(wish?.shop ?? "");
   const [search, setSearch] = useState("");
-  const [detectMsg, setDetectMsg] = useState("Name und Shop übernehmen wir, soweit es die Adresse verrät.");
+  const [detectMsg, setDetectMsg] = useState("Name, Bild und Preis übernehmen wir, soweit der Shop es zulässt.");
   const [newImage, setNewImage] = useState<Blob | null>(null);
   const [preview, setPreview] = useState<string | null>(imageUrl(wish?.image_path ?? null));
   const [dropImage, setDropImage] = useState(false);
+  const [remoteImage, setRemoteImage] = useState<string | null>(null);
+  const [reading, setReading] = useState(false);
+  const lastFetched = useRef("");
   const [busy, setBusy] = useState(false);
   const priceRef = useRef<HTMLInputElement>(null);
   const titleRef = useRef<HTMLInputElement>(null);
@@ -38,13 +41,39 @@ export function WishForm({ listId, wish, onSaved }: Props) {
     if (!value.trim()) return;
     const d = detectFromUrl(value);
     if (!d) return setDetectMsg("Das sieht noch nicht nach einem vollständigen Link aus.");
-    if (!shop) setShop(d.shop);
-    if (!title && d.title) setTitle(d.title);
-    if (d.title || title) {
-      setDetectMsg(`Erkannt: ${d.shop}. Prüf kurz den Namen und ergänze den Preis.`);
+    // Sofort: Shop und Name aus der Adresse. Danach, falls möglich: Name, Bild und Preis von der Shopseite.
+    setShop((s) => s || d.shop);
+    setTitle((t) => t || d.title);
+    if (edit || lastFetched.current === d.url) return;
+    lastFetched.current = d.url;
+    readShopPage(d.url, d.title, d.shop);
+  };
+
+  const readShopPage = async (pageUrl: string, urlTitle: string, urlShop: string) => {
+    setReading(true);
+    setDetectMsg("Produktdaten werden gelesen …");
+    let p: { title?: string | null; image?: string | null; price_cents?: number | null; shop?: string | null; error?: string } | null = null;
+    try {
+      const { data, error } = await db().functions.invoke("link-vorschau", { body: { url: pageUrl } });
+      if (!error) p = data;
+    } catch { /* Funktion nicht erreichbar: dann bleibt es bei den Angaben aus der Adresse */ }
+    setReading(false);
+    if (lastFetched.current !== pageUrl) return; // inzwischen ein anderer Link
+    const found: string[] = [];
+    if (p && !p.error) {
+      if (p.title) { setTitle((t) => (!t || t === urlTitle ? p!.title! : t)); found.push("Name"); }
+      if (p.image) { setRemoteImage(p.image); if (!newImage) { setPreview(p.image); setDropImage(false); } found.push("Bild"); }
+      if (p.price_cents != null) { setPrice((v) => v || priceInput(p!.price_cents!)); found.push("Preis"); }
+      if (p.shop && p.shop.length <= 30) setShop((s) => (!s || s === urlShop ? p!.shop! : s));
+    }
+    if (found.length) {
+      setDetectMsg(`Gefunden: ${found.join(", ")}. Kurz prüfen und speichern.`);
+      if (!found.includes("Preis")) setTimeout(() => priceRef.current?.focus(), 0);
+    } else if (urlTitle) {
+      setDetectMsg(`Erkannt: ${urlShop}. Der Shop gibt keine weiteren Daten heraus, ergänze bitte den Preis.`);
       setTimeout(() => priceRef.current?.focus(), 0);
     } else {
-      setDetectMsg(`Shop erkannt: ${d.shop}. Den Namen trägst du bitte selbst ein.`);
+      setDetectMsg(`Shop erkannt: ${urlShop}. Den Namen trägst du bitte selbst ein.`);
       setTimeout(() => titleRef.current?.focus(), 0);
     }
   };
@@ -82,6 +111,7 @@ export function WishForm({ listId, wish, onSaved }: Props) {
       let image_path = wish?.image_path ?? null;
       if (newImage) image_path = await uploadImage(listId, newImage);
       else if (dropImage) image_path = null;
+      else if (!edit && remoteImage) image_path = remoteImage;
 
       const row = {
         title: title.trim(),
@@ -126,7 +156,7 @@ export function WishForm({ listId, wish, onSaved }: Props) {
                 onPaste={(e) => { const t = e.clipboardData.getData("text"); if (t) setTimeout(() => detect(t), 0); }} />
               <button type="button" className="btn soft" onClick={paste}>Einfügen</button>
             </div>
-            <small>{detectMsg}</small>
+            <small className={`detect ${reading ? "busy" : ""}`}>{detectMsg}</small>
           </label>
           <details className="qs">
             <summary><IconSearch /> Noch keinen Link? Im Shop suchen</summary>
@@ -182,7 +212,7 @@ export function WishForm({ listId, wish, onSaved }: Props) {
         <input maxLength={300} value={note} placeholder="z. B. Größe 34, gern in Blau" onChange={(e) => setNote(e.target.value)} />
       </label>
 
-      <details open={edit && Boolean(wish?.shop || wish?.image_path)}>
+      <details open={(edit && Boolean(wish?.shop || wish?.image_path)) || Boolean(remoteImage)}>
         <summary>Shop, Link und eigenes Bild</summary>
         <label className="field">
           <span>Shop</span>
@@ -199,7 +229,7 @@ export function WishForm({ listId, wish, onSaved }: Props) {
           <input type="file" accept="image/*" aria-label="Bild auswählen" onChange={(e) => pickImage(e.target.files?.[0])} />
           {preview && !dropImage ? (
             <div className="imgprev">
-              <img src={preview} alt="Vorschau" />
+              <img src={preview} alt="Vorschau" referrerPolicy="no-referrer" onError={() => setPreview(null)} />
               <button type="button" className="btn quiet" onClick={() => { setDropImage(true); setNewImage(null); }}>Bild entfernen</button>
             </div>
           ) : (
