@@ -35,12 +35,13 @@ export function Sheet({ open, onClose, label, children }: { open: boolean; onClo
       onClick={(e) => e.target === ref.current && onClose()}
     >
       {open && (
-        <div className="sheet-in">
+        <>
+          {/* Außerhalb des scrollenden Bereichs: bleibt immer sichtbar */}
           <button className="icon-btn sheet-x" onClick={onClose} aria-label="Schließen">
             <IconX />
           </button>
-          {children}
-        </div>
+          <div className="sheet-in">{children}</div>
+        </>
       )}
     </dialog>
   );
