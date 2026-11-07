@@ -5,7 +5,7 @@ import { useAuth } from "../lib/auth";
 import { OCCASIONS, cover, type GuestList, type GuestWish } from "../lib/types";
 import { dateLabel, friendlyError, toast } from "../lib/format";
 import { formatPrice } from "../lib/wishes";
-import { addCode, getCodes, getLargeText, getName, keepCodes, removeCode, setLargeText, setName } from "../lib/device";
+import { addCode, getCodes, getName, keepCodes, removeCode, setName } from "../lib/device";
 import { IconCheck, IconExt, IconGift } from "../components/Icons";
 import { Sheet } from "../components/Sheet";
 import { PriorityBadge, WishTile } from "../components/WishRow";
@@ -29,7 +29,6 @@ export function GuestPage() {
   const [mine, setMine] = useState<Mine[]>([]);
   const [state, setState] = useState<"loading" | "ok" | "invalid" | "error">("loading");
   const [price, setPrice] = useState<Price>("all");
-  const [large, setLarge] = useState(getLargeText());
   const [sheet, setSheet] = useState<GSheet>(null);
   const [busy, setBusy] = useState(false);
   const close = () => setSheet(null);
@@ -83,11 +82,6 @@ export function GuestPage() {
   const c = cover(list.cover);
   const meta = [list.recipient_name ? `Für ${list.recipient_name}` : "", list.event_date ? `${OCCASIONS[list.occasion]} am ${dateLabel(list.event_date)}` : ""].filter(Boolean).join(", ");
 
-  const toggleLarge = () => {
-    setLargeText(!large);
-    setLarge(!large);
-  };
-
   const reserve = async (wish: GuestWish, qty: number, name: string) => {
     setBusy(true);
     const { data, error } = await db().rpc("reserve_wish", { p_token: token, p_wish: wish.id, p_quantity: qty, p_name: name });
@@ -118,30 +112,41 @@ export function GuestPage() {
   const card = (w: GuestWish, mode: "open" | "mine" | "taken") => {
     const my = mineOf(w);
     const myQty = my.reduce((a, m) => a + m.quantity, 0);
-    const shop = w.url && (
-      <a className="btn line" href={w.url} target="_blank" rel="noopener noreferrer"><IconExt /> {w.shop ? `Bei ${w.shop} ansehen` : "Im Shop ansehen"}</a>
+    const shopLink = w.url && (
+      <a className="shop-link" href={w.url} target="_blank" rel="noopener noreferrer">{w.shop ? `Bei ${w.shop} ansehen` : "Im Shop ansehen"} <IconExt /></a>
     );
+    if (mode === "taken") {
+      return (
+        <article className="gcard compact taken" key={`taken-${w.id}`}>
+          <WishTile wish={w} wrapped />
+          <div className="body">
+            <h3>{w.title}</h3>
+            {w.price_cents != null && <p className="note">{formatPrice(w.price_cents)}</p>}
+            <p className="taken-tag">Schon vergeben</p>
+          </div>
+        </article>
+      );
+    }
     return (
-      <article className={`gcard ${mode === "taken" ? "taken" : ""}`} key={`${mode}-${w.id}`}>
-        <WishTile wish={w} wrapped={mode !== "open"} />
+      <article className="gcard" key={`${mode}-${w.id}`}>
+        <WishTile wish={w} wrapped={mode === "mine"} />
         <div className="body">
           <PriorityBadge priority={w.priority} />
           <h3>{w.title}</h3>
-          {w.note && mode !== "taken" && <p className="note">{w.note}</p>}
-          {w.price_cents != null && <p className="price">{formatPrice(w.price_cents)}</p>}
+          {w.note && <p className="note">{w.note}</p>}
+          <div className="price-row">
+            {w.price_cents != null ? <span className="price">{formatPrice(w.price_cents)}</span> : <span />}
+            {shopLink}
+          </div>
           {mode === "open" && w.quantity > 1 && <p className="note">Noch {w.available} von {w.quantity} frei</p>}
           {mode === "mine" && <p className="mine-tag"><IconCheck /> Von dir reserviert{myQty > 1 ? ` (${myQty} Stück)` : ""}</p>}
-          {mode === "taken" && <p className="note">Schon vergeben</p>}
         </div>
-        {mode !== "taken" && (
-          <div className="actions">
-            {mode === "open" && <button className="btn ribbon" onClick={() => setSheet({ kind: "reserve", wish: w })}><IconGift /> Reservieren</button>}
-            {shop}
-            {mode === "mine" && my.map((m) => (
-              <button key={m.code} className="btn quiet" onClick={() => setSheet({ kind: "cancel", wish: w, code: m.code })}>Reservierung aufheben</button>
-            ))}
-          </div>
-        )}
+        <div className="actions">
+          {mode === "open" && <button className="btn ribbon big" onClick={() => setSheet({ kind: "reserve", wish: w })}><IconGift /> Reservieren</button>}
+          {mode === "mine" && my.map((m) => (
+            <button key={m.code} className="btn quiet" onClick={() => setSheet({ kind: "cancel", wish: w, code: m.code })}>Reservierung aufheben</button>
+          ))}
+        </div>
       </article>
     );
   };
@@ -158,16 +163,16 @@ export function GuestPage() {
           <Link className="btn small soft" to={`/liste/${list.id}`}>Zur Verwaltung</Link>
         </div>
       )}
-      <section className={`ghead t${c.t}`}>
-        <span className="emo" aria-hidden="true">{c.e}</span>
-        <h1>{list.title}</h1>
-        {meta && <p className="lead" style={{ marginTop: 0 }}>{meta}</p>}
-        {list.description && <p>{list.description}</p>}
+      <section className="guest-head">
+        <span className={`hero-cover t${c.t}`} aria-hidden="true">{c.e}</span>
+        <div>
+          <p className="eyebrow">Wunschliste</p>
+          <h1>{list.title}</h1>
+          {meta && <p className="lead">{meta}</p>}
+        </div>
       </section>
-      <div className="howto">
-        <IconGift />
-        <p><b>So geht’s:</b> Such dir ein Geschenk aus und tippe auf „Reservieren“. Dann sehen alle anderen, dass es schon vergeben ist. Ein Konto brauchst du nicht.</p>
-      </div>
+      {list.description && <p className="hero-desc">{list.description}</p>}
+      <p className="howto-text">Such dir ein Geschenk aus und tippe auf <b>Reservieren</b>. Dann sehen alle anderen, dass es vergeben ist. Ein Konto brauchst du nicht.</p>
 
       {myWishes.length > 0 && (
         <>
@@ -177,10 +182,8 @@ export function GuestPage() {
         </>
       )}
 
-      <div className="filters" role="group" aria-label="Nach Preis filtern">
+      <div className="filters scroll-x" role="group" aria-label="Nach Preis filtern">
         {chip("all", "Alle")}{chip("20", "bis 20 €")}{chip("50", "bis 50 €")}{chip("more", "über 50 €")}
-        <span className="spacer" />
-        <button className="fchip" aria-pressed={large} aria-label="Größere Schrift" onClick={toggleLarge}>A+</button>
       </div>
 
       <div className="ggrid">

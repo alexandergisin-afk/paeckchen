@@ -42,3 +42,5 @@ export const Bow = () => (
 export const IconUsers = () => <Svg d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8M22 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />;
 export const IconGear = () => <Svg d="M12 15a3 3 0 100-6 3 3 0 000 6zM12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" />;
 export const IconRefresh = () => <Svg d="M21 12a9 9 0 11-3-6.7L21 8M21 3v5h-5" />;
+export const IconChevron = () => <Svg d="M9 18l6-6-6-6" />;
+export const IconEye = () => <Svg d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12zM12 15a3 3 0 100-6 3 3 0 000 6z" />;

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { PRIORITIES, type Reservation, type Wish } from "../lib/types";
 import { formatPrice, guessEmoji, imageUrl, tintFor } from "../lib/wishes";
-import { Bow, IconMore } from "./Icons";
+import { Bow, IconChevron } from "./Icons";
 
 /** Produktkachel. „wrapped“ legt die Geschenkschleife darum (= vergeben), „animate“ bindet sie sichtbar zu. */
 export function WishTile({ wish, wrapped = false, animate = false, className = "" }: {
@@ -37,38 +37,41 @@ export function PriorityBadge({ priority }: { priority: Wish["priority"] }) {
   return <span className={`badge ${p.cls}`}>{p.icon} {p.label}</span>;
 }
 
-export function WishRow({ wish, reservations, showReservations, onMenu }: {
+/** Statuszeile für Eltern: „Noch frei“, „Reserviert von …“ oder „1 reserviert von …, noch 2 frei“. */
+export function reservationStatus(wish: Wish, reservations: Reservation[]): { text: string; free: boolean } {
+  const taken = reservations.reduce((a, r) => a + r.quantity, 0);
+  const free = wish.quantity - taken;
+  if (!reservations.length) return { text: "Noch frei", free: true };
+  const names = reservations.map((r) => (r.quantity > 1 ? `${r.guest_name} (${r.quantity})` : r.guest_name));
+  const who = names.length > 1 ? `${names.slice(0, -1).join(", ")} und ${names[names.length - 1]}` : names[0];
+  if (free <= 0) return { text: `Reserviert von ${who}`, free: false };
+  return { text: `${taken} reserviert von ${who}, noch ${free} frei`, free: false };
+}
+
+/** Ganze Zeile antippbar: öffnet den Wunsch zum Bearbeiten. */
+export function WishRow({ wish, reservations, showReservations, onOpen }: {
   wish: Wish;
   reservations: Reservation[];
   showReservations: boolean;
-  onMenu: () => void;
+  onOpen: () => void;
 }) {
   const taken = reservations.reduce((a, r) => a + r.quantity, 0);
-  const free = wish.quantity - taken;
+  const status = reservationStatus(wish, reservations);
+  const meta = [
+    wish.price_cents != null ? formatPrice(wish.price_cents) : "",
+    wish.quantity > 1 ? `${wish.quantity} Stück` : "",
+    wish.shop ?? "",
+  ].filter(Boolean).join(", ");
   return (
-    <article className="wrow">
-      <WishTile wish={wish} wrapped={showReservations && free <= 0} />
-      <div className="info">
-        <h3>{wish.title}</h3>
-        <div className="sub">
-          <PriorityBadge priority={wish.priority} />
-          {wish.price_cents != null && <span>{formatPrice(wish.price_cents)}</span>}
-          {wish.quantity > 1 && <span>{wish.quantity} Stück</span>}
-          {wish.shop && <span>{wish.shop}</span>}
-        </div>
-        {wish.note && <div className="sub">{wish.note}</div>}
-        {showReservations && (
-          <div className="sub">
-            {reservations.map((r) => (
-              <span key={r.id} className="badge st-res">Reserviert von {r.guest_name}{r.quantity > 1 ? ` (${r.quantity})` : ""}</span>
-            ))}
-            {free > 0 && <span className="badge">{reservations.length ? `noch ${free} frei` : "Noch frei"}</span>}
-          </div>
-        )}
-      </div>
-      <div className="ra">
-        <button className="icon-btn" onClick={onMenu} aria-label={`Aktionen für ${wish.title}`}><IconMore /></button>
-      </div>
-    </article>
+    <button type="button" className="wrow-btn" onClick={onOpen} aria-label={`${wish.title} bearbeiten`}>
+      <WishTile wish={wish} wrapped={showReservations && taken >= wish.quantity} />
+      <span className="wrow-info">
+        <span className="wrow-title">{wish.title}</span>
+        <span className="wrow-meta"><PriorityBadge priority={wish.priority} />{meta && <span>{meta}</span>}</span>
+        {wish.note && <span className="wrow-note">{wish.note}</span>}
+        {showReservations && <span className={`status-line ${status.free ? "is-free" : "is-res"}`}>{status.text}</span>}
+      </span>
+      <span className="wrow-chev" aria-hidden="true"><IconChevron /></span>
+    </button>
   );
 }

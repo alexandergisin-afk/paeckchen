@@ -10,7 +10,7 @@ export interface ListInput {
   description: string;
 }
 
-export function ListForm({ list, busy, onSubmit }: { list?: WishList; busy: boolean; onSubmit: (v: ListInput) => void }) {
+export function ListForm({ list, formId, onSubmit }: { list?: WishList; formId: string; onSubmit: (v: ListInput) => void }) {
   const [v, setV] = useState<ListInput>({
     title: list?.title ?? "",
     recipient_name: list?.recipient_name ?? "",
@@ -28,7 +28,7 @@ export function ListForm({ list, busy, onSubmit }: { list?: WishList; busy: bool
   };
 
   return (
-    <form onSubmit={submit}>
+    <form id={formId} onSubmit={submit}>
       <label className="field">
         <span>Name der Liste</span>
         <input required maxLength={120} autoFocus value={v.title} onChange={(e) => set("title", e.target.value)} placeholder="z. B. Emmas 10. Geburtstag" />
@@ -67,9 +67,6 @@ export function ListForm({ list, busy, onSubmit }: { list?: WishList; busy: bool
         <span>Ein Satz für die Schenkenden (optional)</span>
         <textarea maxLength={1000} value={v.description} onChange={(e) => set("description", e.target.value)} placeholder="z. B. Emma bastelt und liest gerade am liebsten." />
       </label>
-      <button className="btn block" type="submit" disabled={busy}>
-        {busy ? "Wird gespeichert …" : list ? "Änderungen speichern" : "Liste anlegen"}
-      </button>
     </form>
   );
 }

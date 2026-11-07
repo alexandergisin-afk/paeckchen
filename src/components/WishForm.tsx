@@ -9,16 +9,19 @@ import { ProductSearch, type SearchResult } from "./ProductSearch";
 interface Props {
   listId: string;
   wish?: Wish;
+  formId: string;
   onSaved: () => void;
+  onBusyChange?: (busy: boolean) => void;
 }
 
-export function WishForm({ listId, wish, onSaved }: Props) {
+export function WishForm({ listId, wish, formId, onSaved, onBusyChange }: Props) {
   const { session } = useAuth();
   const edit = !!wish;
   const [url, setUrl] = useState(wish?.url ?? "");
   const [title, setTitle] = useState(wish?.title ?? "");
   const [price, setPrice] = useState(priceInput(wish?.price_cents ?? null));
   const [qty, setQty] = useState(String(wish?.quantity ?? 1));
+  const qtyNum = Math.max(1, Math.min(20, Number.parseInt(qty) || 1));
   const [priority, setPriority] = useState<Priority>(wish?.priority ?? "nice");
   const [note, setNote] = useState(wish?.note ?? "");
   const [shop, setShop] = useState(wish?.shop ?? "");
@@ -32,6 +35,8 @@ export function WishForm({ listId, wish, onSaved }: Props) {
   const [busy, setBusy] = useState(false);
   const priceRef = useRef<HTMLInputElement>(null);
   const titleRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { onBusyChange?.(busy); }, [busy, onBusyChange]);
 
   // Vorschau-Adressen wieder freigeben
   useEffect(() => () => { if (preview?.startsWith("blob:")) URL.revokeObjectURL(preview); }, [preview]);
@@ -170,7 +175,7 @@ export function WishForm({ listId, wish, onSaved }: Props) {
   };
 
   return (
-    <form onSubmit={submit}>
+    <form id={formId} onSubmit={submit}>
       {!edit && (
         <>
           <ProductSearch onPick={pickResult} />
@@ -188,27 +193,34 @@ export function WishForm({ listId, wish, onSaved }: Props) {
         </>
       )}
 
-      <label className="field">
-        <span>Was wird gewünscht?</span>
-        <input ref={titleRef} required maxLength={200} value={title} autoFocus={edit} placeholder="z. B. Hörspiel „Pumuckl“" onChange={(e) => setTitle(e.target.value)} />
-      </label>
+      <div className={`title-row ${preview && !dropImage ? "has-img" : ""}`}>
+        {preview && !dropImage && <img className="title-img" src={preview} alt="" referrerPolicy="no-referrer" onError={() => setPreview(null)} />}
+        <label className="field">
+          <span>Was wird gewünscht?</span>
+          <input ref={titleRef} required maxLength={200} value={title} autoFocus={edit} placeholder="z. B. Hörspiel „Pumuckl“" onChange={(e) => setTitle(e.target.value)} />
+        </label>
+      </div>
       <div className="two">
         <label className="field">
           <span>Preis, ca.</span>
           <input ref={priceRef} inputMode="decimal" value={price} placeholder="0,00 €" onChange={(e) => setPrice(e.target.value)} />
         </label>
-        <label className="field">
-          <span>Menge</span>
-          <input type="number" min={1} max={20} value={qty} onChange={(e) => setQty(e.target.value)} />
-        </label>
+        <div className="field">
+          <span id={`${formId}-menge`}>Menge</span>
+          <div className="stepper" role="group" aria-labelledby={`${formId}-menge`}>
+            <button type="button" aria-label="Weniger" disabled={qtyNum <= 1} onClick={() => setQty(String(Math.max(1, qtyNum - 1)))}>−</button>
+            <output aria-live="polite">{qtyNum}</output>
+            <button type="button" aria-label="Mehr" disabled={qtyNum >= 20} onClick={() => setQty(String(Math.min(20, qtyNum + 1)))}>+</button>
+          </div>
+        </div>
       </div>
       <fieldset className="field">
         <legend>Wie wichtig?</legend>
-        <div className="chips">
+        <div className="prio-tiles">
           {(Object.keys(PRIORITIES) as Priority[]).map((p) => (
-            <label className="chip" key={p}>
-              <input type="radio" name="priority" checked={priority === p} onChange={() => setPriority(p)} />
-              <span>{PRIORITIES[p].icon} {PRIORITIES[p].label}</span>
+            <label className={`prio-tile prio-${p}`} key={p}>
+              <input type="radio" name={`${formId}-priority`} checked={priority === p} onChange={() => setPriority(p)} />
+              <span>{PRIORITIES[p].label}</span>
             </label>
           ))}
         </div>
@@ -219,7 +231,7 @@ export function WishForm({ listId, wish, onSaved }: Props) {
       </label>
 
       <details open={(edit && Boolean(wish?.shop || wish?.image_path)) || Boolean(remoteImage)}>
-        <summary>Shop, Link und eigenes Bild</summary>
+        <summary>Shop, Link und Bild</summary>
         <label className="field">
           <span>Shop</span>
           <input maxLength={60} value={shop} onChange={(e) => setShop(e.target.value)} />
@@ -235,7 +247,7 @@ export function WishForm({ listId, wish, onSaved }: Props) {
           <input type="file" accept="image/*" aria-label="Bild auswählen" onChange={(e) => pickImage(e.target.files?.[0])} />
           {preview && !dropImage ? (
             <div className="imgprev">
-              <img src={preview} alt="Vorschau" referrerPolicy="no-referrer" onError={() => setPreview(null)} />
+              <span className="hint">Bild ist hinterlegt (oben neben dem Namen).</span>
               <button type="button" className="btn quiet" onClick={() => { setDropImage(true); setNewImage(null); }}>Bild entfernen</button>
             </div>
           ) : (
@@ -244,9 +256,6 @@ export function WishForm({ listId, wish, onSaved }: Props) {
         </div>
       </details>
 
-      <button className="btn block" type="submit" disabled={busy} style={{ marginTop: 8 }}>
-        {busy ? "Wird gespeichert …" : edit ? "Änderungen speichern" : "Wunsch speichern"}
-      </button>
     </form>
   );
 }

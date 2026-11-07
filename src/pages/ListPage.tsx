@@ -2,11 +2,12 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { db } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
-import { LIST_SELECT, OCCASIONS, cover, sortWishes, type Reservation, type Wish, type WishList } from "../lib/types";
+import { LIST_SELECT, cover, sortWishes, type Reservation, type Wish, type WishList } from "../lib/types";
 import { countdownLabel, dateLabel, friendlyError, toast } from "../lib/format";
 import { removeImage } from "../lib/wishes";
-import { IconBack, IconEdit, IconExt, IconMore, IconPlus, IconShare, IconTrash, IconUndo, IconUsers } from "../components/Icons";
+import { IconBack, IconEdit, IconExt, IconEye, IconPlus, IconShare, IconTrash, IconUndo, IconUsers } from "../components/Icons";
 import { Sheet } from "../components/Sheet";
+import { FormSheet } from "../components/FormSheet";
 import { ListForm, toRow, type ListInput } from "../components/ListForm";
 import { WishForm } from "../components/WishForm";
 import { WishRow } from "../components/WishRow";
@@ -14,11 +15,9 @@ import { ShareContent } from "../components/ShareSheet";
 
 type SheetState =
   | null
-  | { kind: "listMenu" }
   | { kind: "editList" }
   | { kind: "deleteList" }
   | { kind: "addWish" }
-  | { kind: "wishMenu"; wish: Wish }
   | { kind: "editWish"; wish: Wish }
   | { kind: "deleteWish"; wish: Wish }
   | { kind: "share" }
@@ -34,6 +33,7 @@ export function ListPage() {
   const [state, setState] = useState<"loading" | "ok" | "missing" | "error">("loading");
   const [sheet, setSheet] = useState<SheetState>(null);
   const [busy, setBusy] = useState(false);
+  const [wishBusy, setWishBusy] = useState(false);
   const close = () => setSheet(null);
 
   const load = useCallback(async () => {
@@ -74,25 +74,17 @@ export function ListPage() {
   const showRes = me?.show_reservations ?? true;
   const resOf = (w: Wish) => reservations.filter((r) => r.wish_id === w.id);
   const totalQty = wishes.reduce((a, w) => a + w.quantity, 0);
-  const reservedQty = reservations.reduce((a, r) => a + r.quantity, 0);
+  const takenQty = wishes.reduce((a, w) => a + Math.min(w.quantity, resOf(w).reduce((s, r) => s + r.quantity, 0)), 0);
+  const pct = totalQty ? Math.round((takenQty / totalQty) * 100) : 0;
+  const c = cover(list.cover);
+  const cd = countdownLabel(list.event_date);
+  const meta = [list.recipient_name ? `Für ${list.recipient_name}` : "", dateLabel(list.event_date), cd ?? ""].filter(Boolean).join(", ");
 
   const toggleShow = async (on: boolean) => {
     const { error } = await db().rpc("set_show_reservations", { p_list: list.id, p_show: on });
     if (error) return toast(friendlyError(error));
     load();
   };
-
-  const release = async (r: Reservation) => {
-    setBusy(true);
-    const { error } = await db().from("reservations").delete().eq("id", r.id);
-    setBusy(false);
-    if (error) return toast(friendlyError(error));
-    close();
-    toast("Reservierung freigegeben.");
-    load();
-  };
-  const c = cover(list.cover);
-  const cd = countdownLabel(list.event_date);
 
   const saveList = async (v: ListInput) => {
     setBusy(true);
@@ -127,75 +119,119 @@ export function ListPage() {
     load();
   };
 
+  const release = async (r: Reservation) => {
+    setBusy(true);
+    const { error } = await db().from("reservations").delete().eq("id", r.id);
+    setBusy(false);
+    if (error) return toast(friendlyError(error));
+    close();
+    toast("Reservierung freigegeben.");
+    load();
+  };
+
   const saved = () => {
     close();
     load();
   };
 
   return (
-    <div className="wrap">
-      <Link className="back" to="/"><IconBack /> Alle Listen</Link>
-      <section className={`lhead t${c.t}`}>
-        <div className="big"><span aria-hidden="true">{c.e}</span></div>
-        <div>
-          <h1>{list.title}</h1>
-          <p>
-            {[list.recipient_name ? `Für ${list.recipient_name}` : "", list.event_date ? `${OCCASIONS[list.occasion]} am ${dateLabel(list.event_date)}` : ""].filter(Boolean).join(", ")}{" "}
-            {cd && <span className="badge">{cd}</span>}
-          </p>
-          {list.description && <p>{list.description}</p>}
+    <>
+      <header className="page-bar">
+        <div className="page-bar-in">
+          <Link className="bar-back" to="/"><IconBack /> Listen</Link>
+          <button className="bar-action" onClick={() => setSheet({ kind: "editList" })}><IconEdit /> Bearbeiten</button>
         </div>
-      </section>
+      </header>
 
-      <div className="toolbar">
-        <button className="btn" onClick={() => setSheet({ kind: "addWish" })}><IconPlus /> Wunsch hinzufügen</button>
-        <button className="btn soft" onClick={() => setSheet({ kind: "share" })}><IconShare /> Teilen</button>
-        <button className="icon-btn" onClick={() => setSheet({ kind: "listMenu" })} aria-label="Weitere Aktionen"><IconMore /></button>
-      </div>
-
-      <div className="panel plan">
-        <label className="switch">
-          <input type="checkbox" checked={showRes} onChange={(e) => toggleShow(e.target.checked)} />
-          <span>
-            <b>Reservierungen anzeigen</b><br />
-            <span className="hint">Was schon vergeben ist und von wem. Ausschalten, wenn die Liste für dich ist. Gilt nur für dich.</span>
-          </span>
-        </label>
-        {showRes && wishes.length > 0 && (
-          <div className="plan-stats">
-            <span className="badge">{Math.max(0, totalQty - reservedQty)} frei</span>
-            <span className="badge st-res">{reservedQty} reserviert</span>
+      <div className="wrap with-bottom-bar">
+        <section className="hero-row">
+          <span className={`hero-cover t${c.t}`} aria-hidden="true">{c.e}</span>
+          <div>
+            <h1>{list.title}</h1>
+            {meta && <p className="lead">{meta}</p>}
           </div>
+        </section>
+        {list.description && <p className="hero-desc">{list.description}</p>}
+
+        <nav className="action-grid" aria-label="Aktionen für diese Liste">
+          <button className="action-tile" onClick={() => setSheet({ kind: "share" })}><IconShare /> Teilen</button>
+          <Link className="action-tile" to={`/w/${list.guest_token}`}><IconEye /> Gästeansicht</Link>
+          <Link className="action-tile" to={`/liste/${list.id}/mitglieder`}><IconUsers /> Mitglieder</Link>
+        </nav>
+
+        {wishes.length > 0 && (
+          <section className="status-card" aria-label="Stand der Reservierungen">
+            <div className="status-top">
+              <b>{showRes ? `${takenQty} von ${totalQty} ${totalQty === 1 ? "Wunsch" : "Wünschen"} vergeben` : "Reservierungen ausgeblendet"}</b>
+              <label className="mini-switch">
+                <span>Anzeigen</span>
+                <input type="checkbox" role="switch" checked={showRes} onChange={(e) => toggleShow(e.target.checked)} aria-label="Reservierungen anzeigen" />
+              </label>
+            </div>
+            {showRes ? (
+              <span className="progress big" aria-hidden="true"><span style={{ width: `${pct}%` }} /></span>
+            ) : (
+              <span className="hint">Praktisch, wenn die Liste für dich selbst ist. Gilt nur für dich.</span>
+            )}
+          </section>
         )}
-      </div>
 
-      <div className="wl-head"><h2>Wünsche <span className="meta">({wishes.length})</span></h2></div>
-      <div className="wlist">
-        {wishes.length === 0 ? (
-          <div className="empty">
-            <p>Noch keine Wünsche. Füge einen Shop-Link ein oder such direkt im Shop.</p>
-            <button className="btn" onClick={() => setSheet({ kind: "addWish" })}><IconPlus /> Ersten Wunsch hinzufügen</button>
-          </div>
-        ) : (
-          wishes.map((w) => (
-            <WishRow key={w.id} wish={w} reservations={resOf(w)} showReservations={showRes} onMenu={() => setSheet({ kind: "wishMenu", wish: w })} />
-          ))
-        )}
-      </div>
-
-
-      <Sheet open={sheet?.kind === "listMenu"} onClose={close} label="Listenaktionen">
-        <h2>{list.title}</h2>
-        <div className="menu">
-          <button onClick={() => setSheet({ kind: "editList" })}><IconEdit /> Name, Anlass und Bild ändern</button>
-          <Link to={`/liste/${list.id}/mitglieder`} onClick={close}><IconUsers /> Mitglieder und Gast-Link</Link>
-          {isOwner && <button className="danger" onClick={() => setSheet({ kind: "deleteList" })}><IconTrash /> Liste löschen</button>}
+        <h2 className="section-title">Wünsche</h2>
+        <div className="wlist">
+          {wishes.length === 0 ? (
+            <div className="empty">
+              <p>Noch keine Wünsche. Tippe unten auf „Wunsch hinzufügen“ und such direkt nach einem Produkt.</p>
+            </div>
+          ) : (
+            wishes.map((w) => (
+              <WishRow key={w.id} wish={w} reservations={resOf(w)} showReservations={showRes} onOpen={() => setSheet({ kind: "editWish", wish: w })} />
+            ))
+          )}
         </div>
-      </Sheet>
+      </div>
 
-      <Sheet open={sheet?.kind === "editList"} onClose={close} label="Liste bearbeiten">
-        <h2>Liste bearbeiten</h2>
-        <ListForm list={list} busy={busy} onSubmit={saveList} />
+      <div className="bottom-bar">
+        <button className="btn block big" onClick={() => setSheet({ kind: "addWish" })}><IconPlus /> Wunsch hinzufügen</button>
+      </div>
+
+      {/* Formulare als eigene Seite mit fester Leiste */}
+      <FormSheet open={sheet?.kind === "editList"} onClose={close} title="Liste" formId="edit-list" busy={busy}>
+        {sheet?.kind === "editList" && (
+          <>
+            <ListForm formId="edit-list" list={list} onSubmit={saveList} />
+            {isOwner && (
+              <div className="danger-zone">
+                <button type="button" className="btn danger block" onClick={() => setSheet({ kind: "deleteList" })}><IconTrash /> Liste löschen</button>
+              </div>
+            )}
+          </>
+        )}
+      </FormSheet>
+
+      <FormSheet open={sheet?.kind === "addWish"} onClose={close} title="Neuer Wunsch" formId="add-wish" busy={wishBusy}>
+        {sheet?.kind === "addWish" && <WishForm formId="add-wish" listId={list.id} onSaved={saved} onBusyChange={setWishBusy} />}
+      </FormSheet>
+
+      <FormSheet open={sheet?.kind === "editWish"} onClose={close} title="Bearbeiten" formId="edit-wish" busy={wishBusy}>
+        {sheet?.kind === "editWish" && (
+          <>
+            <WishForm formId="edit-wish" listId={list.id} wish={sheet.wish} onSaved={saved} onBusyChange={setWishBusy} />
+            <div className="menu form-extra">
+              {sheet.wish.url && <a href={sheet.wish.url} target="_blank" rel="noopener noreferrer"><IconExt /> Im Shop öffnen</a>}
+              {showRes && resOf(sheet.wish).map((r) => (
+                <button type="button" key={r.id} onClick={() => setSheet({ kind: "release", wish: sheet.wish, reservation: r })}>
+                  <IconUndo /> Reservierung von {r.guest_name} freigeben
+                </button>
+              ))}
+              <button type="button" className="danger" onClick={() => setSheet({ kind: "deleteWish", wish: sheet.wish })}><IconTrash /> Wunsch löschen</button>
+            </div>
+          </>
+        )}
+      </FormSheet>
+
+      {/* Kurze Rückfragen als kleine Dialoge */}
+      <Sheet open={sheet?.kind === "share"} onClose={close} label="Liste teilen">
+        {sheet?.kind === "share" && <ShareContent list={list} onNavigate={close} />}
       </Sheet>
 
       <Sheet open={sheet?.kind === "deleteList"} onClose={close} label="Liste löschen">
@@ -205,49 +241,6 @@ export function ListPage() {
           <button className="btn danger" onClick={deleteList} disabled={busy}>Endgültig löschen</button>
           <button className="btn soft" onClick={close}>Abbrechen</button>
         </div>
-      </Sheet>
-
-      <Sheet open={sheet?.kind === "addWish"} onClose={close} label="Wunsch hinzufügen">
-        <h2>Wunsch hinzufügen</h2>
-        {sheet?.kind === "addWish" && <WishForm listId={list.id} onSaved={saved} />}
-      </Sheet>
-
-      <Sheet open={sheet?.kind === "editWish"} onClose={close} label="Wunsch bearbeiten">
-        <h2>Wunsch bearbeiten</h2>
-        {sheet?.kind === "editWish" && <WishForm listId={list.id} wish={sheet.wish} onSaved={saved} />}
-      </Sheet>
-
-      <Sheet open={sheet?.kind === "wishMenu"} onClose={close} label="Wunschaktionen">
-        {sheet?.kind === "wishMenu" && (
-          <>
-            <h2>{sheet.wish.title}</h2>
-            <div className="menu">
-              <button onClick={() => setSheet({ kind: "editWish", wish: sheet.wish })}><IconEdit /> Bearbeiten</button>
-              {sheet.wish.url && <a href={sheet.wish.url} target="_blank" rel="noopener noreferrer"><IconExt /> Im Shop öffnen</a>}
-              {showRes && resOf(sheet.wish).map((r) => (
-                <button key={r.id} onClick={() => setSheet({ kind: "release", wish: sheet.wish, reservation: r })}><IconUndo /> Reservierung von {r.guest_name} freigeben</button>
-              ))}
-              <button className="danger" onClick={() => setSheet({ kind: "deleteWish", wish: sheet.wish })}><IconTrash /> Löschen</button>
-            </div>
-          </>
-        )}
-      </Sheet>
-
-      <Sheet open={sheet?.kind === "share"} onClose={close} label="Liste teilen">
-        {sheet?.kind === "share" && <ShareContent list={list} onNavigate={close} />}
-      </Sheet>
-
-      <Sheet open={sheet?.kind === "release"} onClose={close} label="Reservierung freigeben">
-        {sheet?.kind === "release" && (
-          <>
-            <h2>Reservierung freigeben?</h2>
-            <p>„{sheet.wish.title}“ ist danach wieder für alle frei. Sprich dich am besten vorher mit {sheet.reservation.guest_name} ab, damit nichts doppelt gekauft wird.</p>
-            <div className="toolbar" style={{ marginTop: 18 }}>
-              <button className="btn" disabled={busy} onClick={() => release(sheet.reservation)}>Freigeben</button>
-              <button className="btn soft" onClick={close}>Abbrechen</button>
-            </div>
-          </>
-        )}
       </Sheet>
 
       <Sheet open={sheet?.kind === "deleteWish"} onClose={close} label="Wunsch löschen">
@@ -262,6 +255,19 @@ export function ListPage() {
           </>
         )}
       </Sheet>
-    </div>
+
+      <Sheet open={sheet?.kind === "release"} onClose={close} label="Reservierung freigeben">
+        {sheet?.kind === "release" && (
+          <>
+            <h2>Reservierung freigeben?</h2>
+            <p>„{sheet.wish.title}“ ist danach wieder für alle frei. Sprich dich am besten vorher mit {sheet.reservation.guest_name} ab, damit nichts doppelt gekauft wird.</p>
+            <div className="toolbar" style={{ marginTop: 18 }}>
+              <button className="btn" disabled={busy} onClick={() => release(sheet.reservation)}>Freigeben</button>
+              <button className="btn soft" onClick={close}>Abbrechen</button>
+            </div>
+          </>
+        )}
+      </Sheet>
+    </>
   );
 }
