@@ -497,3 +497,14 @@ dialog.fsheet::backdrop { background: rgba(20,12,30,.48); }
 .gcard.compact h3 { font-size: 1rem; }
 .taken-tag { font-weight: 700; font-size: .9rem; color: var(--ribbon-text); margin: 0; }
 .textsize { margin-left: auto; }
+/* Zugriff verwalten */
+.settings-link { display: grid; grid-template-columns: 44px minmax(0, 1fr) 20px; gap: 12px; align-items: center; text-decoration: none; color: var(--ink); }
+.settings-link-icon { width: 44px; height: 44px; border-radius: 14px; background: var(--plum-soft); color: var(--plum); display: grid; place-items: center; }
+.settings-link-icon svg { width: 22px; height: 22px; }
+.access-list { list-style: none; margin: 4px 0 0; padding: 0; display: grid; }
+.access-row { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 12px; align-items: center; min-height: 56px; padding: 6px 0; border-top: 1px solid var(--line); cursor: pointer; }
+.access-list li:first-child .access-row, .access-list li.access-row:first-child { border-top: 0; }
+.access-cover { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-size: 1.3rem; }
+.access-title { font-weight: 700; overflow-wrap: anywhere; }
+.person .member { padding-bottom: 6px; }
+.access-title .hint { font-weight: 400; }

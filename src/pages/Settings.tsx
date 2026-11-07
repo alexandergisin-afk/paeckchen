@@ -4,7 +4,8 @@ import { db } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { friendlyError, toast } from "../lib/format";
 import { getLargeText, setLargeText } from "../lib/device";
-import { IconLogout } from "../components/Icons";
+import { IconChevron, IconLogout, IconUsers } from "../components/Icons";
+import { Link } from "react-router-dom";
 
 export function Settings() {
   const { session, displayName, refreshProfile } = useAuth();
@@ -48,6 +49,11 @@ export function Settings() {
           </form>
           <p className="hint" style={{ marginTop: 14 }}>Angemeldet als {session?.user.email}</p>
         </section>
+        <Link className="panel settings-link" to="/einstellungen/zugriff">
+          <span className="settings-link-icon" aria-hidden="true"><IconUsers /></span>
+          <span><b>Zugriff verwalten</b><span className="hint" style={{ display: "block" }}>Wer welche deiner Listen mitbearbeiten darf</span></span>
+          <span className="list-chev" aria-hidden="true"><IconChevron /></span>
+        </Link>
         <section className="panel">
           <h2 style={{ marginBottom: 12 }}>Darstellung</h2>
           <div className="chips">
