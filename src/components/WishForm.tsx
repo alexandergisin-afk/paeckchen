@@ -2,9 +2,9 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { db } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { PRIORITIES, type Priority, type Wish } from "../lib/types";
-import { SEARCH_SHOPS, detectFromUrl, imageUrl, parsePrice, priceInput, removeImage, resizeImage, uploadImage } from "../lib/wishes";
+import { detectFromUrl, imageUrl, parsePrice, priceInput, removeImage, resizeImage, uploadImage } from "../lib/wishes";
 import { friendlyError, toast } from "../lib/format";
-import { IconSearch } from "./Icons";
+import { ProductSearch, type SearchResult } from "./ProductSearch";
 
 interface Props {
   listId: string;
@@ -22,7 +22,6 @@ export function WishForm({ listId, wish, onSaved }: Props) {
   const [priority, setPriority] = useState<Priority>(wish?.priority ?? "nice");
   const [note, setNote] = useState(wish?.note ?? "");
   const [shop, setShop] = useState(wish?.shop ?? "");
-  const [search, setSearch] = useState("");
   const [detectMsg, setDetectMsg] = useState("Name, Bild und Preis übernehmen wir, soweit der Shop es zulässt.");
   const [newImage, setNewImage] = useState<Blob | null>(null);
   const [preview, setPreview] = useState<string | null>(imageUrl(wish?.image_path ?? null));
@@ -94,6 +93,18 @@ export function WishForm({ listId, wish, onSaved }: Props) {
     }
   };
 
+  const pickResult = (r: SearchResult) => {
+    lastFetched.current = r.url; // keine zusätzliche Link-Erkennung nötig
+    setUrl(r.url);
+    setTitle(r.title);
+    setShop(r.shop);
+    if (r.price_cents != null) setPrice(priceInput(r.price_cents));
+    setRemoteImage(r.image);
+    if (!newImage) { setPreview(r.image); setDropImage(false); }
+    setDetectMsg("Aus der Suche übernommen.");
+    setTimeout(() => titleRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
+  };
+
   const paste = async () => {
     try {
       const t = (await navigator.clipboard.readText()).trim();
@@ -158,43 +169,22 @@ export function WishForm({ listId, wish, onSaved }: Props) {
     }
   };
 
-  const q = encodeURIComponent(search.trim());
-
   return (
     <form onSubmit={submit}>
       {!edit && (
         <>
+          <ProductSearch onPick={pickResult} />
+          <p className="or-sep"><span>oder</span></p>
           <label className="field">
-            <span>Link aus dem Onlineshop</span>
+            <span>Link aus einem Shop einfügen</span>
             <div className="row">
-              <input type="url" inputMode="url" autoFocus value={url} placeholder="https://…"
+              <input type="url" inputMode="url" value={url} placeholder="https://…"
                 onChange={(e) => setUrl(e.target.value)} onBlur={() => detect(url)}
                 onPaste={(e) => { const t = e.clipboardData.getData("text"); if (t) setTimeout(() => detect(t), 0); }} />
               <button type="button" className="btn soft" onClick={paste}>Einfügen</button>
             </div>
             <small className={`detect ${reading ? "busy" : ""}`}>{detectMsg}</small>
           </label>
-          <details className="qs">
-            <summary><IconSearch /> Noch keinen Link? Im Shop suchen</summary>
-            <label className="field">
-              <span>Wonach suchst du?</span>
-              <input value={search} autoComplete="off" placeholder="z. B. Lego Baumhaus" onChange={(e) => setSearch(e.target.value)} />
-            </label>
-            <div className="chips">
-              {SEARCH_SHOPS.map((s) => (
-                <a key={s.name} className="fchip" href={s.url(q)} target="_blank" rel="noopener noreferrer"
-                  onClick={(e) => {
-                    if (!search.trim()) { e.preventDefault(); return; }
-                    if (!title) setTitle(search.trim().charAt(0).toUpperCase() + search.trim().slice(1));
-                  }}>
-                  {s.name}
-                </a>
-              ))}
-            </div>
-            <p className="hint" style={{ margin: "10px 0 4px" }}>
-              {search.trim() ? "Der Shop öffnet sich in einem neuen Tab. Produkt gefunden? Link kopieren, hierher zurückkommen und oben einfügen." : "Erst eintippen, dann einen Shop wählen."}
-            </p>
-          </details>
         </>
       )}
 

@@ -169,6 +169,37 @@ const BROWSER_HEADERS = {
   "Upgrade-Insecure-Requests": "1",
 };
 
+const SIMPLE_HEADERS = {
+  "User-Agent": "Mozilla/5.0 (compatible; Paeckli-Linkvorschau/1.0)",
+  "Accept": "text/html",
+  "Accept-Language": "de",
+};
+
+async function attempt(url: URL, headers: Record<string, string>): Promise<Record<string, unknown>> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 8000);
+  try {
+    const res = await fetch(url.href, { signal: ctrl.signal, redirect: "follow", headers });
+    const type = res.headers.get("content-type") ?? "";
+    console.log("link-vorschau", url.hostname, headers === BROWSER_HEADERS ? "browser" : "einfach", res.status, type);
+    if (!res.ok) { res.body?.cancel().catch(() => {}); return { error: "blocked", status: res.status }; }
+    if (!type.includes("html")) { res.body?.cancel().catch(() => {}); return { error: "not_html", status: res.status }; }
+    const finalUrl = allowedUrl(res.url) ? res.url : url.href;
+    const html = await readLimited(res);
+    const result = parse(html, finalUrl);
+    // Schutzseiten („Bitte bestätigen Sie, dass Sie kein Roboter sind“) liefern 200, aber keine Produktdaten.
+    if (!result.image && result.price_cents == null && /captcha|robot|access denied|zugriff verweigert|challenge/i.test(html.slice(0, 20000))) {
+      return { error: "blocked", status: 200 };
+    }
+    return result as unknown as Record<string, unknown>;
+  } catch (e) {
+    console.log("link-vorschau Fehler", url.hostname, String(e));
+    return { error: (e as Error).name === "AbortError" ? "timeout" : "not_readable" };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 if (typeof Deno !== "undefined") {
   Deno.serve(async (req) => {
     if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
@@ -179,27 +210,15 @@ if (typeof Deno !== "undefined") {
     try { url = allowedUrl(String((await req.json()).url ?? "")); } catch { /* leer */ }
     if (!url) return json({ error: "invalid_url" }, 400);
 
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 9000);
-    try {
-      const res = await fetch(url.href, { signal: ctrl.signal, redirect: "follow", headers: BROWSER_HEADERS });
-      const type = res.headers.get("content-type") ?? "";
-      console.log("link-vorschau", url.hostname, res.status, type);
-      if (!res.ok) return json({ error: "blocked", status: res.status });
-      if (!type.includes("html")) return json({ error: "not_html", status: res.status });
-      const finalUrl = allowedUrl(res.url) ? res.url : url.href;
-      const html = await readLimited(res);
-      const result = parse(html, finalUrl);
-      // Schutzseiten (z. B. „Bitte bestätigen Sie, dass Sie kein Roboter sind“) liefern 200, aber keine Produktdaten.
-      if (!result.image && result.price_cents == null && /captcha|robot|access denied|zugriff verweigert|challenge/i.test(html.slice(0, 20000))) {
-        return json({ error: "blocked", status: 200 });
-      }
-      return json(result);
-    } catch (e) {
-      console.log("link-vorschau Fehler", url.hostname, String(e));
-      return json({ error: (e as Error).name === "AbortError" ? "timeout" : "not_readable" });
-    } finally {
-      clearTimeout(timer);
+    // Zwei Anläufe: erst wie ein Browser, dann als schlichte, ehrliche Vorschau-Anfrage.
+    // Manche Schutzsysteme lehnen das eine ab und lassen das andere durch.
+    let last: Record<string, unknown> = { error: "not_readable" };
+    for (const headers of [BROWSER_HEADERS, SIMPLE_HEADERS]) {
+      const r = await attempt(url, headers);
+      if (!("error" in r)) return json(r);
+      last = r;
+      if (r.error === "timeout") break; // ein zweiter Versuch würde nur weiter warten lassen
     }
+    return json(last);
   });
 }
