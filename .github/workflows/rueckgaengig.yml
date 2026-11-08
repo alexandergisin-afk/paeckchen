@@ -1,0 +1,32 @@
+name: Letztes Update rückgängig machen
+
+on: workflow_dispatch
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  revert:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Letztes Update zurücknehmen
+        run: |
+          last=$(git log --format=%s --grep='^Update ' -n 1)
+          if [ "$last" = "Update zurückgenommen" ]; then echo "Das letzte Update wurde bereits zurückgenommen."; exit 0; fi
+          sha=$(git log --format=%H --grep='^Update eingespielt' -n 1)
+          if [ -z "$sha" ]; then echo "Kein eingespieltes Update gefunden."; exit 1; fi
+          echo "Nehme zurück: $(git log --format='%h %ad %s' --date=short -n 1 $sha)"
+          git config user.name "Päckli Update"
+          git config user.email "actions@users.noreply.github.com"
+          git revert --no-edit "$sha"
+          git rm -q --ignore-unmatch -- update*.zip || true
+          git commit -q --amend -m "Update zurückgenommen" || true
+          git push
+      - name: Veröffentlichung starten
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run deploy.yml --ref main
