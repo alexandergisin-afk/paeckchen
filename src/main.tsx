@@ -4,6 +4,9 @@ import { App } from "./App";
 import "./styles.css";
 import { applyTextSize } from "./lib/device";
 import "./lib/install";
+import { captureShareFromLaunch } from "./lib/share";
+
+captureShareFromLaunch();
 
 applyTextSize();
 

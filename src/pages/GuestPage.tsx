@@ -181,22 +181,24 @@ export function GuestPage() {
       {list.description && <p className="hero-desc">{list.description}</p>}
       <p className="howto-text">Such dir ein Geschenk aus und tippe auf <b>Reservieren</b>. Dann sehen alle anderen, dass es vergeben ist. Ein Konto brauchst du nicht.</p>
 
-      {myWishes.length > 0 && (
-        <>
-          <h2 className="sec" style={{ marginTop: 6 }}>Deine Geschenke</h2>
-          <div className={`ggrid ${view === "grid" ? "tiles" : "rows"}`}>{myWishes.map((w) => card(w, "mine"))}</div>
-          <h2 className="sec">Noch zu vergeben</h2>
-        </>
-      )}
-
-      <div className="guest-bar">
-        <div className="filters scroll-x" role="group" aria-label="Nach Preis filtern">
-          {chip("all", "Alle")}{chip("20", "bis 20 €")}{chip("50", "bis 50 €")}{chip("more", "über 50 €")}
-        </div>
+      {/* Wie in der Verwaltung: Überschrift links, Umschalter Liste/Kacheln rechts */}
+      <div className="wl-bar">
+        <h2 className="section-title">{myWishes.length > 0 ? "Deine Geschenke" : "Wünsche"}</h2>
         <div className="view-toggle" role="group" aria-label="Ansicht der Wünsche">
           <button type="button" aria-pressed={view === "rows"} onClick={() => chooseView("rows")}><IconRows /> Liste</button>
           <button type="button" aria-pressed={view === "grid"} onClick={() => chooseView("grid")}><IconGrid /> Kacheln</button>
         </div>
+      </div>
+
+      {myWishes.length > 0 && (
+        <>
+          <div className={`ggrid ${view === "grid" ? "tiles" : "rows"}`}>{myWishes.map((w) => card(w, "mine"))}</div>
+          <h2 className="section-title" style={{ margin: "26px 2px 12px" }}>Noch zu vergeben</h2>
+        </>
+      )}
+
+      <div className="filters scroll-x guest-filters" role="group" aria-label="Nach Preis filtern">
+        {chip("all", "Alle")}{chip("20", "bis 20 €")}{chip("50", "bis 50 €")}{chip("more", "über 50 €")}
       </div>
 
       <div className={`ggrid ${view === "grid" ? "tiles" : "rows"}`}>

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { db } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { LIST_SELECT, cover, sortWishes, type Reservation, type Wish, type WishList } from "../lib/types";
-import { countdownLabel, dateLabel, friendlyError, toast } from "../lib/format";
+import { countdownLabel, dateLabel, daysUntil, friendlyError, toast } from "../lib/format";
 import { removeImage } from "../lib/wishes";
-import { IconBack, IconEdit, IconExt, IconEye, IconGrid, IconPlus, IconRows, IconShare, IconTrash, IconUndo, IconUsers } from "../components/Icons";
+import { copyWishes, moveWish } from "../lib/listOps";
+import { IconArchive, IconBack, IconChevron, IconCopy, IconEdit, IconExt, IconEye, IconGrid, IconMove, IconPlus, IconRepeat, IconRows, IconShare, IconTrash, IconUndo, IconUsers } from "../components/Icons";
 import { Sheet } from "../components/Sheet";
 import { FormSheet } from "../components/FormSheet";
 import { ListForm, toRow, type ListInput } from "../components/ListForm";
@@ -17,11 +18,14 @@ type SheetState =
   | null
   | { kind: "editList" }
   | { kind: "deleteList" }
-  | { kind: "addWish" }
+  | { kind: "addWish"; url?: string }
   | { kind: "editWish"; wish: Wish }
   | { kind: "deleteWish"; wish: Wish }
   | { kind: "share" }
-  | { kind: "release"; wish: Wish; reservation: Reservation };
+  | { kind: "release"; wish: Wish; reservation: Reservation }
+  | { kind: "transfer"; wish: Wish; mode: "move" | "copy"; targets: { id: string; title: string; cover: number }[] | null }
+  | { kind: "reuse" }
+  | { kind: "archive" };
 
 export function ListPage() {
   const { id } = useParams();
@@ -42,6 +46,15 @@ export function ListPage() {
     try { localStorage.setItem("paeckli-wish-view", v); } catch { /* egal */ }
   };
   const close = () => setSheet(null);
+  const [params, setParams] = useSearchParams();
+
+  // Aus einer anderen App geteilt: direkt „Neuer Wunsch“ mit dem Link öffnen
+  useEffect(() => {
+    const shared = params.get("neu");
+    if (!shared) return;
+    setSheet({ kind: "addWish", url: shared });
+    setParams({}, { replace: true });
+  }, [params, setParams]);
 
   const load = useCallback(async () => {
     const [l, w] = await Promise.all([
@@ -136,6 +149,63 @@ export function ListPage() {
     load();
   };
 
+  const openTransfer = async (wish: Wish, mode: "move" | "copy") => {
+    if (mode === "move" && resOf(wish).length) return toast("Reservierte Wünsche bleiben in ihrer Liste. Du kannst den Wunsch kopieren.");
+    setSheet({ kind: "transfer", wish, mode, targets: null });
+    const { data, error } = await db().from("lists").select("id,title,cover").is("archived_at", null).neq("id", list.id).order("created_at", { ascending: false });
+    if (error) return toast(friendlyError(error));
+    setSheet({ kind: "transfer", wish, mode, targets: data as { id: string; title: string; cover: number }[] });
+  };
+
+  const transfer = async (wish: Wish, mode: "move" | "copy", target: { id: string; title: string }) => {
+    setBusy(true);
+    try {
+      if (mode === "copy") await copyWishes([wish], target.id, session!.user.id);
+      else await moveWish(wish, target.id);
+      close();
+      toast(mode === "copy" ? `In „${target.title}“ kopiert.` : `Nach „${target.title}“ verschoben.`);
+      load();
+    } catch (e) {
+      toast(/has_reservations/.test((e as Error).message) ? "Der Wunsch ist inzwischen reserviert und bleibt deshalb hier. Du kannst ihn kopieren." : friendlyError(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const setArchived = async (on: boolean) => {
+    setBusy(true);
+    const { error } = await db().from("lists").update({ archived_at: on ? new Date().toISOString() : null }).eq("id", list.id);
+    setBusy(false);
+    if (error) return toast(friendlyError(error));
+    close();
+    toast(on ? "Liste abgeschlossen. Der Gast-Link ist pausiert." : "Liste ist wieder aktiv.");
+    load();
+  };
+
+  const reuse = async (form: { title: string; date: string; onlyFree: boolean; archiveOld: boolean }) => {
+    setBusy(true);
+    try {
+      const { data, error } = await db().rpc("create_list", {
+        p_title: form.title, p_recipient_name: list.recipient_name, p_occasion: list.occasion,
+        p_event_date: form.date || null, p_cover: list.cover, p_description: list.description,
+      });
+      if (error) throw error;
+      const newId = (data as { id: string }).id;
+      const toCopy = wishes
+        .map((w) => ({ ...w, copyQuantity: form.onlyFree ? w.quantity - Math.min(w.quantity, resOf(w).reduce((a, r) => a + r.quantity, 0)) : w.quantity }))
+        .filter((w) => w.copyQuantity > 0);
+      await copyWishes(toCopy, newId, session!.user.id);
+      if (form.archiveOld) await db().from("lists").update({ archived_at: new Date().toISOString() }).eq("id", list.id);
+      close();
+      toast(`Neue Liste mit ${toCopy.length} ${toCopy.length === 1 ? "Wunsch" : "Wünschen"} angelegt.`);
+      navigate(`/liste/${newId}`);
+    } catch (e) {
+      toast(friendlyError(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const saved = () => {
     close();
     load();
@@ -159,6 +229,21 @@ export function ListPage() {
           </div>
         </section>
         {list.description && <p className="hero-desc">{list.description}</p>}
+
+        {list.archived_at ? (
+          <div className="notice-row">
+            <span><b>Abgeschlossen.</b> Gäste können die Liste nicht mehr öffnen.</span>
+            <button className="btn small" onClick={() => setArchived(false)} disabled={busy}>Wieder öffnen</button>
+          </div>
+        ) : (daysUntil(list.event_date) ?? 1) < 0 ? (
+          <div className="notice-row">
+            <span><b>Der Anlass ist vorbei.</b> Liste abschließen oder fürs nächste Mal wiederverwenden?</span>
+            <span className="notice-actions">
+              <button className="btn small soft" onClick={() => setSheet({ kind: "archive" })}>Abschließen</button>
+              <button className="btn small" onClick={() => setSheet({ kind: "reuse" })}>Wiederverwenden</button>
+            </span>
+          </div>
+        ) : null}
 
         <nav className="action-grid" aria-label="Aktionen für diese Liste">
           <button className="action-tile" onClick={() => setSheet({ kind: "share" })}><IconShare /> Teilen</button>
@@ -220,17 +305,19 @@ export function ListPage() {
         {sheet?.kind === "editList" && (
           <>
             <ListForm formId="edit-list" list={list} onSubmit={saveList} />
-            {isOwner && (
-              <div className="danger-zone">
-                <button type="button" className="btn danger block" onClick={() => setSheet({ kind: "deleteList" })}><IconTrash /> Liste löschen</button>
-              </div>
-            )}
+            <div className="menu form-extra">
+              <button type="button" onClick={() => setSheet({ kind: "reuse" })}><IconRepeat /> Fürs nächste Mal wiederverwenden</button>
+              {list.archived_at
+                ? <button type="button" onClick={() => setArchived(false)}><IconArchive /> Wieder öffnen</button>
+                : <button type="button" onClick={() => setSheet({ kind: "archive" })}><IconArchive /> Liste abschließen</button>}
+              {isOwner && <button type="button" className="danger" onClick={() => setSheet({ kind: "deleteList" })}><IconTrash /> Liste löschen</button>}
+            </div>
           </>
         )}
       </FormSheet>
 
       <FormSheet open={sheet?.kind === "addWish"} onClose={close} title="Neuer Wunsch" formId="add-wish" busy={wishBusy}>
-        {sheet?.kind === "addWish" && <WishForm formId="add-wish" listId={list.id} onSaved={saved} onBusyChange={setWishBusy} />}
+        {sheet?.kind === "addWish" && <WishForm formId="add-wish" listId={list.id} onSaved={saved} onBusyChange={setWishBusy} initialUrl={sheet.url} />}
       </FormSheet>
 
       <FormSheet open={sheet?.kind === "editWish"} onClose={close} title="Bearbeiten" formId="edit-wish" busy={wishBusy}>
@@ -239,6 +326,8 @@ export function ListPage() {
             <WishForm formId="edit-wish" listId={list.id} wish={sheet.wish} onSaved={saved} onBusyChange={setWishBusy} />
             <div className="menu form-extra">
               {sheet.wish.url && <a href={sheet.wish.url} target="_blank" rel="noopener noreferrer"><IconExt /> Im Shop öffnen</a>}
+              <button type="button" onClick={() => openTransfer(sheet.wish, "move")}><IconMove /> In andere Liste verschieben</button>
+              <button type="button" onClick={() => openTransfer(sheet.wish, "copy")}><IconCopy /> In andere Liste kopieren</button>
               {showRes && resOf(sheet.wish).map((r) => (
                 <button type="button" key={r.id} onClick={() => setSheet({ kind: "release", wish: sheet.wish, reservation: r })}>
                   <IconUndo /> Reservierung von {r.guest_name} freigeben
@@ -250,7 +339,41 @@ export function ListPage() {
         )}
       </FormSheet>
 
+      <FormSheet open={sheet?.kind === "reuse"} onClose={close} title="Wiederverwenden" formId="reuse-list" submitLabel="Anlegen" busy={busy}>
+        {sheet?.kind === "reuse" && <ReuseForm list={list} showRes={showRes} onSubmit={reuse} />}
+      </FormSheet>
+
       {/* Kurze Rückfragen als kleine Dialoge */}
+      <Sheet open={sheet?.kind === "transfer"} onClose={close} label="Ziel-Liste wählen">
+        {sheet?.kind === "transfer" && (
+          <>
+            <h2>{sheet.mode === "move" ? "Verschieben nach …" : "Kopieren nach …"}</h2>
+            <p className="hint">„{sheet.wish.title}“</p>
+            {!sheet.targets ? <p className="loading" style={{ minHeight: 80 }}>Listen werden geladen …</p> : sheet.targets.length === 0 ? (
+              <p style={{ marginTop: 12 }}>Du hast keine andere aktive Liste.</p>
+            ) : (
+              <div className="menu">
+                {sheet.targets.map((t) => (
+                  <button key={t.id} disabled={busy} onClick={() => transfer(sheet.wish, sheet.mode, t)}>
+                    <span className={`access-cover t${cover(t.cover).t}`} aria-hidden="true">{cover(t.cover).e}</span>
+                    <span style={{ flex: 1 }}>{t.title}</span><IconChevron />
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </Sheet>
+
+      <Sheet open={sheet?.kind === "archive"} onClose={close} label="Liste abschließen">
+        <h2>„{list.title}“ abschließen?</h2>
+        <p>Die Liste bleibt mit allen Wünschen und Reservierungen erhalten und wandert ins Archiv. Gäste können sie nicht mehr öffnen. Du kannst sie jederzeit wieder öffnen.</p>
+        <div className="toolbar" style={{ marginTop: 18 }}>
+          <button className="btn" disabled={busy} onClick={() => setArchived(true)}>Abschließen</button>
+          <button className="btn soft" onClick={close}>Abbrechen</button>
+        </div>
+      </Sheet>
+
       <Sheet open={sheet?.kind === "share"} onClose={close} label="Liste teilen">
         {sheet?.kind === "share" && <ShareContent list={list} onNavigate={close} />}
       </Sheet>
@@ -290,5 +413,39 @@ export function ListPage() {
         )}
       </Sheet>
     </>
+  );
+}
+
+function ReuseForm({ list, showRes, onSubmit }: {
+  list: WishList;
+  showRes: boolean;
+  onSubmit: (v: { title: string; date: string; onlyFree: boolean; archiveOld: boolean }) => void;
+}) {
+  const nextYear = (d: string | null) => {
+    if (!d) return "";
+    const x = new Date(d + "T12:00:00");
+    x.setFullYear(x.getFullYear() + 1);
+    return x.toISOString().slice(0, 10);
+  };
+  const [title, setTitle] = useState(list.title.replace(/\b(\d{1,2})\.(?= Geburtstag)/, (_, n) => `${Number(n) + 1}.`));
+  const [date, setDate] = useState(nextYear(list.event_date));
+  const [onlyFree, setOnlyFree] = useState(true);
+  const [archiveOld, setArchiveOld] = useState(!list.archived_at);
+  return (
+    <form id="reuse-list" onSubmit={(e) => { e.preventDefault(); if (title.trim()) onSubmit({ title: title.trim(), date, onlyFree, archiveOld }); }}>
+      <p className="hint" style={{ marginBottom: 16 }}>Legt eine neue Liste mit denselben Angaben an und übernimmt die Wünsche, ohne Reservierungen.</p>
+      <label className="field"><span>Name der neuen Liste</span><input required maxLength={120} value={title} onChange={(e) => setTitle(e.target.value)} /></label>
+      <label className="field"><span>Datum (optional)</span><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></label>
+      <label className="switch" style={{ marginBottom: 14 }}>
+        <input type="checkbox" checked={onlyFree} onChange={(e) => setOnlyFree(e.target.checked)} />
+        <span><b>Nur Wünsche übernehmen, die noch frei sind</b><br /><span className="hint">{showRes ? "Was schon verschenkt wurde, bleibt weg." : "Da du Reservierungen ausgeblendet hast, werden alle Wünsche übernommen."}</span></span>
+      </label>
+      {!list.archived_at && (
+        <label className="switch">
+          <input type="checkbox" checked={archiveOld} onChange={(e) => setArchiveOld(e.target.checked)} />
+          <span><b>Alte Liste abschließen</b><br /><span className="hint">Sie wandert ins Archiv, der alte Gast-Link wird pausiert.</span></span>
+        </label>
+      )}
+    </form>
   );
 }

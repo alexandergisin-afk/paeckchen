@@ -12,9 +12,11 @@ interface Props {
   formId: string;
   onSaved: () => void;
   onBusyChange?: (busy: boolean) => void;
+  /** Link, der aus einer anderen App geteilt wurde: wird sofort eingesetzt und ausgewertet. */
+  initialUrl?: string;
 }
 
-export function WishForm({ listId, wish, formId, onSaved, onBusyChange }: Props) {
+export function WishForm({ listId, wish, formId, onSaved, onBusyChange, initialUrl }: Props) {
   const { session } = useAuth();
   const edit = !!wish;
   const [url, setUrl] = useState(wish?.url ?? "");
@@ -37,6 +39,16 @@ export function WishForm({ listId, wish, formId, onSaved, onBusyChange }: Props)
   const titleRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { onBusyChange?.(busy); }, [busy, onBusyChange]);
+
+  // Geteilter Link: einsetzen und wie beim Einfügen auswerten (einmalig beim Öffnen)
+  const sharedHandled = useRef(false);
+  useEffect(() => {
+    if (!initialUrl || edit || sharedHandled.current) return;
+    sharedHandled.current = true;
+    setUrl(initialUrl);
+    detect(initialUrl);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialUrl]);
 
   // Vorschau-Adressen wieder freigeben
   useEffect(() => () => { if (preview?.startsWith("blob:")) URL.revokeObjectURL(preview); }, [preview]);

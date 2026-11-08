@@ -2,11 +2,20 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { guestLink } from "../lib/supabase";
 import type { WishList } from "../lib/types";
-import { IconChat, IconMail, IconShare } from "./Icons";
+import qrcode from "qrcode-generator";
+import { IconChat, IconMail, IconQr, IconShare } from "./Icons";
 
 export function ShareContent({ list, onNavigate }: { list: WishList; onNavigate: () => void }) {
   const link = guestLink(list.guest_token);
   const [copied, setCopied] = useState<null | "ok" | "fail">(null);
+  const [qr, setQr] = useState<string | null>(null);
+  const showQr = () => {
+    if (qr) return setQr(null);
+    const code = qrcode(0, "M");
+    code.addData(link);
+    code.make();
+    setQr(code.createDataURL(8, 4)); // als Bild: lässt sich lange drücken und speichern
+  };
   const text = `Hallo! Hier ist die Wunschliste „${list.title}“. Such dir gern ein Geschenk aus und reservier es mit einem Tipp, ganz ohne Anmeldung: ${link}`;
 
   const copy = async () => {
@@ -40,7 +49,17 @@ export function ShareContent({ list, onNavigate }: { list: WishList; onNavigate:
         <a className="btn soft" href={`https://wa.me/?text=${encodeURIComponent(text)}`} target="_blank" rel="noopener noreferrer"><IconChat /> WhatsApp</a>
         <a className="btn soft" href={`mailto:?subject=${encodeURIComponent("Wunschliste: " + list.title)}&body=${encodeURIComponent(text)}`}><IconMail /> E-Mail</a>
       </div>
-      <button className="btn soft block" onClick={share} style={{ marginBottom: 10 }}><IconShare /> Anders teilen …</button>
+      <div className="sharegrid">
+        <button className="btn soft" onClick={share}><IconShare /> Anders teilen</button>
+        <button className="btn soft" onClick={showQr} aria-expanded={!!qr}><IconQr /> QR-Code</button>
+      </div>
+      {qr && (
+        <div className="qr-box">
+          <img src={qr} alt={`QR-Code für die Wunschliste „${list.title}“`} width={232} height={232} />
+          <p className="hint">Zum Ausdrucken, etwa für die Einladungskarte. Auf dem Handy lange drücken zum Speichern.</p>
+          <a className="btn line small" href={qr} download={`paeckli-${list.title.replace(/[^\wäöüÄÖÜß-]+/g, "-")}.gif`}>Bild herunterladen</a>
+        </div>
+      )}
       <Link className="btn line block" to={`/w/${list.guest_token}`} onClick={onNavigate}>Als Gast ansehen</Link>
     </>
   );

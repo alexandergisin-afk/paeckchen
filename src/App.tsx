@@ -12,6 +12,8 @@ import { TeamPage } from "./pages/TeamPage";
 import { InvitePage } from "./pages/InvitePage";
 import { Settings } from "./pages/Settings";
 import { AccessPage } from "./pages/AccessPage";
+import { SharePage } from "./pages/SharePage";
+import { StatsPage } from "./pages/StatsPage";
 
 export const PENDING_INVITE = "paeckchen-pending-invite";
 
@@ -54,6 +56,8 @@ export function App({ linkError }: { linkError: string | null }) {
             <Route path="/einladung/:token" element={parent(<InvitePage />)} />
             <Route path="/einstellungen" element={parent(<Settings />)} />
             <Route path="/einstellungen/zugriff" element={parent(<AccessPage />)} />
+            <Route path="/teilen" element={parent(<SharePage />)} />
+            <Route path="/statistik" element={parent(<StatsPage />)} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>

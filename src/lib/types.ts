@@ -11,12 +11,13 @@ export interface WishList {
   cover: number;
   guest_token: string;
   created_at: string;
+  archived_at?: string | null;
   wishes?: { count: number }[];
   list_members?: { user_id: string; role: Role; show_reservations: boolean }[];
 }
 
 export const LIST_SELECT =
-  "id,title,description,recipient_name,occasion,event_date,cover,guest_token,created_at,wishes(count),list_members(user_id,role,show_reservations)";
+  "id,title,description,recipient_name,occasion,event_date,cover,guest_token,created_at,archived_at,wishes(count),list_members(user_id,role,show_reservations)";
 
 export const OCCASIONS: Record<Occasion, string> = {
   birthday: "Geburtstag",

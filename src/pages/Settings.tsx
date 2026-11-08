@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { canPrompt, isInstalled, isIOS, onInstallChange, promptInstall } from "../lib/install";
-import { db } from "../lib/supabase";
+import { appUrl, db } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { friendlyError, toast } from "../lib/format";
 import { getLargeText, setLargeText } from "../lib/device";
@@ -13,6 +13,22 @@ export function Settings() {
   const [large, setLarge] = useState(getLargeText());
   const [busy, setBusy] = useState(false);
   const [installable, setInstallable] = useState(canPrompt());
+  const [reminders, setReminders] = useState<boolean | null>(null);
+  const [copied, setCopied] = useState(false);
+  const shortcutUrl = `${appUrl()}#/teilen?url=`;
+
+  useEffect(() => {
+    if (!session) return;
+    db().from("profiles").select("reminder_emails").eq("id", session.user.id).maybeSingle()
+      .then(({ data }) => setReminders(data?.reminder_emails ?? true));
+  }, [session]);
+
+  const toggleReminders = async (on: boolean) => {
+    setReminders(on);
+    const { error } = await db().from("profiles").update({ reminder_emails: on }).eq("id", session!.user.id);
+    if (error) { setReminders(!on); return toast(friendlyError(error)); }
+    toast(on ? "Erinnerungen sind an." : "Erinnerungen sind aus.");
+  };
   useEffect(() => onInstallChange(() => setInstallable(canPrompt())), []);
 
   useEffect(() => setNameValue(displayName), [displayName]);
@@ -61,6 +77,26 @@ export function Settings() {
             <button className="fchip" aria-pressed={!large} onClick={() => toggle(false)}>Normale Schrift</button>
             <button className="fchip" aria-pressed={large} onClick={() => toggle(true)}>Große Schrift</button>
           </div>
+        </section>
+        <section className="panel">
+          <label className="switch">
+            <input type="checkbox" checked={reminders ?? true} disabled={reminders === null} onChange={(e) => toggleReminders(e.target.checked)} />
+            <span><b>Erinnerungs-Mails</b><br /><span className="hint">Zwei Wochen und drei Tage vor jedem Anlass eine kurze Mail mit dem aktuellen Stand.</span></span>
+          </label>
+        </section>
+        <section className="panel">
+          <h2>Wünsche aus anderen Apps teilen</h2>
+          <p className="hint" style={{ marginTop: 6 }}>
+            <b>Android:</b> Lege Päckli als App auf den Startbildschirm (siehe unten). Danach erscheint Päckli im Teilen-Menü jeder Shop-App.
+          </p>
+          <p className="hint" style={{ marginTop: 10 }}>
+            <b>iPhone:</b> Einmalig einen Kurzbefehl anlegen: In der App <b>Kurzbefehle</b> einen neuen Kurzbefehl erstellen, in den Details <b>„Im Share-Sheet anzeigen“</b> einschalten
+            und als Eingabe <b>URLs</b> wählen. Dann die Aktion <b>„URLs öffnen“</b> hinzufügen und dort diese Adresse eintragen, direkt gefolgt von der Variable <b>„Kurzbefehleingabe“</b>:
+          </p>
+          <div className="linkbox"><code>{shortcutUrl}</code>
+            <button className="btn small" onClick={async () => { try { await navigator.clipboard.writeText(shortcutUrl); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { /* egal */ } }}>{copied ? "Kopiert ✓" : "Kopieren"}</button>
+          </div>
+          <p className="hint">Den Kurzbefehl z. B. „Zu Päckli“ nennen. Er öffnet Päckli in Safari, dort musst du angemeldet sein.</p>
         </section>
         <section className="panel">
           <h2>Als App auf dem Startbildschirm</h2>

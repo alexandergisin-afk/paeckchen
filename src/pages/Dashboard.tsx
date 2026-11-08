@@ -4,13 +4,13 @@ import { db } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { cover, type Role } from "../lib/types";
 import { dateLabel, daysUntil, friendlyError, toast } from "../lib/format";
-import { IconChevron, IconPlus } from "../components/Icons";
+import { IconChart, IconChevron, IconPlus } from "../components/Icons";
 import { FormSheet } from "../components/FormSheet";
 import { ListForm, toRow, type ListInput } from "../components/ListForm";
 
 /** Für die Übersicht: pro Liste die Wünsche mit Menge und (falls sichtbar) den Reservierungen. */
 const DASH_SELECT =
-  "id,title,recipient_name,event_date,cover,created_at,list_members(user_id,role,show_reservations),wishes(id,quantity,reservations(quantity))";
+  "id,title,recipient_name,event_date,cover,created_at,archived_at,list_members(user_id,role,show_reservations),wishes(id,quantity,reservations(quantity))";
 
 interface DashList {
   id: string;
@@ -19,6 +19,7 @@ interface DashList {
   event_date: string | null;
   cover: number;
   created_at: string;
+  archived_at: string | null;
   list_members: { user_id: string; role: Role; show_reservations: boolean }[];
   wishes: { id: string; quantity: number; reservations: { quantity: number }[] }[];
 }
@@ -61,7 +62,9 @@ export function Dashboard() {
     navigate(`/liste/${(data as { id: string }).id}`);
   };
 
-  const upcoming = (lists ?? [])
+  const active = (lists ?? []).filter((l) => !l.archived_at);
+  const archived = (lists ?? []).filter((l) => l.archived_at);
+  const upcoming = active
     .filter((l) => (daysUntil(l.event_date) ?? -1) >= 0)
     .sort((a, b) => (daysUntil(a.event_date) ?? 0) - (daysUntil(b.event_date) ?? 0))[0];
   const upcomingDays = upcoming ? daysUntil(upcoming.event_date) : null;
@@ -69,7 +72,10 @@ export function Dashboard() {
   return (
     <div className="wrap with-bottom-bar">
       <div className="page-head">
-        <h1>Hallo {firstName(displayName)}</h1>
+        <div className="page-head-top">
+          <h1>Hallo {firstName(displayName)}</h1>
+          {lists && lists.length > 0 && <Link className="btn soft small" to="/statistik"><IconChart /> Statistik</Link>}
+        </div>
         <p className="lead">
           {upcoming
             ? `Als Nächstes: ${upcoming.title} ${upcomingDays === 0 ? "heute" : upcomingDays === 1 ? "morgen" : `in ${upcomingDays} Tagen`}`
@@ -80,15 +86,15 @@ export function Dashboard() {
       {error && <p className="notice error" role="alert">{error} <button className="btn small soft" onClick={load}>Erneut laden</button></p>}
       {!lists && !error && <p className="loading">Listen werden geladen …</p>}
 
-      {lists && lists.length === 0 && (
+      {lists && active.length === 0 && (
         <div className="empty">
           <p>Noch keine Wunschliste. Leg die erste an, das dauert eine Minute.</p>
         </div>
       )}
 
-      {lists && lists.length > 0 && (
+      {lists && active.length > 0 && (
         <div className="list-rows">
-          {lists.map((l) => {
+          {active.map((l) => {
             const c = cover(l.cover);
             const me = l.list_members.find((m) => m.user_id === session?.user.id);
             const show = me?.show_reservations ?? true;
@@ -121,6 +127,27 @@ export function Dashboard() {
             );
           })}
         </div>
+      )}
+
+      {archived.length > 0 && (
+        <details className="arch">
+          <summary>Abgeschlossen ({archived.length})</summary>
+          <div className="list-rows" style={{ marginTop: 10 }}>
+            {archived.map((l) => {
+              const c = cover(l.cover);
+              return (
+                <Link className="list-row is-archived" to={`/liste/${l.id}`} key={l.id}>
+                  <span className={`list-cover t${c.t}`} aria-hidden="true">{c.e}</span>
+                  <span className="list-text">
+                    <span className="list-title">{l.title}</span>
+                    <span className="list-meta">{[l.recipient_name ? `Für ${l.recipient_name}` : "", dateLabel(l.event_date)].filter(Boolean).join(", ")}</span>
+                  </span>
+                  <span className="list-chev" aria-hidden="true"><IconChevron /></span>
+                </Link>
+              );
+            })}
+          </div>
+        </details>
       )}
 
       <div className="bottom-bar">
