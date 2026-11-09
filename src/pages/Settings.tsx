@@ -14,22 +14,21 @@ export function Settings() {
   const [busy, setBusy] = useState(false);
   const [installable, setInstallable] = useState(canPrompt());
   const [reminders, setReminders] = useState<boolean | null>(null);
-  const [notify, setNotify] = useState<"instant" | "daily" | "off" | null>(null);
+  const [notify, setNotify] = useState<boolean | null>(null);
   const [copied, setCopied] = useState(false);
   const shortcutUrl = `${appUrl()}#/teilen?url=`;
 
   useEffect(() => {
     if (!session) return;
     db().from("profiles").select("reminder_emails,notify_reservations").eq("id", session.user.id).maybeSingle()
-      .then(({ data }) => { setReminders(data?.reminder_emails ?? true); setNotify((data?.notify_reservations as "instant" | "daily" | "off") ?? "daily"); });
+      .then(({ data }) => { setReminders(data?.reminder_emails ?? true); setNotify((data?.notify_reservations ?? "daily") !== "off"); });
   }, [session]);
 
-  const chooseNotify = async (v: "instant" | "daily" | "off") => {
-    const old = notify;
-    setNotify(v);
-    const { error } = await db().from("profiles").update({ notify_reservations: v }).eq("id", session!.user.id);
-    if (error) { setNotify(old); return toast(friendlyError(error)); }
-    toast(v === "off" ? "Keine Mails mehr bei Reservierungen." : v === "daily" ? "Einmal täglich eine Zusammenfassung." : "Mail innerhalb weniger Minuten.");
+  const toggleNotify = async (on: boolean) => {
+    setNotify(on);
+    const { error } = await db().from("profiles").update({ notify_reservations: on ? "daily" : "off" }).eq("id", session!.user.id);
+    if (error) { setNotify(!on); return toast(friendlyError(error)); }
+    toast(on ? "Du bekommst morgens eine Zusammenfassung." : "Keine Mails mehr bei Reservierungen.");
   };
 
   const toggleReminders = async (on: boolean) => {
@@ -88,13 +87,10 @@ export function Settings() {
           </div>
         </section>
         <section className="panel">
-          <h2>Bei neuen Reservierungen</h2>
-          <p className="hint" style={{ margin: "6px 0 12px" }}>Eine Mail, wenn jemand etwas von euren Listen reserviert. Listen, bei denen du Reservierungen ausgeblendet hast, sind ausgenommen.</p>
-          <div className="view-toggle notify-toggle" role="group" aria-label="Benachrichtigung bei Reservierungen">
-            {([["instant", "Sofort"], ["daily", "Täglich"], ["off", "Aus"]] as const).map(([v, label]) => (
-              <button key={v} type="button" aria-pressed={notify === v} disabled={notify === null} onClick={() => chooseNotify(v)}>{label}</button>
-            ))}
-          </div>
+          <label className="switch">
+            <input type="checkbox" checked={notify ?? true} disabled={notify === null} onChange={(e) => toggleNotify(e.target.checked)} />
+            <span><b>Neue Reservierungen per Mail</b><br /><span className="hint">Einmal täglich morgens eine Zusammenfassung, wer was reserviert hat. Listen, bei denen du Reservierungen ausgeblendet hast, sind ausgenommen.</span></span>
+          </label>
         </section>
         <section className="panel">
           <label className="switch">

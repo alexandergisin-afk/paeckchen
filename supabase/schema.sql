@@ -784,3 +784,12 @@ grant execute on function public.notify_window(text), public.reservation_notices
   public.set_notify_window(text, timestamptz) to service_role;
 grant execute on function public.reserve_wish(text, uuid, int, text, boolean) to anon, authenticated;
 grant execute on function public.reserve_for_guest(uuid, int, text, boolean) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- Benachrichtigungen nur täglich oder aus (identisch mit 12_ohne_sofort.sql)
+-- ---------------------------------------------------------------------
+update public.profiles set notify_reservations = 'daily' where notify_reservations = 'instant';
+
+alter table public.profiles drop constraint if exists profiles_notify_reservations_check;
+alter table public.profiles add constraint profiles_notify_reservations_check
+  check (notify_reservations in ('daily', 'off'));

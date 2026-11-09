@@ -146,4 +146,7 @@ update list_members set show_reservations = false where user_id = '11111111-1111
 select pg_temp.pruefe((select count(*) from reservation_notices('daily', :'vorher', now()) where email = 'julia@test.de') = 0, 'Ausgeblendete Reservierungen werden nicht verraten');
 update list_members set show_reservations = true;
 
+do $$ begin update profiles set notify_reservations = 'instant' where id = '11111111-1111-1111-1111-111111111111';
+  raise exception 'FEHLGESCHLAGEN: „Sofort“ ließ sich noch einstellen'; exception when check_violation then raise notice 'OK: Benachrichtigungen nur noch täglich oder aus'; end $$;
+
 \echo 'Alle Datenbank-Tests bestanden.'

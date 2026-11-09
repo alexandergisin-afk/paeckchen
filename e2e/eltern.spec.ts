@@ -104,11 +104,12 @@ test("Eltern reservieren für jemanden, der angerufen hat", async ({ page }) => 
   expect(calls.bodies.find((b) => b.fn === "reserve_for_guest")).toMatchObject({ p_wish: "w1", p_name: "Opa Heinz", p_parents_buy: true, p_quantity: 1 });
 });
 
-test("Benachrichtigungen lassen sich auf sofort, täglich oder aus stellen", async ({ page }) => {
+test("Tägliche Benachrichtigung lässt sich ausschalten", async ({ page }) => {
   const calls = await mockSupabase(page, { signedIn: true });
   await page.goto("/#/einstellungen");
-  const group = page.getByRole("group", { name: "Benachrichtigung bei Reservierungen" });
-  await expect(group.getByRole("button", { name: "Täglich" })).toHaveAttribute("aria-pressed", "true");
-  await group.getByRole("button", { name: "Sofort" }).click();
-  await expect.poll(() => calls.writes.some((w) => w.includes('"notify_reservations":"instant"'))).toBe(true);
+  const sw = page.getByRole("checkbox", { name: /Neue Reservierungen per Mail/ });
+  await expect(sw).toBeChecked();
+  await expect(page.getByText("Sofort", { exact: true })).toHaveCount(0);
+  await sw.uncheck();
+  await expect.poll(() => calls.writes.some((w) => w.includes('"notify_reservations":"off"'))).toBe(true);
 });
