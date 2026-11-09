@@ -2,7 +2,7 @@ import type { Priority } from "./types";
 
 export interface StatList { id: string; title: string; recipient_name: string | null; event_date: string | null; archived_at: string | null; list_members: { user_id: string; show_reservations: boolean }[] }
 export interface StatWish { id: string; list_id: string; title: string; price_cents: number | null; quantity: number; priority: Priority; shop: string | null; created_at: string }
-export interface StatRes { id: string; wish_id: string; quantity: number; guest_name: string; created_at: string }
+export interface StatRes { id: string; wish_id: string; quantity: number; guest_name: string; created_at: string; parents_buy?: boolean }
 
 const DAY = 864e5;
 const today = () => { const t = new Date(); t.setHours(0, 0, 0, 0); return t; };
@@ -11,7 +11,7 @@ const day = (s: string) => new Date(s.length <= 10 ? s + "T00:00:00" : s);
 export interface Stats {
   hiddenLists: number;
   stand: { total: number; taken: number; hearts: number; heartsDone: number; next: { title: string; days: number } | null };
-  geld: { totalValue: number; reservedValue: number; avgPrice: number | null; buckets: { label: string; count: number }[] };
+  geld: { totalValue: number; reservedValue: number; avgPrice: number | null; buckets: { label: string; count: number }[]; parentsBuy: { items: number; value: number } };
   schenkende: { distinct: number; ranking: { name: string; items: number; value: number }[] };
   zeit: { weeks: { label: string; count: number }[]; avgDaysToReserve: number | null; hasDates: boolean };
 }
@@ -76,6 +76,7 @@ export function computeStats(lists: StatList[], wishes: StatWish[], res: StatRes
       reservedValue: priced.reduce((a, w) => a + w.price_cents! * taken(w), 0),
       avgPrice: priced.length ? Math.round(priced.reduce((a, w) => a + w.price_cents!, 0) / priced.length) : null,
       buckets,
+      parentsBuy: rs.filter((r) => r.parents_buy).reduce((a, r) => ({ items: a.items + r.quantity, value: a.value + (wishById.get(r.wish_id)?.price_cents ?? 0) * r.quantity }), { items: 0, value: 0 }),
     },
     schenkende: { distinct: people.size, ranking },
     zeit: { weeks, avgDaysToReserve: waits.length ? waits.reduce((a, b) => a + b, 0) / waits.length : null, hasDates },

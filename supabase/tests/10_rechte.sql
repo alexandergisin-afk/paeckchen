@@ -107,4 +107,43 @@ select pg_temp.pruefe((select count(*) from client_errors) = 0, 'Fehlerprotokoll
 select pg_temp.als(null);
 select pg_temp.pruefe((select count(*) from client_errors) = 1, 'Fehler wurde protokolliert');
 
+
+-- Eltern besorgen, Eltern reservieren, Benachrichtigungen
+select pg_temp.als('11111111-1111-1111-1111-111111111111');
+insert into wishes (list_id, title, quantity, created_by) values (:'liste', 'Zelt', 1, auth.uid()), (:'liste', 'Puppe', 1, auth.uid());
+select pg_temp.als(null);
+select id as zelt from wishes where title = 'Zelt' \gset
+select id as puppe from wishes where title = 'Puppe' \gset
+delete from rate_events;
+select clock_timestamp() as vorher \gset
+select pg_temp.als('anon');
+select pg_temp.pruefe((reserve_wish(:'gast', :'zelt', 1, 'Oma Gisela', true)->>'ok')::boolean, 'Gast reserviert mit „Bitte besorgt ihr es“');
+select pg_temp.als('22222222-2222-2222-2222-222222222222');
+select pg_temp.pruefe((select parents_buy from reservations r join wishes w on w.id = r.wish_id where w.title = 'Zelt'), 'Eltern sehen „Eltern besorgen“');
+select pg_temp.pruefe((reserve_for_guest(:'puppe', 1, 'Opa Heinz', true)->>'ok')::boolean, 'Eltern reservieren für jemanden');
+select pg_temp.pruefe((select entered_by from reservations r join wishes w on w.id = r.wish_id where w.title = 'Puppe') = auth.uid(), 'Eintrag merkt sich, wer ihn gemacht hat');
+select pg_temp.pruefe(reserve_for_guest(:'puppe', 1, 'Tante')->>'error' = 'already_taken', 'Auch Eltern können nicht doppelt reservieren');
+select pg_temp.als('33333333-3333-3333-3333-333333333333');
+do $$ begin perform reserve_for_guest((select id from wishes limit 1), 1, 'X'); raise exception 'FEHLGESCHLAGEN: Fremde konnten reservieren';
+  exception when insufficient_privilege then raise notice 'OK: Fremde können nicht für andere reservieren'; end $$;
+select pg_temp.als('anon');
+select pg_temp.pruefe(guest_list(:'gast')::text not like '%Opa Heinz%' and guest_list(:'gast')::text not like '%parents_buy%', 'Gäste erfahren weder Namen noch „Eltern besorgen“');
+
+-- Benachrichtigungen: nur für den Server, ohne eigene Einträge
+select pg_temp.als('11111111-1111-1111-1111-111111111111');
+do $$ begin perform reservation_notices('daily', now() - interval '1 day', now()); raise exception 'FEHLGESCHLAGEN: App kann Benachrichtigungen lesen';
+  exception when insufficient_privilege then raise notice 'OK: App hat keinen Zugriff auf Benachrichtigungen'; end $$;
+select pg_temp.als(null);
+create temp table hinweise as select * from reservation_notices('daily', :'vorher', now());
+select pg_temp.pruefe((select count(*) from hinweise where email = 'julia@test.de') = 1
+  and (select jsonb_array_length(items) from hinweise where email = 'julia@test.de') = 2, 'Julia erfährt von beiden neuen Reservierungen');
+select pg_temp.pruefe((select count(*) from hinweise h, jsonb_array_elements(h.items) i where h.email = 'markus@test.de' and i->>'name' = 'Opa Heinz') = 0
+  and (select count(*) from hinweise where email = 'markus@test.de') = 1, 'Markus wird über seinen eigenen Eintrag nicht benachrichtigt');
+update profiles set notify_reservations = 'off' where id = '11111111-1111-1111-1111-111111111111';
+select pg_temp.pruefe((select count(*) from reservation_notices('daily', :'vorher', now()) where email = 'julia@test.de') = 0, 'Wer „aus“ wählt, bekommt nichts');
+update profiles set notify_reservations = 'daily' where id = '11111111-1111-1111-1111-111111111111';
+update list_members set show_reservations = false where user_id = '11111111-1111-1111-1111-111111111111';
+select pg_temp.pruefe((select count(*) from reservation_notices('daily', :'vorher', now()) where email = 'julia@test.de') = 0, 'Ausgeblendete Reservierungen werden nicht verraten');
+update list_members set show_reservations = true;
+
 \echo 'Alle Datenbank-Tests bestanden.'

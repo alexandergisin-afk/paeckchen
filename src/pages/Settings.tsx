@@ -14,14 +14,23 @@ export function Settings() {
   const [busy, setBusy] = useState(false);
   const [installable, setInstallable] = useState(canPrompt());
   const [reminders, setReminders] = useState<boolean | null>(null);
+  const [notify, setNotify] = useState<"instant" | "daily" | "off" | null>(null);
   const [copied, setCopied] = useState(false);
   const shortcutUrl = `${appUrl()}#/teilen?url=`;
 
   useEffect(() => {
     if (!session) return;
-    db().from("profiles").select("reminder_emails").eq("id", session.user.id).maybeSingle()
-      .then(({ data }) => setReminders(data?.reminder_emails ?? true));
+    db().from("profiles").select("reminder_emails,notify_reservations").eq("id", session.user.id).maybeSingle()
+      .then(({ data }) => { setReminders(data?.reminder_emails ?? true); setNotify((data?.notify_reservations as "instant" | "daily" | "off") ?? "daily"); });
   }, [session]);
+
+  const chooseNotify = async (v: "instant" | "daily" | "off") => {
+    const old = notify;
+    setNotify(v);
+    const { error } = await db().from("profiles").update({ notify_reservations: v }).eq("id", session!.user.id);
+    if (error) { setNotify(old); return toast(friendlyError(error)); }
+    toast(v === "off" ? "Keine Mails mehr bei Reservierungen." : v === "daily" ? "Einmal täglich eine Zusammenfassung." : "Mail innerhalb weniger Minuten.");
+  };
 
   const toggleReminders = async (on: boolean) => {
     setReminders(on);
@@ -76,6 +85,15 @@ export function Settings() {
           <div className="chips">
             <button className="fchip" aria-pressed={!large} onClick={() => toggle(false)}>Normale Schrift</button>
             <button className="fchip" aria-pressed={large} onClick={() => toggle(true)}>Große Schrift</button>
+          </div>
+        </section>
+        <section className="panel">
+          <h2>Bei neuen Reservierungen</h2>
+          <p className="hint" style={{ margin: "6px 0 12px" }}>Eine Mail, wenn jemand etwas von euren Listen reserviert. Listen, bei denen du Reservierungen ausgeblendet hast, sind ausgenommen.</p>
+          <div className="view-toggle notify-toggle" role="group" aria-label="Benachrichtigung bei Reservierungen">
+            {([["instant", "Sofort"], ["daily", "Täglich"], ["off", "Aus"]] as const).map(([v, label]) => (
+              <button key={v} type="button" aria-pressed={notify === v} disabled={notify === null} onClick={() => chooseNotify(v)}>{label}</button>
+            ))}
           </div>
         </section>
         <section className="panel">

@@ -6,7 +6,7 @@ import { LIST_PAGE_SELECT, cover, sortWishes, type Reservation, type Wish, type 
 import { countdownLabel, dateLabel, daysUntil, friendlyError, toast } from "../lib/format";
 import { removeImage } from "../lib/wishes";
 import { copyWishes, moveWish } from "../lib/listOps";
-import { IconArchive, IconBack, IconChevron, IconCopy, IconEdit, IconExt, IconEye, IconGrid, IconMove, IconPlus, IconRepeat, IconRows, IconShare, IconTrash, IconUndo, IconUsers } from "../components/Icons";
+import { IconArchive, IconBack, IconChevron, IconCopy, IconGift, IconEdit, IconExt, IconEye, IconGrid, IconMove, IconPlus, IconRepeat, IconRows, IconShare, IconTrash, IconUndo, IconUsers } from "../components/Icons";
 import { Sheet } from "../components/Sheet";
 import { FormSheet } from "../components/FormSheet";
 import { ListForm, toRow, type ListInput } from "../components/ListForm";
@@ -26,6 +26,7 @@ type SheetState =
   | { kind: "release"; wish: Wish; reservation: Reservation }
   | { kind: "transfer"; wish: Wish; mode: "move" | "copy"; targets: { id: string; title: string; cover: number }[] | null }
   | { kind: "reuse" }
+  | { kind: "reserveFor"; wish: Wish }
   | { kind: "archive" };
 
 export function ListPage() {
@@ -201,6 +202,20 @@ export function ListPage() {
     }
   };
 
+  const reserveFor = async (wish: Wish, name: string, qty: number, parentsBuy: boolean) => {
+    setBusy(true);
+    const { data, error } = await db().rpc("reserve_for_guest", { p_wish: wish.id, p_quantity: qty, p_name: name, p_parents_buy: parentsBuy });
+    setBusy(false);
+    if (error) return toast(friendlyError(error));
+    const r = data as { ok: boolean; error?: string; available?: number };
+    if (!r.ok) {
+      return toast(r.error === "already_taken" ? "Inzwischen hat jemand anderes reserviert." : r.error === "name_required" ? "Bitte gib einen Namen an." : "Das hat nicht geklappt.");
+    }
+    close();
+    toast(`Für ${name} reserviert.`);
+    load();
+  };
+
   const saved = () => {
     close();
     load();
@@ -322,6 +337,9 @@ export function ListPage() {
               {sheet.wish.url && <a href={sheet.wish.url} target="_blank" rel="noopener noreferrer"><IconExt /> Im Shop öffnen</a>}
               <button type="button" onClick={() => openTransfer(sheet.wish, "move")}><IconMove /> In andere Liste verschieben</button>
               <button type="button" onClick={() => openTransfer(sheet.wish, "copy")}><IconCopy /> In andere Liste kopieren</button>
+              {showRes && sheet.wish.quantity - resOf(sheet.wish).reduce((a, r) => a + r.quantity, 0) > 0 && (
+                <button type="button" onClick={() => setSheet({ kind: "reserveFor", wish: sheet.wish })}><IconGift /> Für jemanden reservieren</button>
+              )}
               {showRes && resOf(sheet.wish).map((r) => (
                 <button type="button" key={r.id} onClick={() => setSheet({ kind: "release", wish: sheet.wish, reservation: r })}>
                   <IconUndo /> Reservierung von {r.guest_name} freigeben
@@ -356,6 +374,13 @@ export function ListPage() {
               </div>
             )}
           </>
+        )}
+      </Sheet>
+
+      <Sheet open={sheet?.kind === "reserveFor"} onClose={close} label="Für jemanden reservieren">
+        {sheet?.kind === "reserveFor" && (
+          <ReserveForForm wish={sheet.wish} free={sheet.wish.quantity - resOf(sheet.wish).reduce((a, r) => a + r.quantity, 0)}
+            busy={busy} onSubmit={(n, q, pb) => reserveFor(sheet.wish, n, q, pb)} />
         )}
       </Sheet>
 
@@ -440,6 +465,40 @@ function ReuseForm({ list, showRes, onSubmit }: {
           <span><b>Alte Liste abschließen</b><br /><span className="hint">Sie wandert ins Archiv, der alte Gast-Link wird pausiert.</span></span>
         </label>
       )}
+    </form>
+  );
+}
+
+/** Eltern tragen eine Reservierung für jemanden ein, z. B. nach einem Anruf von Oma. */
+function ReserveForForm({ wish, free, busy, onSubmit }: {
+  wish: Wish; free: number; busy: boolean; onSubmit: (name: string, qty: number, parentsBuy: boolean) => void;
+}) {
+  const [name, setName] = useState("");
+  const [qty, setQty] = useState(1);
+  const [parentsBuy, setParentsBuy] = useState(false);
+  return (
+    <form onSubmit={(e) => { e.preventDefault(); if (name.trim()) onSubmit(name.trim(), qty, parentsBuy); }}>
+      <h2>Für jemanden reservieren</h2>
+      <p className="hint" style={{ marginBottom: 14 }}>„{wish.title}“ wird für diese Person reserviert, zum Beispiel wenn sie angerufen hat. Alle anderen sehen dann: vergeben.</p>
+      <label className="field">
+        <span>Für wen?</span>
+        <input required autoFocus maxLength={60} value={name} placeholder="z. B. Oma Gisela" onChange={(e) => setName(e.target.value)} />
+      </label>
+      {free > 1 && (
+        <div className="qty-row">
+          <span className="qty-label">Wie viele? <span className="optional">(noch {free} frei)</span></span>
+          <div className="stepper" role="group" aria-label="Menge">
+            <button type="button" aria-label="Weniger" disabled={qty <= 1} onClick={() => setQty(qty - 1)}>−</button>
+            <output>{qty}</output>
+            <button type="button" aria-label="Mehr" disabled={qty >= free} onClick={() => setQty(qty + 1)}>+</button>
+          </div>
+        </div>
+      )}
+      <label className="switch" style={{ margin: "6px 0 18px" }}>
+        <input type="checkbox" checked={parentsBuy} onChange={(e) => setParentsBuy(e.target.checked)} />
+        <span><b>Wir besorgen das Geschenk</b><br /><span className="hint">Die Person gibt euch das Geld, ihr kauft es.</span></span>
+      </label>
+      <button type="submit" className="btn block big" disabled={busy}>{busy ? "Wird reserviert …" : "Reservieren"}</button>
     </form>
   );
 }

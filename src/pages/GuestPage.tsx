@@ -15,7 +15,7 @@ type Price = "all" | "20" | "50" | "more";
 type GSheet =
   | null
   | { kind: "reserve"; wish: GuestWish }
-  | { kind: "done"; wish: GuestWish }
+  | { kind: "done"; wish: GuestWish; parentsBuy: boolean }
   | { kind: "taken"; available: number }
   | { kind: "cancel"; wish: GuestWish; code: string };
 
@@ -89,16 +89,16 @@ export function GuestPage() {
   const c = cover(list.cover);
   const meta = [list.recipient_name ? `Für ${list.recipient_name}` : "", list.event_date ? `${OCCASIONS[list.occasion]} am ${dateLabel(list.event_date)}` : ""].filter(Boolean).join(", ");
 
-  const reserve = async (wish: GuestWish, qty: number, name: string) => {
+  const reserve = async (wish: GuestWish, qty: number, name: string, parentsBuy: boolean) => {
     setBusy(true);
-    const { data, error } = await db().rpc("reserve_wish", { p_token: token, p_wish: wish.id, p_quantity: qty, p_name: name });
+    const { data, error } = await db().rpc("reserve_wish", { p_token: token, p_wish: wish.id, p_quantity: qty, p_name: name, p_parents_buy: parentsBuy });
     setBusy(false);
     if (error) return toast(friendlyError(error));
     const r = data as { ok: boolean; code?: string; error?: string; available?: number };
     if (r.ok && r.code) {
       addCode(r.code);
       setName(name);
-      setSheet({ kind: "done", wish });
+      setSheet({ kind: "done", wish, parentsBuy });
     } else if (r.error === "already_taken") setSheet({ kind: "taken", available: r.available ?? 0 });
     else if (r.error === "name_required") return toast("Bitte gib deinen Namen an.");
     else if (r.error === "rate_limited") return toast("Gerade wurde auf dieser Liste sehr viel reserviert. Bitte versuch es in einer Minute noch einmal.");
@@ -224,7 +224,7 @@ export function GuestPage() {
       </p>
 
       <Sheet open={sheet?.kind === "reserve"} onClose={close} label="Wunsch reservieren">
-        {sheet?.kind === "reserve" && <ReserveForm wish={sheet.wish} busy={busy} onSubmit={(q, n) => reserve(sheet.wish, q, n)} />}
+        {sheet?.kind === "reserve" && <ReserveForm wish={sheet.wish} busy={busy} onSubmit={(q, n, pb) => reserve(sheet.wish, q, n, pb)} />}
       </Sheet>
 
       <Sheet open={sheet?.kind === "done"} onClose={close} label="Reservierung bestätigt">
@@ -233,7 +233,8 @@ export function GuestPage() {
             <h2>Reserviert!</h2>
             <WishTile wish={sheet.wish} wrapped animate className="confirm-tile" />
             <p>„{sheet.wish.title}“ ist jetzt für dich reserviert. Alle anderen sehen nur noch: vergeben.</p>
-            {sheet.wish.url && (
+            {sheet.parentsBuy && <p className="notice" style={{ marginTop: 12 }}>Die Eltern wissen Bescheid, dass sie das Geschenk für dich besorgen. Das Geld regelt ihr am besten direkt miteinander.</p>}
+            {!sheet.parentsBuy && sheet.wish.url && (
               <p style={{ marginTop: 14 }}>
                 <a className="btn line block" href={sheet.wish.url} target="_blank" rel="noopener noreferrer"><IconExt /> Zum Shop</a>
               </p>
@@ -272,13 +273,14 @@ export function GuestPage() {
   );
 }
 
-function ReserveForm({ wish, busy, onSubmit }: { wish: GuestWish; busy: boolean; onSubmit: (qty: number, name: string) => void }) {
+function ReserveForm({ wish, busy, onSubmit }: { wish: GuestWish; busy: boolean; onSubmit: (qty: number, name: string, parentsBuy: boolean) => void }) {
   const [name, setNameValue] = useState(getName());
   const [qty, setQty] = useState("1");
+  const [parentsBuy, setParentsBuy] = useState(false);
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    onSubmit(Math.max(1, Math.min(wish.available, Number.parseInt(qty) || 1)), name.trim());
+    onSubmit(Math.max(1, Math.min(wish.available, Number.parseInt(qty) || 1)), name.trim(), parentsBuy);
   };
   return (
     <>
@@ -296,6 +298,10 @@ function ReserveForm({ wish, busy, onSubmit }: { wish: GuestWish; busy: boolean;
           <span>Dein Name</span>
           <input required maxLength={60} autoComplete="name" autoFocus={!name} value={name} placeholder="z. B. Oma Gisela" onChange={(e) => setNameValue(e.target.value)} />
           <small>Damit die Eltern wissen, von wem das Geschenk kommt. Andere Gäste sehen deinen Namen nie.</small>
+        </label>
+        <label className="switch parents-buy">
+          <input type="checkbox" checked={parentsBuy} onChange={(e) => setParentsBuy(e.target.checked)} />
+          <span><b>Bitte besorgt ihr das Geschenk</b><br /><span className="hint">Die Eltern kaufen es für dich, du gibst ihnen das Geld.</span></span>
         </label>
         <button className="btn ribbon block" type="submit" disabled={busy}><IconGift /> {busy ? "Wird reserviert …" : "Jetzt reservieren"}</button>
       </form>

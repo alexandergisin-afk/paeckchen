@@ -42,7 +42,10 @@ export function reservationStatus(wish: Wish, reservations: Reservation[]): { te
   const taken = reservations.reduce((a, r) => a + r.quantity, 0);
   const free = wish.quantity - taken;
   if (!reservations.length) return { text: "Noch frei", free: true };
-  const names = reservations.map((r) => (r.quantity > 1 ? `${r.guest_name} (${r.quantity})` : r.guest_name));
+  const names = reservations.map((r) => {
+    const extra = [r.quantity > 1 ? `${r.quantity} Stück` : "", r.parents_buy ? "ihr besorgt" : ""].filter(Boolean).join(", ");
+    return extra ? `${r.guest_name} (${extra})` : r.guest_name;
+  });
   const who = names.length > 1 ? `${names.slice(0, -1).join(", ")} und ${names[names.length - 1]}` : names[0];
   if (free <= 0) return { text: `Reserviert von ${who}`, free: false };
   return { text: `${taken} reserviert von ${who}, noch ${free} frei`, free: false };

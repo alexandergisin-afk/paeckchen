@@ -18,11 +18,11 @@ const LIST = {
   list_members: [{ user_id: UID, role: "owner", show_reservations: true }],
 };
 
-export interface Calls { lists: string[]; rpc: string[]; writes: string[] }
+export interface Calls { lists: string[]; rpc: string[]; writes: string[]; bodies: Record<string, unknown>[] }
 
 /** Beantwortet alle Supabase-Anfragen mit Testdaten und protokolliert sie. */
 export async function mockSupabase(page: Page, opts: { signedIn?: boolean } = {}): Promise<Calls> {
-  const calls: Calls = { lists: [], rpc: [], writes: [] };
+  const calls: Calls = { lists: [], rpc: [], writes: [], bodies: [] };
   if (opts.signedIn) {
     const session = {
       access_token: "a", refresh_token: "r", token_type: "bearer", expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600,
@@ -48,6 +48,8 @@ export async function mockSupabase(page: Page, opts: { signedIn?: boolean } = {}
     if (url.includes("/rpc/")) {
       const fn = url.split("/rpc/")[1].split("?")[0];
       calls.rpc.push(fn);
+      try { calls.bodies.push({ fn, ...JSON.parse(req.postData() ?? "{}") }); } catch { /* egal */ }
+      if (fn === "reserve_for_guest") return json({ ok: true, code: "WXYZ-2345" });
       if (fn === "guest_list") {
         const avail: Record<string, number> = { w1: 1, w2: 2, w3: 0 };
         return json({ ...LIST, wishes: WISHES.map(({ list_id: _l, created_at: _c, ...w }) => ({ ...w, available: avail[w.id] })) });
@@ -57,7 +59,7 @@ export async function mockSupabase(page: Page, opts: { signedIn?: boolean } = {}
       return json(null);
     }
     if (req.method() !== "GET") { calls.writes.push(`${req.method()} ${url.split("/rest/v1/")[1] ?? url} ${req.postData() ?? ""}`); return route.fulfill({ status: 204 }); }
-    if (url.includes("/rest/v1/profiles")) return json({ display_name: "Julia", reminder_emails: true });
+    if (url.includes("/rest/v1/profiles")) return json({ display_name: "Julia", reminder_emails: true, notify_reservations: "daily" });
     if (url.includes("/rest/v1/lists")) {
       calls.lists.push(url);
       const nested = { ...LIST, wishes: WISHES.map((w) => ({ ...w, reservations: RES.filter((r) => r.wish_id === w.id) })) };

@@ -90,3 +90,25 @@ test("Statistik zeigt alle Bereiche", async ({ page }) => {
   }
   expect(problems).toEqual([]);
 });
+
+test("Eltern reservieren für jemanden, der angerufen hat", async ({ page }) => {
+  const calls = await mockSupabase(page, { signedIn: true });
+  await page.goto(`/#/liste/${LID}`);
+  await page.locator(".wrow-btn", { hasText: "Kinderfahrrad" }).click();
+  await page.getByRole("button", { name: "Für jemanden reservieren" }).click();
+  const dlg = page.locator("dialog.sheet[open]");
+  await dlg.getByLabel("Für wen?").fill("Opa Heinz");
+  await dlg.getByRole("checkbox", { name: /Wir besorgen das Geschenk/ }).check();
+  await dlg.getByRole("button", { name: "Reservieren" }).click();
+  await expect(page.locator("#toast")).toContainText("Für Opa Heinz reserviert");
+  expect(calls.bodies.find((b) => b.fn === "reserve_for_guest")).toMatchObject({ p_wish: "w1", p_name: "Opa Heinz", p_parents_buy: true, p_quantity: 1 });
+});
+
+test("Benachrichtigungen lassen sich auf sofort, täglich oder aus stellen", async ({ page }) => {
+  const calls = await mockSupabase(page, { signedIn: true });
+  await page.goto("/#/einstellungen");
+  const group = page.getByRole("group", { name: "Benachrichtigung bei Reservierungen" });
+  await expect(group.getByRole("button", { name: "Täglich" })).toHaveAttribute("aria-pressed", "true");
+  await group.getByRole("button", { name: "Sofort" }).click();
+  await expect.poll(() => calls.writes.some((w) => w.includes('"notify_reservations":"instant"'))).toBe(true);
+});

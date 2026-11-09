@@ -22,7 +22,7 @@ export const LIST_SELECT =
 /** Listenseite: Liste, Wünsche und (falls sichtbar) Reservierungen in einer einzigen Abfrage. */
 export const LIST_PAGE_SELECT =
   "id,title,description,recipient_name,occasion,event_date,cover,guest_token,created_at,archived_at,list_members(user_id,role,show_reservations)," +
-  "wishes(id,list_id,title,url,shop,image_path,price_cents,quantity,priority,note,created_at,reservations(id,wish_id,quantity,guest_name,created_at))";
+  "wishes(id,list_id,title,url,shop,image_path,price_cents,quantity,priority,note,created_at,reservations(id,wish_id,quantity,guest_name,created_at,parents_buy,entered_by))";
 
 export const OCCASIONS: Record<Occasion, string> = {
   birthday: "Geburtstag",
@@ -71,6 +71,10 @@ export interface Reservation {
   quantity: number;
   guest_name: string;
   created_at: string;
+  /** Schenkende möchten, dass die Eltern das Geschenk besorgen */
+  parents_buy?: boolean;
+  /** Von einem Elternteil eingetragen (z. B. nach einem Anruf) */
+  entered_by?: string | null;
 }
 
 /** Was Gäste über eine Liste erfahren: keine Namen, nur freie Mengen. */

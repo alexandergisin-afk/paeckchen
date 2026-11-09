@@ -32,7 +32,7 @@ export function StatsPage() {
         if (error) throw error;
         const ls = lists as StatList[];
         const wishes = await inChunks<StatWish>("wishes", "id,list_id,title,price_cents,quantity,priority,shop,created_at", "list_id", ls.map((l) => l.id));
-        const res = await inChunks<StatRes>("reservations", "id,wish_id,quantity,guest_name,created_at", "wish_id", wishes.map((w) => w.id));
+        const res = await inChunks<StatRes>("reservations", "id,wish_id,quantity,guest_name,created_at,parents_buy", "wish_id", wishes.map((w) => w.id));
         setData({ lists: ls, wishes, res });
       } catch (e) {
         setError(friendlyError(e));
@@ -101,6 +101,12 @@ export function StatsPage() {
             <div className="stat-tile"><span className="stat-num">{formatPrice(s.geld.reservedValue)}</span><span className="stat-label">davon reserviert</span></div>
             <div className="stat-tile"><span className="stat-num">{s.geld.avgPrice != null ? formatPrice(s.geld.avgPrice) : "–"}</span><span className="stat-label">durchschnittlicher Preis</span></div>
           </div>
+          {s.geld.parentsBuy.items > 0 && (
+            <p className="notice" style={{ marginTop: 12 }}>
+              <b>Von euch zu besorgen:</b> {s.geld.parentsBuy.items} {s.geld.parentsBuy.items === 1 ? "Geschenk" : "Geschenke"}
+              {s.geld.parentsBuy.value > 0 && <> im Wert von {formatPrice(s.geld.parentsBuy.value)}</>}. Das Geld bekommt ihr von den Schenkenden.
+            </p>
+          )}
           <h3 className="stat-sub">Wünsche nach Preis</h3>
           <div className="hbars">
             {s.geld.buckets.map((b) => (

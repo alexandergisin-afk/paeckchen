@@ -19,7 +19,7 @@ const wishes = [
 ];
 const R = (id: string, wish_id: string, quantity: number, guest_name: string, created_at: string): StatRes => ({ id, wish_id, quantity, guest_name, created_at });
 const res = [
-  R("r1", "rad", 1, "Oma Gisela", "2026-11-04T10:00:00Z"),
+  { ...R("r1", "rad", 1, "Oma Gisela", "2026-11-04T10:00:00Z"), parents_buy: true },
   R("r2", "tonie", 2, "Familie Yilmaz", "2026-12-10T10:00:00Z"),
   R("r3", "tonie", 1, " oma gisela", "2026-12-20T10:00:00Z"),
   R("r4", "mikro", 1, "Tante Sabine", "2025-12-01T10:00:00Z"),
@@ -35,6 +35,9 @@ describe("Statistik", () => {
     expect(s.geld.totalValue).toBe(34900 + 3 * 1699 + 1300 + 9900);
     expect(s.geld.reservedValue).toBe(34900 + 3 * 1699);
     expect(s.geld.buckets.map((b) => b.count)).toEqual([2, 0, 2, 1]);
+  });
+  it("zählt, was die Eltern besorgen sollen", () => {
+    expect(s.geld.parentsBuy).toEqual({ items: 1, value: 34900 });
   });
   it("fasst gleiche Schenkende zusammen", () => {
     expect(s.schenkende.distinct).toBe(2);

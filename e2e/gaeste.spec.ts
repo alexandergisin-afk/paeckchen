@@ -36,3 +36,14 @@ test("Gästeansicht lässt sich zwischen Kacheln und Liste umschalten und merkt 
   await page.reload();
   await expect(page.locator(".ggrid.rows")).toBeVisible();
 });
+
+test("Gäste können bitten, dass die Eltern das Geschenk besorgen", async ({ page }) => {
+  const calls = await mockSupabase(page);
+  await page.goto("/#/w/TOK");
+  await page.locator(".gcard", { hasText: "Kinderfahrrad" }).getByRole("button", { name: "Reservieren" }).click();
+  await page.getByLabel("Dein Name").fill("Oma Gisela");
+  await page.getByRole("checkbox", { name: /Bitte besorgt ihr das Geschenk/ }).check();
+  await page.getByRole("button", { name: "Jetzt reservieren" }).click();
+  await expect(page.getByText("Die Eltern wissen Bescheid")).toBeVisible();
+  expect(calls.bodies.find((b) => b.fn === "reserve_wish")).toMatchObject({ p_name: "Oma Gisela", p_parents_buy: true });
+});

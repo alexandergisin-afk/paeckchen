@@ -669,3 +669,6 @@ dialog.fsheet::backdrop { background: rgba(20,12,30,.48); }
 .qty-row .stepper { width: 156px; }
 .more-details { margin-top: 6px; border-radius: 14px; background: var(--surface-2); padding: 2px 14px 8px; }
 .more-details summary small { font-weight: 400; color: var(--ink-2); margin-left: 6px; }
+.parents-buy { margin: 4px 0 18px; padding: 12px; border-radius: 14px; background: var(--surface-2); }
+.notify-toggle button { min-height: 44px; padding: 0 18px; }
+.sheet-in > form > h2:first-child { padding-right: 48px; margin-bottom: 10px; }
