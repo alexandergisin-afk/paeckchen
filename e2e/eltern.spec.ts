@@ -12,17 +12,73 @@ test("Listenseite lädt mit einer einzigen Abfrage und zeigt Reservierungen", as
   expect(problems).toEqual([]);
 });
 
-test("Formulare behalten Abbrechen und Speichern auch bei wenig Platz im Blick", async ({ page }) => {
-  await page.setViewportSize({ width: 360, height: 560 });
+test("Wunsch über die Suche: 25 Treffer, auswählen, Priorität wählen, speichern", async ({ page }) => {
+  const problems = watchProblems(page);
+  const calls = await mockSupabase(page, { signedIn: true });
+  await page.goto(`/#/liste/${LID}`);
+  await page.getByRole("button", { name: "Wunsch hinzufügen" }).click();
+  const flow = page.locator("dialog.add-flow[open]");
+  await expect(flow.getByRole("heading", { name: "Was wünscht sich Emma?" })).toBeVisible();
+  await expect(flow.getByText("Schritt 1 von 2")).toBeVisible();
+  await flow.getByLabel("Produkt suchen").fill("lego baumhaus");
+  await flow.getByLabel("Produkt suchen").press("Enter");
+  await expect(flow.locator(".result")).toHaveCount(25);
+  await flow.locator(".result").first().click();
+  await expect(flow.getByText("Schritt 2 von 2")).toBeVisible();
+  await expect(flow.locator(".product-title")).toHaveText("LEGO Friends 42652 Freundschaftsbaumhaus");
+  await flow.getByRole("radio", { name: /Herzenswunsch/ }).check();
+  await expect(flow.getByRole("radio", { name: /Herzenswunsch/ })).toBeChecked();
+  await flow.getByRole("button", { name: "Mehr" }).click();
+  await flow.getByRole("button", { name: "Auf die Liste setzen" }).click();
+  await expect(flow).toHaveCount(0);
+  const post = calls.writes.find((w) => w.startsWith("POST wishes"))!;
+  expect(post).toContain('"priority":"heart"');
+  expect(post).toContain('"quantity":2');
+  expect(post).toContain('"url":"https://www.ebay.de/itm/1000"');
+  expect(problems).toEqual([]);
+});
+
+test("Wunsch über einen Link: wird ausgelesen und springt automatisch zu Schritt 2", async ({ page }) => {
   await mockSupabase(page, { signedIn: true });
   await page.goto(`/#/liste/${LID}`);
   await page.getByRole("button", { name: "Wunsch hinzufügen" }).click();
-  const save = page.locator("dialog.fsheet[open] .fs-save");
-  const cancel = page.locator("dialog.fsheet[open] .fs-cancel");
-  await expect(save).toBeInViewport();
-  await expect(cancel).toBeInViewport();
-  const [s, c] = [await save.boundingBox(), await cancel.boundingBox()];
-  expect(c!.x + c!.width).toBeLessThan(s!.x); // nichts überlappt
+  const flow = page.locator("dialog.add-flow[open]");
+  await flow.getByRole("button", { name: /Link einfügen/ }).click();
+  await flow.locator("input[type=url]").fill("https://www.thalia.de/shop/artikel/12345");
+  await flow.locator("input[type=url]").press("Enter");
+  await expect(flow.locator(".product-title")).toHaveText("Hörbuch-Box für Kinder ab 8");
+  // Zurück führt wieder zum Link, nicht ganz an den Anfang
+  await flow.getByRole("button", { name: "Zurück" }).click();
+  await expect(flow.getByRole("heading", { name: "Link einfügen" })).toBeVisible();
+});
+
+test("Wunsch selbst eintragen, und „Weitere Angaben“ enthält Shop, Link und Foto", async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 560 });
+  const calls = await mockSupabase(page, { signedIn: true });
+  await page.goto(`/#/liste/${LID}`);
+  await page.getByRole("button", { name: "Wunsch hinzufügen" }).click();
+  const flow = page.locator("dialog.add-flow[open]");
+  await expect(flow.getByRole("button", { name: "Abbrechen" })).toBeInViewport();
+  await flow.getByRole("button", { name: /Selbst eintragen/ }).click();
+  await flow.getByLabel("Was wird gewünscht?").fill("Ein Tag im Kletterwald");
+  await flow.getByText("Weitere Angaben").click();
+  await expect(flow.locator(".more-details input[type=url]")).toBeVisible();
+  // Der Speichern-Knopf bleibt auch auf kleinem Bildschirm sichtbar
+  await expect(flow.getByRole("button", { name: "Auf die Liste setzen" })).toBeInViewport();
+  await flow.getByRole("button", { name: "Auf die Liste setzen" }).click();
+  await expect.poll(() => calls.writes.some((w) => w.includes("Kletterwald"))).toBe(true);
+});
+
+test("Bearbeiten zeigt die Produktkarte, Name und Preis lassen sich aufklappen", async ({ page }) => {
+  await mockSupabase(page, { signedIn: true });
+  await page.goto(`/#/liste/${LID}`);
+  await page.locator(".wrow-btn", { hasText: "Kinderfahrrad" }).click();
+  const edit = page.locator("dialog.fsheet[open]");
+  await expect(edit.locator(".product-title")).toHaveText("Kinderfahrrad 24 Zoll");
+  await edit.getByRole("button", { name: "Name oder Preis ändern" }).click();
+  await expect(edit.getByLabel("Was wird gewünscht?")).toHaveValue("Kinderfahrrad 24 Zoll");
+  await edit.getByText("Weitere Angaben").click();
+  await expect(edit.locator(".more-details input[type=url]")).toHaveValue("https://www.decathlon.de/x");
 });
 
 test("Statistik zeigt alle Bereiche", async ({ page }) => {

@@ -117,11 +117,11 @@ if (typeof Deno !== "undefined") {
     const api = Deno.env.get("EBAY_API_BASE") ?? "https://api.ebay.com"; // nur für Tests änderbar
 
     let q = "";
-    let limit = 12;
+    let limit = 25;
     try {
       const body = await req.json();
       q = String(body.q ?? "").trim().slice(0, 100);
-      limit = Math.max(1, Math.min(24, Number(body.limit) || 12));
+      limit = Math.max(1, Math.min(50, Number(body.limit) || 25));
     } catch { /* leer */ }
     if (q.length < 2) return json({ error: "query_too_short" }, 400);
 
@@ -130,7 +130,7 @@ if (typeof Deno !== "undefined") {
       if (!t.token) return json({ error: "ebay_auth", status: t.status });
       const params = new URLSearchParams({
         q,
-        limit: String(Math.min(50, limit * 2)), // mehr holen, weil doppelte Titel herausfallen
+        limit: String(Math.min(100, limit * 2)), // mehr holen, weil doppelte Titel herausfallen
         filter: "buyingOptions:{FIXED_PRICE},conditionIds:{1000}", // Neuware, Sofortkauf
       });
       const res = await fetch(`${api}/buy/browse/v1/item_summary/search?${params}`, {

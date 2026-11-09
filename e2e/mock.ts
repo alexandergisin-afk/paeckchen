@@ -34,6 +34,17 @@ export async function mockSupabase(page: Page, opts: { signedIn?: boolean } = {}
     const req = route.request();
     const url = decodeURIComponent(req.url());
     const json = (body: unknown, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
+    if (url.includes("/functions/v1/produkt-suche")) {
+      calls.rpc.push("produkt-suche");
+      return json({ market: "EBAY_DE", results: Array.from({ length: 25 }, (_, i) => ({
+        title: i === 0 ? "LEGO Friends 42652 Freundschaftsbaumhaus" : `Baumhaus Spielset Nr. ${i + 1}`,
+        image: null, price_cents: 7999 - i * 100, currency: "EUR", url: `https://www.ebay.de/itm/${1000 + i}`, shop: "eBay",
+      })) });
+    }
+    if (url.includes("/functions/v1/link-vorschau")) {
+      calls.rpc.push("link-vorschau");
+      return json({ title: "Hörbuch-Box für Kinder ab 8", image: null, price_cents: 1499, shop: "Thalia" });
+    }
     if (url.includes("/rpc/")) {
       const fn = url.split("/rpc/")[1].split("?")[0];
       calls.rpc.push(fn);
@@ -45,7 +56,7 @@ export async function mockSupabase(page: Page, opts: { signedIn?: boolean } = {}
       if (fn === "reserve_wish") return json({ ok: true, code: "ABCD-2345" });
       return json(null);
     }
-    if (req.method() !== "GET") { calls.writes.push(`${req.method()} ${url.split("/rest/v1/")[1] ?? url}`); return route.fulfill({ status: 204 }); }
+    if (req.method() !== "GET") { calls.writes.push(`${req.method()} ${url.split("/rest/v1/")[1] ?? url} ${req.postData() ?? ""}`); return route.fulfill({ status: 204 }); }
     if (url.includes("/rest/v1/profiles")) return json({ display_name: "Julia", reminder_emails: true });
     if (url.includes("/rest/v1/lists")) {
       calls.lists.push(url);

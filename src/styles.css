@@ -609,3 +609,63 @@ dialog.fsheet::backdrop { background: rgba(20,12,30,.48); }
 .review-card { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 12px; align-items: start; padding: 12px; border-radius: 16px; background: var(--surface-2); }
 .stat-label { hyphens: auto; -webkit-hyphens: auto; overflow-wrap: anywhere; }
 .offline-banner { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 7; background: var(--ink); color: var(--bg); text-align: center; font-weight: 700; font-size: .92rem; padding: 10px 16px; }
+
+/* =================== Wunsch hinzufügen in zwei Schritten =================== */
+.step-bar { justify-content: space-between; }
+.step-info { font-size: .88rem; color: var(--ink-2); padding-right: 8px; }
+.fs-cancel.back { display: inline-flex; align-items: center; gap: 2px; font-weight: 700; }
+.fs-cancel.back svg { width: 22px; height: 22px; }
+.flow-step { display: grid; gap: 16px; }
+.flow-title { font-size: 1.7rem; letter-spacing: -.02em; margin: 2px 0 0; }
+.search-big { display: flex; align-items: center; gap: 10px; min-height: 60px; padding: 0 8px 0 16px; border-radius: 18px; border: 2px solid var(--plum); background: var(--surface); box-shadow: 0 0 0 4px var(--plum-soft); }
+.search-big > svg { width: 24px; height: 24px; color: var(--plum); flex: none; }
+.search-big input { flex: 1; min-width: 0; border: 0 !important; outline: none; box-shadow: none !important; min-height: 52px; padding: 0 !important; font-size: 1.05rem; background: transparent; }
+.search-big .btn { flex: none; }
+.recent { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
+.recent .fchip { min-height: 38px; font-weight: 400; }
+.result-count { margin: 12px 2px 8px; }
+.result { grid-template-columns: 64px minmax(0, 1fr) auto !important; }
+.rpick { align-self: center; min-height: 36px; padding: 0 12px; border-radius: 999px; background: var(--plum); color: var(--plum-ink); display: grid; place-items: center; font-weight: 700; font-size: .85rem; }
+.results { max-height: none; overflow: visible; }
+.source-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.source-tile { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-height: 124px; padding: 16px; border: 0; border-radius: 18px; background: var(--surface-2); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.source-tile:active { transform: scale(.98); }
+.source-tile b { font-size: 1rem; }
+.source-tile small { font-size: .82rem; color: var(--ink-2); line-height: 1.35; }
+.source-icon { width: 40px; height: 40px; border-radius: 12px; background: var(--surface); display: grid; place-items: center; color: var(--plum); font-size: 1.2rem; }
+.source-icon svg { width: 22px; height: 22px; }
+.flow-tip { padding: 12px 14px; border-radius: 14px; background: var(--plum-soft); font-size: .9rem; line-height: 1.4; margin-top: 4px; }
+.fs-foot { flex: none; padding: 12px 18px calc(14px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--line); background: var(--surface); }
+
+/* Schritt 2: Produktkarte und Prioritäten mit Erklärung */
+.wish-details { display: grid; gap: 4px; }
+.product-card { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 14px; align-items: center; padding: 12px; border-radius: 20px; background: var(--surface-2); margin-bottom: 16px; }
+.product-img { width: 96px; height: 96px; border-radius: 16px; background: #fff; display: grid; place-items: center; overflow: hidden; font-size: 2.4rem; }
+.product-img img { width: 100%; height: 100%; object-fit: contain; }
+.product-text { display: grid; gap: 4px; min-width: 0; }
+.product-title { font-size: 1rem; line-height: 1.3; overflow-wrap: anywhere; }
+.product-meta { color: var(--ink-2); font-size: .95rem; }
+.product-price { color: var(--ink); font-family: var(--font-display); font-size: 1.1rem; }
+.link-btn { justify-self: start; border: 0; background: none; padding: 6px 0; color: var(--plum); font: 700 .92rem var(--font-ui); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.optional { font-weight: 400; color: var(--ink-2); }
+.prio-list { display: grid; gap: 8px; }
+.prio-list legend { font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; margin-bottom: 10px; }
+.prio-option { position: relative; display: block; }
+.prio-option input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.prio-box { display: flex; align-items: center; gap: 12px; min-height: 58px; padding: 8px 14px; border-radius: 16px; border: 1.5px solid var(--line); background: var(--surface); }
+.prio-box b { display: block; font-size: 1rem; }
+.prio-box small { display: block; font-size: .82rem; color: var(--ink-2); }
+.prio-icon { width: 28px; text-align: center; font-size: 1.2rem; flex: none; }
+.prio-option input:checked + .prio-box { border-width: 2px; }
+.prio-heart .prio-icon { color: var(--ribbon); }
+.prio-nice .prio-icon { color: var(--plum); }
+.prio-heart input:checked + .prio-box { border-color: var(--ribbon); background: var(--ribbon-soft); }
+.prio-heart input:checked + .prio-box b, .prio-heart input:checked + .prio-box small { color: var(--ribbon-text); }
+.prio-nice input:checked + .prio-box { border-color: var(--plum); background: var(--plum-soft); }
+.prio-small input:checked + .prio-box { border-color: var(--mint); background: var(--mint-soft); }
+.prio-option input:focus-visible + .prio-box { outline: 3px solid var(--plum); outline-offset: 2px; }
+.qty-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 10px 0 16px; }
+.qty-label { font-weight: 700; }
+.qty-row .stepper { width: 156px; }
+.more-details { margin-top: 6px; border-radius: 14px; background: var(--surface-2); padding: 2px 14px 8px; }
+.more-details summary small { font-weight: 400; color: var(--ink-2); margin-left: 6px; }

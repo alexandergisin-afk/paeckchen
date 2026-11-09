@@ -11,6 +11,7 @@ import { Sheet } from "../components/Sheet";
 import { FormSheet } from "../components/FormSheet";
 import { ListForm, toRow, type ListInput } from "../components/ListForm";
 import { WishForm } from "../components/WishForm";
+import { AddWishFlow } from "../components/AddWishFlow";
 import { WishCard, WishRow } from "../components/WishRow";
 import { ShareContent } from "../components/ShareSheet";
 
@@ -310,14 +311,13 @@ export function ListPage() {
         )}
       </FormSheet>
 
-      <FormSheet open={sheet?.kind === "addWish"} onClose={close} title="Neuer Wunsch" formId="add-wish" busy={wishBusy}>
-        {sheet?.kind === "addWish" && <WishForm formId="add-wish" listId={list.id} onSaved={saved} onBusyChange={setWishBusy} initialUrl={sheet.url} />}
-      </FormSheet>
+      <AddWishFlow open={sheet?.kind === "addWish"} onClose={close} listId={list.id} recipient={list.recipient_name}
+        initialUrl={sheet?.kind === "addWish" ? sheet.url : undefined} onSaved={saved} />
 
       <FormSheet open={sheet?.kind === "editWish"} onClose={close} title="Bearbeiten" formId="edit-wish" busy={wishBusy}>
         {sheet?.kind === "editWish" && (
           <>
-            <WishForm formId="edit-wish" listId={list.id} wish={sheet.wish} onSaved={saved} onBusyChange={setWishBusy} />
+            <WishForm formId="edit-wish" listId={list.id} wish={sheet.wish} recipient={list.recipient_name} onSaved={saved} onBusyChange={setWishBusy} />
             <div className="menu form-extra">
               {sheet.wish.url && <a href={sheet.wish.url} target="_blank" rel="noopener noreferrer"><IconExt /> Im Shop öffnen</a>}
               <button type="button" onClick={() => openTransfer(sheet.wish, "move")}><IconMove /> In andere Liste verschieben</button>
