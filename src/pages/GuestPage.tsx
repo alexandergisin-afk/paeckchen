@@ -101,15 +101,17 @@ export function GuestPage() {
       setSheet({ kind: "done", wish });
     } else if (r.error === "already_taken") setSheet({ kind: "taken", available: r.available ?? 0 });
     else if (r.error === "name_required") return toast("Bitte gib deinen Namen an.");
+    else if (r.error === "rate_limited") return toast("Gerade wurde auf dieser Liste sehr viel reserviert. Bitte versuch es in einer Minute noch einmal.");
     else setState("invalid");
     load();
   };
 
   const cancel = async (code: string) => {
     setBusy(true);
-    const { error } = await db().rpc("cancel_reservation", { p_code: code });
+    const { data, error } = await db().rpc("cancel_reservation", { p_code: code });
     setBusy(false);
     if (error) return toast(friendlyError(error));
+    if ((data as { error?: string } | null)?.error === "rate_limited") return toast("Zu viele Versuche. Bitte warte ein paar Minuten.");
     removeCode(code);
     close();
     toast("Reservierung aufgehoben.");

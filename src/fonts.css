@@ -1,0 +1,18 @@
+/* Ziffern 0–9 aus Public Sans (Atkinson schreibt die Null mit Schrägstrich).
+   unicode-range sorgt dafür, dass diese Schrift nur für Ziffern verwendet wird. */
+@font-face {
+  font-family: "Paeckli Ziffern";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./fonts/ziffern-400.woff2") format("woff2");
+  unicode-range: U+0030-0039;
+}
+@font-face {
+  font-family: "Paeckli Ziffern";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("./fonts/ziffern-700.woff2") format("woff2");
+  unicode-range: U+0030-0039;
+}

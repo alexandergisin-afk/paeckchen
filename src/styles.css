@@ -6,8 +6,8 @@
   --t0:#FFE1EA; --t1:#DDEFFC; --t2:#E2F4DC; --t3:#FFF0C9; --t4:#ECE2FF; --t5:#FFE5D6;
   --shadow:0 1px 2px rgba(35,26,49,.06),0 10px 28px rgba(35,26,49,.07);
   --r-card:22px; --r-field:14px; --fs:17px;
-  --font-ui:"Public Sans","Atkinson Hyperlegible","Segoe UI",system-ui,-apple-system,sans-serif;
-  --font-display:"Bricolage Grotesque","Avenir Next","Segoe UI",system-ui,sans-serif;
+  --font-ui:"Paeckli Ziffern","Atkinson Hyperlegible","Segoe UI",system-ui,-apple-system,sans-serif;
+  --font-display:"Bricolage Grotesque Variable","Bricolage Grotesque","Avenir Next","Segoe UI",system-ui,sans-serif;
   color-scheme:light;
   box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
 }

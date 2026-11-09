@@ -1,6 +1,11 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
+// Schriften werden mit der App ausgeliefert (keine Anfragen an Google, schneller, datenschutzfreundlich)
+import "@fontsource/atkinson-hyperlegible/latin-400.css";
+import "@fontsource/atkinson-hyperlegible/latin-700.css";
+import "@fontsource-variable/bricolage-grotesque/opsz.css";
+import "./fonts.css";
 import "./styles.css";
 import { applyTextSize } from "./lib/device";
 import "./lib/install";

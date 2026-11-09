@@ -16,7 +16,17 @@ export function SharePage() {
   const [lists, setLists] = useState<Row[] | null>(null);
 
   useEffect(() => {
-    const fromQuery = firstUrl(params.get("url"), params.get("text"));
+    // Alles nach „url=“ übernehmen, auch wenn der Shop-Link selbst „&“ oder „?“ enthält
+    // (ein Kurzbefehl auf dem iPhone hängt den Link unverändert an).
+    const raw = (() => {
+      const h = window.location.hash;
+      const i = h.indexOf("url=");
+      if (i < 0) return null;
+      let v = h.slice(i + 4);
+      if (!/^https?:\/\//i.test(v)) { try { v = decodeURIComponent(v); } catch { /* so lassen */ } }
+      return v;
+    })();
+    const fromQuery = firstUrl(raw, params.get("text"));
     if (fromQuery) rememberShare(fromQuery);
     setUrl(fromQuery ?? pendingShare());
     db().from("lists").select("id,title,cover,archived_at").is("archived_at", null).order("created_at", { ascending: false })
