@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { db } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
-import { LIST_SELECT, cover, sortWishes, type Reservation, type Wish, type WishList } from "../lib/types";
+import { LIST_PAGE_SELECT, cover, sortWishes, type Reservation, type Wish, type WishList } from "../lib/types";
 import { countdownLabel, dateLabel, daysUntil, friendlyError, toast } from "../lib/format";
 import { removeImage } from "../lib/wishes";
 import { copyWishes, moveWish } from "../lib/listOps";
@@ -57,20 +57,14 @@ export function ListPage() {
   }, [params, setParams]);
 
   const load = useCallback(async () => {
-    const [l, w] = await Promise.all([
-      db().from("lists").select(LIST_SELECT).eq("id", id).maybeSingle(),
-      db().from("wishes").select("*").eq("list_id", id),
-    ]);
-    if (l.error || w.error) return setState("error");
-    if (!l.data) return setState("missing");
-    const ws = w.data as Wish[];
-    // Reservierungen liefert die Datenbank nur, wenn der eigene Schalter „anzeigen“ an ist.
-    let rs: Reservation[] = [];
-    if (ws.length) {
-      const r = await db().from("reservations").select("id,wish_id,quantity,guest_name,created_at").in("wish_id", ws.map((x) => x.id));
-      if (!r.error && Array.isArray(r.data)) rs = r.data as Reservation[];
-    }
-    setList(l.data as WishList);
+    // Eine einzige Abfrage. Reservierungen liefert die Datenbank nur, wenn der eigene Schalter „anzeigen“ an ist.
+    const { data, error } = await db().from("lists").select(LIST_PAGE_SELECT).eq("id", id).maybeSingle();
+    if (error) return setState("error");
+    if (!data) return setState("missing");
+    const raw = data as unknown as Omit<WishList, "wishes"> & { wishes: (Wish & { reservations?: Reservation[] })[] };
+    const ws: Wish[] = (raw.wishes ?? []).map(({ reservations: _r, ...w }) => w as Wish);
+    const rs: Reservation[] = (raw.wishes ?? []).flatMap((w) => (Array.isArray(w.reservations) ? w.reservations : []));
+    setList({ ...raw, wishes: undefined } as WishList);
     setWishes(sortWishes(ws));
     setReservations(rs);
     setState("ok");

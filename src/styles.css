@@ -608,3 +608,4 @@ dialog.fsheet::backdrop { background: rgba(20,12,30,.48); }
 .review { display: grid; gap: 10px; }
 .review-card { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 12px; align-items: start; padding: 12px; border-radius: 16px; background: var(--surface-2); }
 .stat-label { hyphens: auto; -webkit-hyphens: auto; overflow-wrap: anywhere; }
+.offline-banner { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 7; background: var(--ink); color: var(--bg); text-align: center; font-weight: 700; font-size: .92rem; padding: 10px 16px; }

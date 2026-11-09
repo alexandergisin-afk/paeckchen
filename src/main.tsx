@@ -10,6 +10,9 @@ import "./styles.css";
 import { applyTextSize } from "./lib/device";
 import "./lib/install";
 import { captureShareFromLaunch } from "./lib/share";
+import { installErrorReporting } from "./lib/errorlog";
+
+installErrorReporting();
 
 captureShareFromLaunch();
 

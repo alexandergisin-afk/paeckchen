@@ -1,0 +1,110 @@
+-- =====================================================================
+-- Päckli – Datenbank-Tests: Jede Prüfung bricht bei einem Fehler mit klarer Meldung ab.
+-- =====================================================================
+\set ON_ERROR_STOP 1
+create function pg_temp.pruefe(ok boolean, was text) returns void language plpgsql as
+  $$ begin if not coalesce(ok, false) then raise exception 'FEHLGESCHLAGEN: %', was; end if; raise notice 'OK: %', was; end $$;
+create function pg_temp.als(uid text) returns void language plpgsql as $$
+begin
+  if uid is null then execute 'reset role'; perform set_config('request.jwt.claim.sub', '', false);
+  elsif uid = 'anon' then execute 'set role anon'; perform set_config('request.jwt.claim.sub', '', false);
+  else execute 'set role authenticated'; perform set_config('request.jwt.claim.sub', uid, false); end if;
+end $$;
+
+insert into allowed_emails values ('julia@test.de'), ('markus@test.de'), ('fremd@test.de');
+insert into auth.users values ('11111111-1111-1111-1111-111111111111', 'julia@test.de'),
+  ('22222222-2222-2222-2222-222222222222', 'markus@test.de'), ('33333333-3333-3333-3333-333333333333', 'fremd@test.de');
+do $$ begin insert into auth.users values ('44444444-4444-4444-4444-444444444444', 'nicht@freigeschaltet.de');
+  raise exception 'FEHLGESCHLAGEN: nicht freigeschaltete Adresse konnte sich registrieren'; exception when insufficient_privilege then raise notice 'OK: Zugangsliste blockiert fremde Adressen'; end $$;
+
+-- Julia legt eine Liste mit Wünschen an
+select pg_temp.als('11111111-1111-1111-1111-111111111111');
+select id as liste from create_list('Emmas Geburtstag', 'Emma', 'birthday', (current_date + 30)) \gset
+select id as liste2 from create_list('Leons Liste') \gset
+select set_config('test.liste2', :'liste2', false) is not null as x \gset
+insert into wishes (list_id, title, quantity, priority, created_by) values
+  (:'liste', 'Fahrrad', 1, 'heart', auth.uid()), (:'liste', 'Hörspiele', 3, 'nice', auth.uid());
+select create_invite(:'liste') as einladung \gset
+select pg_temp.als(null);
+select guest_token as gast from lists where id = :'liste' \gset
+select id as rad from wishes where title = 'Fahrrad' \gset
+select id as hoer from wishes where title = 'Hörspiele' \gset
+
+-- Fremde sehen nichts
+select pg_temp.als('33333333-3333-3333-3333-333333333333');
+select pg_temp.pruefe((select count(*) from lists) = 0 and (select count(*) from wishes) = 0, 'Fremdes Konto sieht keine Listen und Wünsche');
+select pg_temp.als('anon');
+select pg_temp.pruefe((select count(*) from wishes) = 0, 'Gäste haben keinen direkten Tabellenzugriff');
+
+-- Einladung: einmalig
+select pg_temp.als('22222222-2222-2222-2222-222222222222');
+select pg_temp.pruefe(accept_invite(:'einladung') = :'liste'::uuid, 'Markus nimmt die Einladung an');
+select set_config('test.einladung', :'einladung', false) is not null as x \gset
+select pg_temp.als('33333333-3333-3333-3333-333333333333');
+do $$ begin perform accept_invite(current_setting('test.einladung')); raise exception 'FEHLGESCHLAGEN: Einladung ein zweites Mal angenommen';
+  exception when sqlstate '22023' then raise notice 'OK: Einladung funktioniert kein zweites Mal'; end $$;
+select pg_temp.pruefe((select count(*) from lists) = 0, 'Zweiter Empfänger sieht die Liste nicht');
+
+-- Mitbearbeiter darf bearbeiten, aber nicht löschen oder einladen
+select pg_temp.als('22222222-2222-2222-2222-222222222222');
+update wishes set price_cents = 34900 where id = :'rad';
+select pg_temp.pruefe((select price_cents from wishes where id = :'rad') = 34900, 'Mitbearbeiter kann Wünsche bearbeiten');
+delete from lists where id = :'liste';
+select pg_temp.pruefe((select count(*) from lists where id = :'liste') = 1, 'Mitbearbeiter kann die Liste nicht löschen');
+do $$ begin perform create_invite((select id from lists limit 1)); raise exception 'FEHLGESCHLAGEN: Mitbearbeiter konnte einladen';
+  exception when insufficient_privilege then raise notice 'OK: Mitbearbeiter kann nicht einladen'; end $$;
+
+-- Gäste: reservieren mit Pflichtnamen, keine Namen sichtbar, keine Überbuchung
+select pg_temp.als('anon');
+select pg_temp.pruefe(reserve_wish(:'gast', :'rad', 1, '  ')->>'error' = 'name_required', 'Reservieren ohne Namen wird abgelehnt');
+select reserve_wish(:'gast', :'rad', 1, 'Oma Gisela')->>'code' as code \gset
+select pg_temp.pruefe(:'code' ~ '^[A-Z2-9]{4}-[A-Z2-9]{4}$', 'Gast bekommt einen Code');
+select pg_temp.pruefe(reserve_wish(:'gast', :'rad', 1, 'Onkel')->>'error' = 'already_taken', 'Vergebener Wunsch kann nicht doppelt reserviert werden');
+select pg_temp.pruefe(reserve_wish(:'gast', :'hoer', 4, 'Viel')->>'error' = 'already_taken', 'Mengen-Wunsch kann nicht überbucht werden');
+select pg_temp.pruefe(guest_list(:'gast')::text not like '%Oma%', 'Gästeansicht verrät keine Namen');
+select pg_temp.pruefe((cancel_reservation('ZZZZ-ZZZZ')->>'ok')::boolean = false, 'Falscher Code hebt nichts auf');
+select pg_temp.pruefe((cancel_reservation(lower(:'code'))->>'ok')::boolean, 'Richtiger Code hebt die Reservierung auf');
+
+-- Eltern sehen Namen, Schalter blendet aus, Menge nicht unter Reservierungen
+select reserve_wish(:'gast', :'hoer', 2, 'Familie Yilmaz') is not null as x \gset
+select pg_temp.als('22222222-2222-2222-2222-222222222222');
+select pg_temp.pruefe((select string_agg(guest_name, ',') from reservations) = 'Familie Yilmaz', 'Eltern sehen, wer reserviert hat');
+select set_show_reservations(:'liste', false);
+select pg_temp.pruefe((select count(*) from reservations) = 0, 'Schalter blendet Reservierungen aus');
+select set_show_reservations(:'liste', true);
+do $$ begin update wishes set quantity = 1 where title = 'Hörspiele'; raise exception 'FEHLGESCHLAGEN: Menge unter Reservierung gesenkt';
+  exception when check_violation then raise notice 'OK: Menge kann nicht unter die Reservierungen sinken'; end $$;
+select pg_temp.als('11111111-1111-1111-1111-111111111111');
+do $$ begin update wishes set list_id = current_setting('test.liste2')::uuid where title = 'Hörspiele'; raise exception 'FEHLGESCHLAGEN: reservierter Wunsch verschoben';
+  exception when check_violation then raise notice 'OK: Reservierte Wünsche bleiben in ihrer Liste'; end $$;
+update wishes set list_id = :'liste2' where title = 'Fahrrad';
+select pg_temp.pruefe((select list_id from wishes where title = 'Fahrrad') = :'liste2'::uuid, 'Freie Wünsche lassen sich verschieben');
+update wishes set list_id = :'liste' where title = 'Fahrrad';
+
+-- Abgeschlossene Listen sind für Gäste pausiert; Erinnerungen nur für den Server
+select pg_temp.als('11111111-1111-1111-1111-111111111111');
+do $$ begin perform reminder_batch(current_date); raise exception 'FEHLGESCHLAGEN: App kann Erinnerungsdaten lesen';
+  exception when insufficient_privilege then raise notice 'OK: App hat keinen Zugriff auf Erinnerungsdaten'; end $$;
+update lists set archived_at = now() where id = :'liste';
+select pg_temp.als('anon');
+select pg_temp.pruefe(guest_list(:'gast') is null, 'Abgeschlossene Liste ist für Gäste nicht erreichbar');
+select pg_temp.als('11111111-1111-1111-1111-111111111111');
+update lists set archived_at = null where id = :'liste';
+
+-- Bremsklotz: höchstens 10 Reservierungen pro Liste und Minute
+insert into wishes (list_id, title, quantity, created_by) values (:'liste', 'Sticker', 20, auth.uid());
+select pg_temp.als(null);
+select id as sticker from wishes where title = 'Sticker' \gset
+delete from rate_events;
+select pg_temp.als('anon');
+create temp table bremse as select g, reserve_wish(:'gast', :'sticker', 1, 'Gast ' || g)->>'error' as fehler from generate_series(1, 12) g;
+select pg_temp.pruefe((select count(*) from bremse where fehler is null) = 10 and (select count(*) from bremse where fehler = 'rate_limited') = 2,
+  'Bremsklotz lässt 10 Reservierungen pro Minute zu und stoppt weitere');
+
+-- Fehlerprotokoll: nur schreiben, nie lesen
+select log_client_error('Testfehler');
+select pg_temp.pruefe((select count(*) from client_errors) = 0, 'Fehlerprotokoll ist aus der App nicht lesbar');
+select pg_temp.als(null);
+select pg_temp.pruefe((select count(*) from client_errors) = 1, 'Fehler wurde protokolliert');
+
+\echo 'Alle Datenbank-Tests bestanden.'

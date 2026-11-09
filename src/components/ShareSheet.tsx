@@ -2,15 +2,15 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { guestLink } from "../lib/supabase";
 import type { WishList } from "../lib/types";
-import qrcode from "qrcode-generator";
 import { IconChat, IconMail, IconQr, IconShare } from "./Icons";
 
 export function ShareContent({ list, onNavigate }: { list: WishList; onNavigate: () => void }) {
   const link = guestLink(list.guest_token);
   const [copied, setCopied] = useState<null | "ok" | "fail">(null);
   const [qr, setQr] = useState<string | null>(null);
-  const showQr = () => {
+  const showQr = async () => {
     if (qr) return setQr(null);
+    const { default: qrcode } = await import("qrcode-generator");
     const code = qrcode(0, "M");
     code.addData(link);
     code.make();

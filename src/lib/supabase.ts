@@ -6,9 +6,30 @@ const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 /** Fehlen die Zugangsdaten, zeigt die App eine Einrichtungsseite statt abzustürzen. */
 export const isConfigured = Boolean(url && key);
 
+/**
+ * Wiederholt reine Leseanfragen bei kurzen Netzaussetzern (bis zu 2 Mal).
+ * Schreibende Anfragen (z. B. Reservieren) werden bewusst NICHT wiederholt,
+ * damit nichts doppelt passiert, falls die erste Anfrage doch angekommen ist.
+ */
+const SAFE_RPC = /\/rpc\/(guest_list|my_reservations)$/;
+async function fetchWithRetry(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const method = (init?.method ?? "GET").toUpperCase();
+  const href = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+  const retryable = method === "GET" || method === "HEAD" || SAFE_RPC.test(href.split("?")[0]);
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fetch(input, init);
+    } catch (e) {
+      if (!retryable || attempt >= 2 || (e as Error).name === "AbortError") throw e;
+      await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
+    }
+  }
+}
+
 export const supabase: SupabaseClient | null = isConfigured
   ? createClient(url!, key!, {
       auth: { flowType: "pkce", persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+      global: { fetch: fetchWithRetry },
     })
   : null;
 

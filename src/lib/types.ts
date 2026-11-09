@@ -19,6 +19,11 @@ export interface WishList {
 export const LIST_SELECT =
   "id,title,description,recipient_name,occasion,event_date,cover,guest_token,created_at,archived_at,wishes(count),list_members(user_id,role,show_reservations)";
 
+/** Listenseite: Liste, Wünsche und (falls sichtbar) Reservierungen in einer einzigen Abfrage. */
+export const LIST_PAGE_SELECT =
+  "id,title,description,recipient_name,occasion,event_date,cover,guest_token,created_at,archived_at,list_members(user_id,role,show_reservations)," +
+  "wishes(id,list_id,title,url,shop,image_path,price_cents,quantity,priority,note,created_at,reservations(id,wish_id,quantity,guest_name,created_at))";
+
 export const OCCASIONS: Record<Occasion, string> = {
   birthday: "Geburtstag",
   christmas: "Weihnachten",

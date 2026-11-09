@@ -1,19 +1,23 @@
 import { HashRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
-import type { ReactNode } from "react";
+import { lazy, Suspense, type ReactNode } from "react";
 import { isConfigured } from "./lib/supabase";
 import { AuthProvider, useAuth } from "./lib/auth";
 import { TopBar } from "./components/TopBar";
+import { ErrorBoundary } from "./components/ErrorBoundary";
+import { OfflineBanner } from "./components/OfflineBanner";
 import { Setup } from "./pages/Setup";
 import { Login } from "./pages/Login";
-import { Dashboard } from "./pages/Dashboard";
-import { ListPage } from "./pages/ListPage";
-import { GuestPage } from "./pages/GuestPage";
-import { TeamPage } from "./pages/TeamPage";
-import { InvitePage } from "./pages/InvitePage";
-import { Settings } from "./pages/Settings";
-import { AccessPage } from "./pages/AccessPage";
-import { SharePage } from "./pages/SharePage";
-import { StatsPage } from "./pages/StatsPage";
+
+// Seiten werden erst geladen, wenn man sie öffnet: Gäste laden so nur die Gästeansicht.
+const Dashboard = lazy(() => import("./pages/Dashboard").then((m) => ({ default: m.Dashboard })));
+const ListPage = lazy(() => import("./pages/ListPage").then((m) => ({ default: m.ListPage })));
+const GuestPage = lazy(() => import("./pages/GuestPage").then((m) => ({ default: m.GuestPage })));
+const TeamPage = lazy(() => import("./pages/TeamPage").then((m) => ({ default: m.TeamPage })));
+const InvitePage = lazy(() => import("./pages/InvitePage").then((m) => ({ default: m.InvitePage })));
+const Settings = lazy(() => import("./pages/Settings").then((m) => ({ default: m.Settings })));
+const AccessPage = lazy(() => import("./pages/AccessPage").then((m) => ({ default: m.AccessPage })));
+const SharePage = lazy(() => import("./pages/SharePage").then((m) => ({ default: m.SharePage })));
+const StatsPage = lazy(() => import("./pages/StatsPage").then((m) => ({ default: m.StatsPage })));
 
 export const PENDING_INVITE = "paeckchen-pending-invite";
 
@@ -46,7 +50,10 @@ export function App({ linkError }: { linkError: string | null }) {
     <HashRouter>
       <AuthProvider>
         <TopBar />
+        <OfflineBanner />
         <main id="app">
+          <ErrorBoundary>
+          <Suspense fallback={<p className="loading">Einen Moment …</p>}>
           <Routes>
             {/* Gästeansicht: ohne Anmeldung */}
             <Route path="/w/:token" element={<GuestPage />} />
@@ -60,6 +67,8 @@ export function App({ linkError }: { linkError: string | null }) {
             <Route path="/statistik" element={parent(<StatsPage />)} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          </Suspense>
+          </ErrorBoundary>
         </main>
       </AuthProvider>
     </HashRouter>
