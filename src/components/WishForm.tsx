@@ -35,6 +35,7 @@ export function WishForm({ listId, wish, draft, formId, recipient, onSaved, onBu
   const [qty, setQty] = useState(wish?.quantity ?? 1);
   const [priority, setPriority] = useState<Priority>(wish?.priority ?? "nice");
   const [note, setNote] = useState(wish?.note ?? "");
+  const [groupGift, setGroupGift] = useState(!!wish?.group_gift);
   const [shop, setShop] = useState(wish?.shop ?? draft?.shop ?? "");
   const [newImage, setNewImage] = useState<Blob | null>(null);
   const [preview, setPreview] = useState<string | null>(imageUrl(wish?.image_path ?? draft?.image ?? null));
@@ -77,6 +78,7 @@ export function WishForm({ listId, wish, draft, formId, recipient, onSaved, onBu
       const row = {
         title: title.trim(), url: cleanUrl, shop: shop.trim() || null, price_cents: parsePrice(price),
         quantity: qty, priority, note: note.trim() || null, image_path,
+        group_gift: groupGift && parsePrice(price) != null,
       };
       const { error } = edit
         ? await db().from("wishes").update(row).eq("id", wish!.id)
@@ -84,6 +86,7 @@ export function WishForm({ listId, wish, draft, formId, recipient, onSaved, onBu
       if (error) {
         if (newImage) await removeImage(image_path); // hochgeladenes Bild nicht verwaisen lassen
         if (/quantity_below_reserved/.test(error.message)) throw new Error("Die Menge kann nicht kleiner sein als die bereits reservierte Anzahl.");
+        if (/group_gift_has_reservations/.test(error.message)) throw new Error("Die Einstellung „Gemeinsam schenken“ lässt sich nicht mehr ändern, weil es schon Reservierungen oder Beiträge gibt.");
         throw error;
       }
       if (edit && wish!.image_path && wish!.image_path !== image_path) await removeImage(wish!.image_path);
@@ -91,7 +94,7 @@ export function WishForm({ listId, wish, draft, formId, recipient, onSaved, onBu
       onSaved();
     } catch (err) {
       const m = (err as Error).message;
-      toast(m.startsWith("Die Menge") ? m : friendlyError(err));
+      toast(m.startsWith("Die Menge") || m.startsWith("Die Einstellung") ? m : friendlyError(err));
     } finally {
       setBusy(false);
     }
@@ -156,6 +159,16 @@ export function WishForm({ listId, wish, draft, formId, recipient, onSaved, onBu
           <button type="button" aria-label="Mehr" disabled={qty >= 20} onClick={() => setQty(Math.min(20, qty + 1))}>+</button>
         </div>
       </div>
+
+      <label className={`switch group-switch ${parsed == null ? "is-disabled" : ""}`}>
+        <input type="checkbox" checked={groupGift && parsed != null} disabled={parsed == null} onChange={(e) => setGroupGift(e.target.checked)} />
+        <span>
+          <b>Gemeinsam schenken erlauben</b><br />
+          <span className="hint">{parsed == null
+            ? "Dafür braucht der Wunsch einen Preis."
+            : "Gäste können einen Betrag beisteuern. Ihr kauft das Geschenk, sobald alles zusammen ist."}</span>
+        </span>
+      </label>
 
       <label className="field">
         <span>Hinweis für die Schenkenden <span className="optional">(optional)</span></span>

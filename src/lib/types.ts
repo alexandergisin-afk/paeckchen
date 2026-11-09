@@ -22,7 +22,7 @@ export const LIST_SELECT =
 /** Listenseite: Liste, Wünsche und (falls sichtbar) Reservierungen in einer einzigen Abfrage. */
 export const LIST_PAGE_SELECT =
   "id,title,description,recipient_name,occasion,event_date,cover,guest_token,created_at,archived_at,list_members(user_id,role,show_reservations)," +
-  "wishes(id,list_id,title,url,shop,image_path,price_cents,quantity,priority,note,created_at,reservations(id,wish_id,quantity,guest_name,created_at,parents_buy,entered_by))";
+  "wishes(id,list_id,title,url,shop,image_path,price_cents,quantity,priority,note,created_at,group_gift,reservations(id,wish_id,quantity,amount_cents,guest_name,created_at,parents_buy,entered_by))";
 
 export const OCCASIONS: Record<Occasion, string> = {
   birthday: "Geburtstag",
@@ -51,6 +51,8 @@ export interface Wish {
   priority: Priority;
   note: string | null;
   created_at: string;
+  /** Gäste können einen Betrag beisteuern (Gruppengeschenk) */
+  group_gift?: boolean;
 }
 
 export const PRIORITIES: Record<Priority, { label: string; icon: string; cls: string }> = {
@@ -75,6 +77,8 @@ export interface Reservation {
   parents_buy?: boolean;
   /** Von einem Elternteil eingetragen (z. B. nach einem Anruf) */
   entered_by?: string | null;
+  /** Beitrag zu einem Gruppengeschenk (dann ist quantity 0) */
+  amount_cents?: number | null;
 }
 
 /** Was Gäste über eine Liste erfahren: keine Namen, nur freie Mengen. */
@@ -89,6 +93,10 @@ export interface GuestWish {
   priority: Priority;
   note: string | null;
   available: number;
+  group_gift?: boolean;
+  target_cents?: number | null;
+  funded_cents?: number | null;
+  contributors?: number | null;
 }
 
 export interface GuestList {

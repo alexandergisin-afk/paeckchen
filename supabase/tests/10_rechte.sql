@@ -149,4 +149,42 @@ update list_members set show_reservations = true;
 do $$ begin update profiles set notify_reservations = 'instant' where id = '11111111-1111-1111-1111-111111111111';
   raise exception 'FEHLGESCHLAGEN: „Sofort“ ließ sich noch einstellen'; exception when check_violation then raise notice 'OK: Benachrichtigungen nur noch täglich oder aus'; end $$;
 
+
+-- Gruppengeschenke
+select pg_temp.als('11111111-1111-1111-1111-111111111111');
+do $$ begin insert into wishes (list_id, title, group_gift, created_by) values ((select id from lists where title = 'Emmas Geburtstag'), 'Ohne Preis', true, auth.uid());
+  raise exception 'FEHLGESCHLAGEN: Gruppengeschenk ohne Preis angelegt'; exception when check_violation then raise notice 'OK: Gruppengeschenk braucht einen Preis'; end $$;
+insert into wishes (list_id, title, price_cents, group_gift, created_by) values (:'liste', 'Kinderfahrrad gemeinsam', 34900, true, auth.uid());
+select pg_temp.als(null);
+select id as gruppe from wishes where title = 'Kinderfahrrad gemeinsam' \gset
+delete from rate_events;
+select pg_temp.als('anon');
+select pg_temp.pruefe(reserve_wish(:'gast', :'gruppe', 1, 'Oma')->>'error' = 'group_gift', 'Gruppengeschenk lässt sich nicht normal reservieren');
+select pg_temp.pruefe(contribute(:'gast', :'gruppe', 300, 'Klein')->>'error' = 'too_little', 'Beitrag unter 5 € wird abgelehnt');
+select pg_temp.pruefe(contribute(:'gast', :'gruppe', 40000, 'Viel')->>'error' = 'too_much', 'Mehr als der offene Rest wird abgelehnt');
+select contribute(:'gast', :'gruppe', 10000, 'Oma Gisela')->>'code' as beitrag \gset
+select pg_temp.pruefe(:'beitrag' ~ '^[A-Z2-9]{4}-[A-Z2-9]{4}$', 'Gast steuert 100 € bei und bekommt einen Code');
+select pg_temp.pruefe((select (w->>'funded_cents')::int = 10000 and (w->>'contributors')::int = 1 and (w->>'available')::int = 1
+  from jsonb_array_elements(guest_list(:'gast')->'wishes') w where w->>'id' = :'gruppe'), 'Gäste sehen Summe und Anzahl');
+select pg_temp.pruefe(guest_list(:'gast')::text not like '%Oma Gisela%', 'Gäste sehen keine Namen der Beitragenden');
+select pg_temp.pruefe((select sum(quantity) from my_reservations(array[:'beitrag'])) = 0
+  and (select sum(amount_cents) from my_reservations(array[:'beitrag'])) = 10000, 'Eigener Beitrag ist mit Betrag abrufbar');
+
+select pg_temp.als('22222222-2222-2222-2222-222222222222');
+select pg_temp.pruefe((contribute_for_guest(:'gruppe', 5000, 'Onkel Tobias')->>'ok')::boolean, 'Eltern tragen einen Beitrag für jemanden ein');
+do $$ begin update wishes set group_gift = false where title = 'Kinderfahrrad gemeinsam'; raise exception 'FEHLGESCHLAGEN: Umschalten trotz Beiträgen';
+  exception when check_violation then raise notice 'OK: Gemeinsam-Schenken lässt sich mit Beiträgen nicht abschalten'; end $$;
+select pg_temp.pruefe((select string_agg(guest_name || ':' || amount_cents, ',' order by amount_cents) from reservations where wish_id = :'gruppe') = 'Onkel Tobias:5000,Oma Gisela:10000', 'Eltern sehen Namen und Beträge');
+
+select pg_temp.als(null);
+select pg_temp.pruefe((select gift_target(w) - gift_funded(w.id) from wishes w where id = :'gruppe') = 19900, 'Offener Rest wird richtig berechnet (349 − 100 − 50 = 199 €)');
+select pg_temp.als('anon');
+select pg_temp.pruefe((contribute(:'gast', :'gruppe', 19900, 'Tante Sabine')->>'ok')::boolean, 'Den Rest übernehmen geht');
+select pg_temp.pruefe(contribute(:'gast', :'gruppe', 500, 'Noch wer')->>'error' = 'fully_funded', 'Komplett finanziert: keine weiteren Beiträge');
+select pg_temp.pruefe((select (w->>'available')::int = 0 from jsonb_array_elements(guest_list(:'gast')->'wishes') w where w->>'id' = :'gruppe'), 'Komplett finanziert gilt als vergeben');
+select pg_temp.pruefe((cancel_reservation(:'beitrag')->>'ok')::boolean, 'Gast zieht seinen Beitrag zurück');
+select pg_temp.pruefe((select (w->>'funded_cents')::int = 24900 and (w->>'available')::int = 1 from jsonb_array_elements(guest_list(:'gast')->'wishes') w where w->>'id' = :'gruppe'), 'Danach ist wieder etwas offen');
+select pg_temp.als(null);
+select pg_temp.pruefe((select count(*) from reservation_notices('daily', now() - interval '1 hour', now()) n, jsonb_array_elements(n.items) i where i->>'amount_cents' = '5000') >= 1, 'Tägliche Mail enthält die Beträge');
+
 \echo 'Alle Datenbank-Tests bestanden.'

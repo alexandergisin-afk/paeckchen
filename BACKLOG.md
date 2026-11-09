@@ -14,9 +14,6 @@ Entwurf: Zeichenfläche „Päckli – Gestaltungsvorschlag“, dritte Reihe.
 - **Variante B:** freiwilliges Konto für Schenkende, geräteübergreifend. Braucht Zustimmung zur längeren Speicherung (bisher 60 Tage) und eine Anpassung der Zugangsliste. Aufwand hoch.
 - **Variante C:** freiwillige Bestätigung per Mail, das Postfach wird zum Verlauf. Aufwand mittel.
 
-### Gruppengeschenke
-Mehrere Gäste teilen sich ein teures Geschenk (z. B. das Fahrrad), jeder sieht, wie viel noch fehlt. Aufwand mittel.
-
 ## Für Eltern
 
 ### Kinder schlagen Wünsche vor
@@ -55,6 +52,9 @@ Bisher laden Gäste Bilder direkt von den Shop-Servern, die dabei die IP-Adresse
 - Impressum und Datenschutzerklärung
 - Umzug von GitHub Pages zu einem Hoster mit Sicherheitsheadern (GitHub Pages ist für nicht-kommerzielle Projekte gedacht)
 - Strengerer Schutz der Link-Vorschau gegen Tricks über Domainnamen
+
+## Erledigt
+- **Gruppengeschenke** (November 2026): Eltern schalten „Gemeinsam schenken“ pro Wunsch ein, Gäste steuern Beträge bei und sehen nur die Summe.
 
 ## Bewusst verworfen
 - **Echte Produktsuche bei Amazon:** braucht ein Partnerkonto mit laufenden Verkäufen.

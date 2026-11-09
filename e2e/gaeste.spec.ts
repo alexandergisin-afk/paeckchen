@@ -47,3 +47,31 @@ test("Gäste können bitten, dass die Eltern das Geschenk besorgen", async ({ pa
   await expect(page.getByText("Die Eltern wissen Bescheid")).toBeVisible();
   expect(calls.bodies.find((b) => b.fn === "reserve_wish")).toMatchObject({ p_name: "Oma Gisela", p_parents_buy: true });
 });
+
+test("Gruppengeschenk: Gäste sehen nur die Summe und steuern einen Betrag bei", async ({ page }) => {
+  const calls = await mockSupabase(page);
+  await page.goto("/#/w/TOK");
+  const card = page.locator(".gcard", { hasText: "Laufrad gemeinsam" });
+  await expect(card.getByText("Gemeinsam schenken")).toBeVisible();
+  await expect(card.getByText("1 Person macht mit")).toBeVisible();
+  await expect(card).not.toContainText("Onkel Tobias");
+  await expect(card.getByRole("button", { name: "Ich schenke es ganz" })).toHaveCount(0); // es gibt schon einen Beitrag
+  await card.getByRole("button", { name: "Mitschenken" }).click();
+  const dlg = page.locator("dialog.sheet[open]");
+  await dlg.getByRole("button", { name: /Rest/ }).click();
+  await dlg.getByLabel("Dein Name").fill("Oma Gisela");
+  await dlg.getByRole("button", { name: "200 € beisteuern" }).click();
+  await expect(page.getByRole("heading", { name: "Danke!" })).toBeVisible();
+  expect(calls.bodies.find((b) => b.fn === "contribute")).toMatchObject({ p_wish: "w4", p_amount_cents: 20000, p_name: "Oma Gisela" });
+});
+
+test("Gruppengeschenk: zu hohe Beträge lassen sich gar nicht erst abschicken", async ({ page }) => {
+  await mockSupabase(page);
+  await page.goto("/#/w/TOK");
+  await page.locator(".gcard", { hasText: "Laufrad gemeinsam" }).getByRole("button", { name: "Mitschenken" }).click();
+  const dlg = page.locator("dialog.sheet[open]");
+  await dlg.getByLabel("Anderer Betrag").fill("250");
+  await dlg.getByLabel("Dein Name").fill("Test");
+  await expect(dlg.getByText("Höchstens 200 €")).toBeVisible();
+  await expect(dlg.getByRole("button", { name: /beisteuern/ })).toBeDisabled();
+});

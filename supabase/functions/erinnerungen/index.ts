@@ -18,6 +18,7 @@ interface Due {
 }
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
+const euro = (c: number) => (c % 100 === 0 ? `${c / 100} €` : `${(c / 100).toFixed(2).replace(".", ",")} €`);
 const dateDe = (d: string) => new Date(d + "T12:00:00").toLocaleDateString("de-DE", { day: "numeric", month: "long" });
 
 export function subject(d: Due): string {
@@ -42,7 +43,7 @@ export function mailHtml(d: Due, appUrl: string, withStats: boolean): string {
 </div>`;
 }
 
-interface Notice { email: string; list_id: string; list_title: string; items: { wish: string; name: string; quantity: number; parents_buy: boolean; entered_by_family: boolean }[] }
+interface Notice { email: string; list_id: string; list_title: string; items: { wish: string; name: string; quantity: number; amount_cents?: number | null; parents_buy: boolean; entered_by_family: boolean }[] }
 
 /** Eine Mail pro Empfänger, auch wenn mehrere Listen betroffen sind. */
 export function noticeMail(email: string, notices: Notice[], appUrl: string, mode: string): { subject: string; html: string } {
@@ -54,7 +55,9 @@ export function noticeMail(email: string, notices: Notice[], appUrl: string, mod
   const blocks = notices.map((n) => `
     <p style="margin:18px 0 6px;font-weight:bold">${esc(n.list_title)}</p>
     <ul style="margin:0 0 10px;padding-left:20px">
-      ${n.items.map((i) => `<li style="margin:4px 0"><b>${esc(i.name)}</b>: ${esc(i.wish)}${i.quantity > 1 ? ` (${i.quantity} Stück)` : ""}${i.parents_buy ? ` <span style="color:#9E1747">(ihr besorgt es)</span>` : ""}${i.entered_by_family ? ` <span style="color:#5E5470">(von euch eingetragen)</span>` : ""}</li>`).join("")}
+      ${n.items.map((i) => i.amount_cents != null
+        ? `<li style="margin:4px 0"><b>${esc(i.name)}</b>: ${euro(i.amount_cents)} für ${esc(i.wish)} <span style="color:#9E1747">(gemeinsames Geschenk)</span>${i.entered_by_family ? ` <span style="color:#5E5470">(von euch eingetragen)</span>` : ""}</li>`
+        : `<li style="margin:4px 0"><b>${esc(i.name)}</b>: ${esc(i.wish)}${i.quantity > 1 ? ` (${i.quantity} Stück)` : ""}${i.parents_buy ? ` <span style="color:#9E1747">(ihr besorgt es)</span>` : ""}${i.entered_by_family ? ` <span style="color:#5E5470">(von euch eingetragen)</span>` : ""}</li>`).join("")}
     </ul>
     <a href="${base}#/liste/${n.list_id}" style="color:#4B2E83;font-weight:bold">Liste öffnen</a>`).join("");
   const html = `<div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#231A31;line-height:1.5">

@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { db } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { cover, type Role } from "../lib/types";
+import { takenQuantity } from "../lib/gift";
 import { dateLabel, daysUntil, friendlyError, toast } from "../lib/format";
 import { IconChart, IconChevron, IconPlus } from "../components/Icons";
 import { FormSheet } from "../components/FormSheet";
@@ -10,7 +11,7 @@ import { ListForm, toRow, type ListInput } from "../components/ListForm";
 
 /** Für die Übersicht: pro Liste die Wünsche mit Menge und (falls sichtbar) den Reservierungen. */
 const DASH_SELECT =
-  "id,title,recipient_name,event_date,cover,created_at,archived_at,list_members(user_id,role,show_reservations),wishes(id,quantity,reservations(quantity))";
+  "id,title,recipient_name,event_date,cover,created_at,archived_at,list_members(user_id,role,show_reservations),wishes(id,quantity,price_cents,group_gift,reservations(quantity,amount_cents))";
 
 interface DashList {
   id: string;
@@ -21,7 +22,7 @@ interface DashList {
   created_at: string;
   archived_at: string | null;
   list_members: { user_id: string; role: Role; show_reservations: boolean }[];
-  wishes: { id: string; quantity: number; reservations: { quantity: number }[] }[];
+  wishes: { id: string; quantity: number; price_cents: number | null; group_gift: boolean; reservations: { quantity: number; amount_cents: number | null }[] }[];
 }
 
 /** „julia.weber“ oder „Julia Weber“ → „Julia“ */
@@ -99,7 +100,7 @@ export function Dashboard() {
             const me = l.list_members.find((m) => m.user_id === session?.user.id);
             const show = me?.show_reservations ?? true;
             const total = l.wishes.reduce((a, w) => a + w.quantity, 0);
-            const taken = l.wishes.reduce((a, w) => a + Math.min(w.quantity, (w.reservations ?? []).reduce((s, r) => s + r.quantity, 0)), 0);
+            const taken = l.wishes.reduce((a, w) => a + takenQuantity(w, w.reservations ?? []), 0);
             const pct = total ? Math.round((taken / total) * 100) : 0;
             const n = l.wishes.length;
             return (

@@ -4,17 +4,21 @@ import { db } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { OCCASIONS, cover, type GuestList, type GuestWish } from "../lib/types";
 import { dateLabel, friendlyError, toast } from "../lib/format";
-import { formatPrice } from "../lib/wishes";
+import { formatPrice, parsePrice } from "../lib/wishes";
+import { euroShort } from "../lib/gift";
 import { addCode, getCodes, getName, keepCodes, removeCode, setName } from "../lib/device";
 import { IconCheck, IconExt, IconGift, IconGrid, IconRows } from "../components/Icons";
 import { Sheet } from "../components/Sheet";
 import { PriorityBadge, WishTile } from "../components/WishRow";
 
-interface Mine { code: string; wish_id: string; quantity: number }
+interface Mine { code: string; wish_id: string; quantity: number; amount_cents?: number | null }
 type Price = "all" | "20" | "50" | "more";
 type GSheet =
   | null
   | { kind: "reserve"; wish: GuestWish }
+  | { kind: "contribute"; wish: GuestWish; full: boolean }
+  | { kind: "contributed"; wish: GuestWish; amount: number }
+  | { kind: "giftInfo"; text: string }
   | { kind: "done"; wish: GuestWish; parentsBuy: boolean }
   | { kind: "taken"; available: number }
   | { kind: "cancel"; wish: GuestWish; code: string };
@@ -106,6 +110,25 @@ export function GuestPage() {
     load();
   };
 
+  const contribute = async (wish: GuestWish, amount: number, name: string) => {
+    setBusy(true);
+    const { data, error } = await db().rpc("contribute", { p_token: token, p_wish: wish.id, p_amount_cents: amount, p_name: name });
+    setBusy(false);
+    if (error) return toast(friendlyError(error));
+    const r = data as { ok: boolean; code?: string; error?: string; open_cents?: number };
+    if (r.ok && r.code) {
+      addCode(r.code);
+      setName(name);
+      setSheet({ kind: "contributed", wish, amount });
+    } else if (r.error === "too_much") setSheet({ kind: "giftInfo", text: `Inzwischen fehlen nur noch ${euroShort(r.open_cents ?? 0)}. Du kannst gern diesen Rest übernehmen.` });
+    else if (r.error === "fully_funded") setSheet({ kind: "giftInfo", text: "Gerade ist der letzte Betrag zusammengekommen. Das Geschenk ist komplett, danke trotzdem!" });
+    else if (r.error === "too_little") return toast(`Bitte mindestens ${euroShort(Math.min(500, r.open_cents ?? 500))}.`);
+    else if (r.error === "rate_limited") return toast("Gerade ist hier sehr viel los. Bitte versuch es in einer Minute noch einmal.");
+    else if (r.error === "name_required") return toast("Bitte gib deinen Namen an.");
+    else setState("invalid");
+    load();
+  };
+
   const cancel = async (code: string) => {
     setBusy(true);
     const { data, error } = await db().rpc("cancel_reservation", { p_code: code });
@@ -121,6 +144,11 @@ export function GuestPage() {
   const card = (w: GuestWish, mode: "open" | "mine" | "taken") => {
     const my = mineOf(w);
     const myQty = my.reduce((a, m) => a + m.quantity, 0);
+    const myAmount = my.reduce((a, m) => a + (m.amount_cents ?? 0), 0);
+    const group = !!w.group_gift && w.target_cents != null;
+    const funded = w.funded_cents ?? 0;
+    const target = w.target_cents ?? 0;
+    const open = Math.max(0, target - funded);
     const shopLink = w.url && (
       <a className="shop-link" href={w.url} target="_blank" rel="noopener noreferrer">{view === "grid" ? "Zum Shop" : w.shop ? `Bei ${w.shop} ansehen` : "Im Shop ansehen"}<IconExt /></a>
     );
@@ -131,7 +159,7 @@ export function GuestPage() {
           <div className="body">
             <h3>{w.title}</h3>
             {w.price_cents != null && <p className="note">{formatPrice(w.price_cents)}</p>}
-            <p className="taken-tag">Schon vergeben</p>
+            <p className="taken-tag">{group ? "Komplett zusammen" : "Schon vergeben"}</p>
           </div>
         </article>
       );
@@ -140,20 +168,29 @@ export function GuestPage() {
       <article className={`gcard ${view === "rows" ? "row" : ""}`} key={`${mode}-${w.id}`}>
         <WishTile wish={w} wrapped={mode === "mine"} />
         <div className="body">
-          <PriorityBadge priority={w.priority} />
+          <span className="badge-row"><PriorityBadge priority={w.priority} />{group && <span className="badge group-badge">Gemeinsam schenken</span>}</span>
           <h3>{w.title}</h3>
           {w.note && <p className="note">{w.note}</p>}
           <div className="price-row">
             {w.price_cents != null ? <span className="price">{formatPrice(w.price_cents)}</span> : <span />}
             {shopLink}
           </div>
-          {mode === "open" && w.quantity > 1 && <p className="note">Noch {w.available} von {w.quantity} frei</p>}
-          {mode === "mine" && <p className="mine-tag"><IconCheck /> Von dir reserviert{myQty > 1 ? ` (${myQty} Stück)` : ""}</p>}
+          {group && (
+            <div className="gift-box">
+              <div className="gift-sum"><span><b>{euroShort(funded)}</b> von {euroShort(target)}</span>{(w.contributors ?? 0) > 0 && <small>{w.contributors} {w.contributors === 1 ? "Person macht" : "Personen machen"} mit</small>}</div>
+              <span className="progress big" aria-hidden="true"><span style={{ width: `${target ? Math.min(100, Math.round((funded / target) * 100)) : 0}%` }} /></span>
+              {mode === "open" && <small className="note">Es fehlen noch <b>{euroShort(open)}</b>. Die Eltern kaufen das Geschenk, sobald alles zusammen ist.</small>}
+            </div>
+          )}
+          {mode === "open" && !group && w.quantity > 1 && <p className="note">Noch {w.available} von {w.quantity} frei</p>}
+          {mode === "mine" && <p className="mine-tag"><IconCheck /> {myAmount > 0 ? `Du steuerst ${euroShort(myAmount)} bei` : `Von dir reserviert${myQty > 1 ? ` (${myQty} Stück)` : ""}`}</p>}
         </div>
         <div className="actions">
-          {mode === "open" && <button className="btn ribbon big" onClick={() => setSheet({ kind: "reserve", wish: w })}><IconGift /> Reservieren</button>}
+          {mode === "open" && !group && <button className="btn ribbon big" onClick={() => setSheet({ kind: "reserve", wish: w })}><IconGift /> Reservieren</button>}
+          {mode === "open" && group && <button className="btn ribbon big" onClick={() => setSheet({ kind: "contribute", wish: w, full: false })}><IconGift /> Mitschenken</button>}
+          {mode === "open" && group && funded === 0 && <button className="btn quiet" onClick={() => setSheet({ kind: "contribute", wish: w, full: true })}>Ich schenke es ganz</button>}
           {mode === "mine" && my.map((m) => (
-            <button key={m.code} className="btn quiet" onClick={() => setSheet({ kind: "cancel", wish: w, code: m.code })}>Reservierung aufheben</button>
+            <button key={m.code} className="btn quiet" onClick={() => setSheet({ kind: "cancel", wish: w, code: m.code })}>{m.amount_cents != null ? "Beitrag zurückziehen" : "Reservierung aufheben"}</button>
           ))}
         </div>
       </article>
@@ -227,6 +264,34 @@ export function GuestPage() {
         {sheet?.kind === "reserve" && <ReserveForm wish={sheet.wish} busy={busy} onSubmit={(q, n, pb) => reserve(sheet.wish, q, n, pb)} />}
       </Sheet>
 
+      <Sheet open={sheet?.kind === "contribute"} onClose={close} label="Mitschenken">
+        {sheet?.kind === "contribute" && (
+          <ContributeForm wish={sheet.wish} full={sheet.full} busy={busy} onSubmit={(a, n) => contribute(sheet.wish, a, n)} />
+        )}
+      </Sheet>
+
+      <Sheet open={sheet?.kind === "contributed"} onClose={close} label="Beitrag bestätigt">
+        {sheet?.kind === "contributed" && (
+          <>
+            <h2>Danke!</h2>
+            <p>Du steuerst <b>{euroShort(sheet.amount)}</b> zu „{sheet.wish.title}“ bei.</p>
+            <p className="notice" style={{ marginTop: 12 }}>Die Eltern kaufen das Geschenk, sobald alles zusammen ist. Deinen Betrag gibst du ihnen direkt.</p>
+            <p className="hint" style={{ marginTop: 12 }}>Dieses Gerät merkt sich deinen Beitrag. Hier kannst du ihn jederzeit zurückziehen.</p>
+            <button className="btn block" onClick={close} style={{ marginTop: 14 }}>Fertig</button>
+          </>
+        )}
+      </Sheet>
+
+      <Sheet open={sheet?.kind === "giftInfo"} onClose={close} label="Hinweis">
+        {sheet?.kind === "giftInfo" && (
+          <>
+            <h2>Da hat sich etwas getan.</h2>
+            <p>{sheet.text}</p>
+            <button className="btn block" onClick={close} style={{ marginTop: 16 }}>Zur Liste</button>
+          </>
+        )}
+      </Sheet>
+
       <Sheet open={sheet?.kind === "done"} onClose={close} label="Reservierung bestätigt">
         {sheet?.kind === "done" && (
           <>
@@ -260,8 +325,8 @@ export function GuestPage() {
       <Sheet open={sheet?.kind === "cancel"} onClose={close} label="Reservierung aufheben">
         {sheet?.kind === "cancel" && (
           <>
-            <h2>Reservierung aufheben?</h2>
-            <p>„{sheet.wish.title}“ ist danach wieder für alle frei.</p>
+            <h2>{sheet.wish.group_gift ? "Beitrag zurückziehen?" : "Reservierung aufheben?"}</h2>
+            <p>{sheet.wish.group_gift ? `Dein Beitrag zu „${sheet.wish.title}“ wird entfernt.` : `„${sheet.wish.title}“ ist danach wieder für alle frei.`}</p>
             <div className="toolbar" style={{ marginTop: 18 }}>
               <button className="btn danger" disabled={busy} onClick={() => cancel(sheet.code)}>Ja, aufheben</button>
               <button className="btn soft" onClick={close}>Behalten</button>
@@ -306,5 +371,46 @@ function ReserveForm({ wish, busy, onSubmit }: { wish: GuestWish; busy: boolean;
         <button className="btn ribbon block" type="submit" disabled={busy}><IconGift /> {busy ? "Wird reserviert …" : "Jetzt reservieren"}</button>
       </form>
     </>
+  );
+}
+
+/** Betrag fürs Gruppengeschenk wählen: Vorschläge, eigener Betrag oder der ganze Rest. */
+function ContributeForm({ wish, full, busy, onSubmit }: { wish: GuestWish; full: boolean; busy: boolean; onSubmit: (amount: number, name: string) => void }) {
+  const open = Math.max(0, (wish.target_cents ?? 0) - (wish.funded_cents ?? 0));
+  const [name, setNameValue] = useState(getName());
+  const [custom, setCustom] = useState(full ? (open / 100).toString().replace(".", ",") : "");
+  const [chip, setChip] = useState<number | null>(full ? open : null);
+  const presets = [2000, 5000, 10000].filter((c) => c < open);
+  const amount = chip ?? parsePrice(custom);
+  const valid = amount != null && amount >= Math.min(500, open) && amount <= open && !!name.trim();
+  return (
+    <form onSubmit={(e) => { e.preventDefault(); if (valid) onSubmit(amount!, name.trim()); }}>
+      <h2>{full ? `„${wish.title}“ ganz schenken` : `Bei „${wish.title}“ mitschenken`}</h2>
+      <p className="hint" style={{ marginBottom: 14 }}>{full ? `Du übernimmst den vollen Betrag von ${euroShort(open)}.` : `Noch offen: ${euroShort(open)}. Wie viel möchtest du beisteuern?`}</p>
+      {!full && (
+        <div className="amount-chips" role="group" aria-label="Betrag">
+          {presets.map((c) => (
+            <button key={c} type="button" className="amount-chip" aria-pressed={chip === c} onClick={() => { setChip(c); setCustom(""); }}>{euroShort(c)}</button>
+          ))}
+          <button type="button" className="amount-chip" aria-pressed={chip === open} onClick={() => { setChip(open); setCustom(""); }}>Rest<br /><small>{euroShort(open)}</small></button>
+        </div>
+      )}
+      {!full && (
+        <label className="field">
+          <span>Anderer Betrag</span>
+          <input inputMode="decimal" value={custom} placeholder="z. B. 30" onChange={(e) => { setCustom(e.target.value); setChip(null); }} />
+          {chip == null && amount != null && amount > open && <small className="field-error">Höchstens {euroShort(open)}.</small>}
+          {chip == null && amount != null && amount < Math.min(500, open) && <small className="field-error">Mindestens {euroShort(Math.min(500, open))}.</small>}
+        </label>
+      )}
+      <label className="field">
+        <span>Dein Name</span>
+        <input required maxLength={60} autoComplete="name" value={name} placeholder="z. B. Oma Gisela" onChange={(e) => setNameValue(e.target.value)} />
+        <small>Andere Gäste sehen nur die Summe, nicht wer wie viel gibt. Das Geld gibst du den Eltern direkt.</small>
+      </label>
+      <button className="btn ribbon block" type="submit" disabled={busy || !valid}>
+        <IconGift /> {busy ? "Wird eingetragen …" : amount ? `${euroShort(amount)} beisteuern` : "Beisteuern"}
+      </button>
+    </form>
   );
 }

@@ -16,6 +16,7 @@ const wishes = [
   W("brille", "a", null, 1, "small", null, "2026-11-02T10:00:00Z"),
   W("mikro", "b", 4500, 1, "heart", "Thalia", "2025-11-01T10:00:00Z"),
   W("papa", "c", 9900, 1, "nice", null, "2026-11-01T10:00:00Z"),
+  { ...W("rad2", "d", 30000, 1, "heart", null, "2026-11-01T10:00:00Z"), group_gift: true },
 ];
 const R = (id: string, wish_id: string, quantity: number, guest_name: string, created_at: string): StatRes => ({ id, wish_id, quantity, guest_name, created_at });
 const res = [
@@ -23,7 +24,24 @@ const res = [
   R("r2", "tonie", 2, "Familie Yilmaz", "2026-12-10T10:00:00Z"),
   R("r3", "tonie", 1, " oma gisela", "2026-12-20T10:00:00Z"),
   R("r4", "mikro", 1, "Tante Sabine", "2025-12-01T10:00:00Z"),
+  { ...R("g1", "rad2", 0, "Oma Gisela", "2026-11-10T10:00:00Z"), amount_cents: 10000 },
+  { ...R("g2", "rad2", 0, "Onkel Tobias", "2026-11-11T10:00:00Z"), amount_cents: 5000 },
 ];
+
+describe("Gruppengeschenke in der Statistik", () => {
+  const listsD: StatList[] = [{ id: "d", title: "Gemeinsam", recipient_name: "Emma", event_date: "2026-12-24", archived_at: null, list_members: [{ user_id: me, show_reservations: true }] }];
+  const s = computeStats(listsD, wishes, res, new Set(["d"]), me);
+  it("zählt ein Gruppengeschenk erst als vergeben, wenn alles zusammen ist", () => {
+    expect(s.stand).toMatchObject({ taken: 0, total: 1 });
+  });
+  it("rechnet die zugesagten Beiträge als reservierten Wert und als Geld für die Eltern", () => {
+    expect(s.geld.reservedValue).toBe(15000);
+    expect(s.geld.parentsBuy).toEqual({ items: 1, value: 15000 });
+  });
+  it("zeigt bei Schenkenden den Beitrag", () => {
+    expect(s.schenkende.ranking.find((r) => r.name === "Oma Gisela")?.value).toBe(10000);
+  });
+});
 
 describe("Statistik", () => {
   const s = computeStats(lists, wishes, res, new Set(["a", "c"]), me);

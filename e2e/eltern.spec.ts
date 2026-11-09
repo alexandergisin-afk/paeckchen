@@ -113,3 +113,34 @@ test("Tägliche Benachrichtigung lässt sich ausschalten", async ({ page }) => {
   await sw.uncheck();
   await expect.poll(() => calls.writes.some((w) => w.includes('"notify_reservations":"off"'))).toBe(true);
 });
+
+test("Gruppengeschenk: Eltern sehen Beiträge mit Namen und tragen einen Beitrag ein", async ({ page }) => {
+  const calls = await mockSupabase(page, { signedIn: true });
+  await page.goto(`/#/liste/${LID}`);
+  await expect(page.getByText("100 € von 300 € von 1 Person")).toBeVisible();
+  await page.locator(".wrow-btn", { hasText: "Laufrad gemeinsam" }).click();
+  await expect(page.getByRole("button", { name: "Beitrag von Onkel Tobias (100 €) freigeben" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Für jemanden reservieren" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Beitrag für jemanden eintragen" }).click();
+  const dlg = page.locator("dialog.sheet[open]");
+  await dlg.getByLabel("Von wem?").fill("Oma Gisela");
+  await dlg.getByLabel("Betrag").fill("50");
+  await dlg.getByRole("button", { name: "50 € eintragen" }).click();
+  await expect.poll(() => calls.bodies.find((b) => b.fn === "contribute_for_guest")).toMatchObject({ p_wish: "w4", p_amount_cents: 5000, p_name: "Oma Gisela" });
+});
+
+test("Gemeinsam schenken lässt sich nur mit Preis einschalten", async ({ page }) => {
+  const calls = await mockSupabase(page, { signedIn: true });
+  await page.goto(`/#/liste/${LID}`);
+  await page.getByRole("button", { name: "Wunsch hinzufügen" }).click();
+  const flow = page.locator("dialog.add-flow[open]");
+  await flow.getByRole("button", { name: /Selbst eintragen/ }).click();
+  await flow.getByLabel("Was wird gewünscht?").fill("Trampolin");
+  const sw = flow.getByRole("checkbox", { name: /Gemeinsam schenken erlauben/ });
+  await expect(sw).toBeDisabled();
+  await flow.getByRole("textbox", { name: /^Preis/ }).fill("199");
+  await expect(sw).toBeEnabled();
+  await sw.check();
+  await flow.getByRole("button", { name: "Auf die Liste setzen" }).click();
+  await expect.poll(() => calls.writes.some((w) => w.includes('"group_gift":true') && w.includes('"price_cents":19900'))).toBe(true);
+});

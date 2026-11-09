@@ -1,8 +1,9 @@
 import type { Priority } from "./types";
+import { isGroupGift, reservedValue, takenQuantity } from "./gift";
 
 export interface StatList { id: string; title: string; recipient_name: string | null; event_date: string | null; archived_at: string | null; list_members: { user_id: string; show_reservations: boolean }[] }
-export interface StatWish { id: string; list_id: string; title: string; price_cents: number | null; quantity: number; priority: Priority; shop: string | null; created_at: string }
-export interface StatRes { id: string; wish_id: string; quantity: number; guest_name: string; created_at: string; parents_buy?: boolean }
+export interface StatWish { id: string; list_id: string; title: string; price_cents: number | null; quantity: number; priority: Priority; shop: string | null; created_at: string; group_gift?: boolean }
+export interface StatRes { id: string; wish_id: string; quantity: number; guest_name: string; created_at: string; parents_buy?: boolean; amount_cents?: number | null }
 
 const DAY = 864e5;
 const today = () => { const t = new Date(); t.setHours(0, 0, 0, 0); return t; };
@@ -21,9 +22,9 @@ export function computeStats(lists: StatList[], wishes: StatWish[], res: StatRes
   const ws = wishes.filter((w) => scope.has(w.list_id));
   const wishById = new Map(ws.map((w) => [w.id, w]));
   const rs = res.filter((r) => wishById.has(r.wish_id));
-  const takenOf = new Map<string, number>();
-  for (const r of rs) takenOf.set(r.wish_id, (takenOf.get(r.wish_id) ?? 0) + r.quantity);
-  const taken = (w: StatWish) => Math.min(w.quantity, takenOf.get(w.id) ?? 0);
+  const resOf = new Map<string, StatRes[]>();
+  for (const r of rs) resOf.set(r.wish_id, [...(resOf.get(r.wish_id) ?? []), r]);
+  const taken = (w: StatWish) => takenQuantity(w, resOf.get(w.id) ?? []);
 
   // Stand
   const hearts = ws.filter((w) => w.priority === "heart");
@@ -48,7 +49,7 @@ export function computeStats(lists: StatList[], wishes: StatWish[], res: StatRes
     const key = r.guest_name.trim().toLowerCase().replace(/\s+/g, " ");
     const p = people.get(key) ?? { name: r.guest_name.trim(), items: 0, value: 0 };
     p.items += r.quantity;
-    p.value += (wishById.get(r.wish_id)?.price_cents ?? 0) * r.quantity;
+    p.value += r.amount_cents ?? (wishById.get(r.wish_id)?.price_cents ?? 0) * r.quantity;
     people.set(key, p);
   }
   const ranking = [...people.values()].sort((a, b) => b.items - a.items || b.value - a.value);
@@ -73,10 +74,16 @@ export function computeStats(lists: StatList[], wishes: StatWish[], res: StatRes
     stand: { total: ws.reduce((a, w) => a + w.quantity, 0), taken: ws.reduce((a, w) => a + taken(w), 0), hearts: hearts.length, heartsDone: hearts.filter((w) => taken(w) >= w.quantity).length, next: upcoming },
     geld: {
       totalValue: priced.reduce((a, w) => a + w.price_cents! * w.quantity, 0),
-      reservedValue: priced.reduce((a, w) => a + w.price_cents! * taken(w), 0),
+      reservedValue: priced.reduce((a, w) => a + reservedValue(w, resOf.get(w.id) ?? []), 0),
       avgPrice: priced.length ? Math.round(priced.reduce((a, w) => a + w.price_cents!, 0) / priced.length) : null,
       buckets,
-      parentsBuy: rs.filter((r) => r.parents_buy).reduce((a, r) => ({ items: a.items + r.quantity, value: a.value + (wishById.get(r.wish_id)?.price_cents ?? 0) * r.quantity }), { items: 0, value: 0 }),
+      // Was die Eltern kaufen und wofür sie Geld bekommen: „Bitte besorgt ihr es“ und Gruppengeschenke
+      parentsBuy: {
+        items: rs.filter((r) => r.parents_buy && r.amount_cents == null).reduce((a, r) => a + r.quantity, 0)
+          + ws.filter((w) => isGroupGift(w) && (resOf.get(w.id) ?? []).length > 0).length,
+        value: rs.filter((r) => r.parents_buy || r.amount_cents != null)
+          .reduce((a, r) => a + (r.amount_cents ?? (wishById.get(r.wish_id)?.price_cents ?? 0) * r.quantity), 0),
+      },
     },
     schenkende: { distinct: people.size, ranking },
     zeit: { weeks, avgDaysToReserve: waits.length ? waits.reduce((a, b) => a + b, 0) / waits.length : null, hasDates },
@@ -85,8 +92,8 @@ export function computeStats(lists: StatList[], wishes: StatWish[], res: StatRes
 
 /** Rückblick pro beschenkter Person über alle Listen und Jahre. */
 export function computeReview(lists: StatList[], wishes: StatWish[], res: StatRes[]) {
-  const takenOf = new Map<string, number>();
-  for (const r of res) takenOf.set(r.wish_id, (takenOf.get(r.wish_id) ?? 0) + r.quantity);
+  const resByWish = new Map<string, StatRes[]>();
+  for (const r of res) resByWish.set(r.wish_id, [...(resByWish.get(r.wish_id) ?? []), r]);
   const groups = new Map<string, { name: string; lists: number; wishes: number; fulfilled: number; years: Set<number>; shops: Map<string, number> }>();
   for (const l of lists) {
     const name = l.recipient_name?.trim() || "Ohne Namen";
@@ -95,7 +102,7 @@ export function computeReview(lists: StatList[], wishes: StatWish[], res: StatRe
     if (l.event_date) g.years.add(day(l.event_date).getFullYear());
     for (const w of wishes.filter((x) => x.list_id === l.id)) {
       g.wishes += 1;
-      if ((takenOf.get(w.id) ?? 0) >= w.quantity) g.fulfilled += 1;
+      if (takenQuantity(w, resByWish.get(w.id) ?? []) >= w.quantity) g.fulfilled += 1;
       if (w.shop) g.shops.set(w.shop, (g.shops.get(w.shop) ?? 0) + 1);
     }
     groups.set(name.toLowerCase(), g);

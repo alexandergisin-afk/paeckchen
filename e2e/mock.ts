@@ -6,11 +6,13 @@ export const LID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const WISHES = [
   { id: "w1", list_id: LID, title: "Kinderfahrrad 24 Zoll", url: "https://www.decathlon.de/x", shop: "Decathlon", image_path: null, price_cents: 34900, quantity: 1, priority: "heart", note: "Mintgrün", created_at: "2026-11-02" },
   { id: "w2", list_id: LID, title: "Hörspielfiguren für die Toniebox", url: null, shop: "tonies", image_path: null, price_cents: 1699, quantity: 3, priority: "nice", note: null, created_at: "2026-11-03" },
+  { id: "w4", list_id: LID, title: "Laufrad gemeinsam", url: null, shop: null, image_path: null, price_cents: 30000, quantity: 1, priority: "heart", note: null, created_at: "2026-11-05", group_gift: true },
   { id: "w3", list_id: LID, title: "Schwimmbrille", url: null, shop: null, image_path: null, price_cents: 1299, quantity: 1, priority: "small", note: null, created_at: "2026-11-04" },
 ];
 const RES = [
   { id: "r1", wish_id: "w2", quantity: 1, guest_name: "Familie Yilmaz", created_at: "2026-11-20T10:00:00Z" },
   { id: "r2", wish_id: "w3", quantity: 1, guest_name: "Oma Gisela", created_at: "2026-11-21T10:00:00Z" },
+  { id: "r3", wish_id: "w4", quantity: 0, amount_cents: 10000, guest_name: "Onkel Tobias", created_at: "2026-11-22T10:00:00Z" },
 ];
 const LIST = {
   id: LID, title: "Emmas 9. Geburtstag", description: "Basteln und Lesen", recipient_name: "Emma", occasion: "birthday",
@@ -50,9 +52,13 @@ export async function mockSupabase(page: Page, opts: { signedIn?: boolean } = {}
       calls.rpc.push(fn);
       try { calls.bodies.push({ fn, ...JSON.parse(req.postData() ?? "{}") }); } catch { /* egal */ }
       if (fn === "reserve_for_guest") return json({ ok: true, code: "WXYZ-2345" });
+      if (fn === "contribute" || fn === "contribute_for_guest") return json({ ok: true, code: "GIFT-2345", open_cents: 0 });
       if (fn === "guest_list") {
-        const avail: Record<string, number> = { w1: 1, w2: 2, w3: 0 };
-        return json({ ...LIST, wishes: WISHES.map(({ list_id: _l, created_at: _c, ...w }) => ({ ...w, available: avail[w.id] })) });
+        const avail: Record<string, number> = { w1: 1, w2: 2, w3: 0, w4: 1 };
+        return json({ ...LIST, wishes: WISHES.map(({ list_id: _l, created_at: _c, ...w }) => ({
+          ...w, available: avail[w.id],
+          ...(w.id === "w4" ? { target_cents: 30000, funded_cents: 10000, contributors: 1 } : {}),
+        })) });
       }
       if (fn === "my_reservations") return json([]);
       if (fn === "reserve_wish") return json({ ok: true, code: "ABCD-2345" });

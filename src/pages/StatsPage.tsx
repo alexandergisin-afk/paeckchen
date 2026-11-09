@@ -31,8 +31,8 @@ export function StatsPage() {
         const { data: lists, error } = await db().from("lists").select("id,title,recipient_name,event_date,archived_at,list_members(user_id,show_reservations)").order("event_date", { ascending: false });
         if (error) throw error;
         const ls = lists as StatList[];
-        const wishes = await inChunks<StatWish>("wishes", "id,list_id,title,price_cents,quantity,priority,shop,created_at", "list_id", ls.map((l) => l.id));
-        const res = await inChunks<StatRes>("reservations", "id,wish_id,quantity,guest_name,created_at,parents_buy", "wish_id", wishes.map((w) => w.id));
+        const wishes = await inChunks<StatWish>("wishes", "id,list_id,title,price_cents,quantity,priority,shop,created_at,group_gift", "list_id", ls.map((l) => l.id));
+        const res = await inChunks<StatRes>("reservations", "id,wish_id,quantity,amount_cents,guest_name,created_at,parents_buy", "wish_id", wishes.map((w) => w.id));
         setData({ lists: ls, wishes, res });
       } catch (e) {
         setError(friendlyError(e));

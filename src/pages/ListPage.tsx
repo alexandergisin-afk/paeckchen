@@ -4,8 +4,9 @@ import { db } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { LIST_PAGE_SELECT, cover, sortWishes, type Reservation, type Wish, type WishList } from "../lib/types";
 import { countdownLabel, dateLabel, daysUntil, friendlyError, toast } from "../lib/format";
-import { removeImage } from "../lib/wishes";
+import { parsePrice, removeImage } from "../lib/wishes";
 import { copyWishes, moveWish } from "../lib/listOps";
+import { euroShort, giftFunded, giftTarget, isGroupGift, takenQuantity } from "../lib/gift";
 import { IconArchive, IconBack, IconChevron, IconCopy, IconGift, IconEdit, IconExt, IconEye, IconGrid, IconMove, IconPlus, IconRepeat, IconRows, IconShare, IconTrash, IconUndo, IconUsers } from "../components/Icons";
 import { Sheet } from "../components/Sheet";
 import { FormSheet } from "../components/FormSheet";
@@ -27,11 +28,12 @@ type SheetState =
   | { kind: "transfer"; wish: Wish; mode: "move" | "copy"; targets: { id: string; title: string; cover: number }[] | null }
   | { kind: "reuse" }
   | { kind: "reserveFor"; wish: Wish }
+  | { kind: "contributeFor"; wish: Wish }
   | { kind: "archive" };
 
 export function ListPage() {
   const { id } = useParams();
-  const { session } = useAuth();
+  const { session, displayName } = useAuth();
   const navigate = useNavigate();
   const [list, setList] = useState<WishList | null>(null);
   const [wishes, setWishes] = useState<Wish[]>([]);
@@ -90,7 +92,7 @@ export function ListPage() {
   const showRes = me?.show_reservations ?? true;
   const resOf = (w: Wish) => reservations.filter((r) => r.wish_id === w.id);
   const totalQty = wishes.reduce((a, w) => a + w.quantity, 0);
-  const takenQty = wishes.reduce((a, w) => a + Math.min(w.quantity, resOf(w).reduce((s, r) => s + r.quantity, 0)), 0);
+  const takenQty = wishes.reduce((a, w) => a + takenQuantity(w, resOf(w)), 0);
   const pct = totalQty ? Math.round((takenQty / totalQty) * 100) : 0;
   const c = cover(list.cover);
   const cd = countdownLabel(list.event_date);
@@ -188,7 +190,7 @@ export function ListPage() {
       if (error) throw error;
       const newId = (data as { id: string }).id;
       const toCopy = wishes
-        .map((w) => ({ ...w, copyQuantity: form.onlyFree ? w.quantity - Math.min(w.quantity, resOf(w).reduce((a, r) => a + r.quantity, 0)) : w.quantity }))
+        .map((w) => ({ ...w, copyQuantity: form.onlyFree ? w.quantity - takenQuantity(w, resOf(w)) : w.quantity }))
         .filter((w) => w.copyQuantity > 0);
       await copyWishes(toCopy, newId, session!.user.id);
       if (form.archiveOld) await db().from("lists").update({ archived_at: new Date().toISOString() }).eq("id", list.id);
@@ -200,6 +202,21 @@ export function ListPage() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const contributeFor = async (wish: Wish, name: string, amount: number) => {
+    setBusy(true);
+    const { data, error } = await db().rpc("contribute_for_guest", { p_wish: wish.id, p_amount_cents: amount, p_name: name });
+    setBusy(false);
+    if (error) return toast(friendlyError(error));
+    const r = data as { ok: boolean; error?: string; open_cents?: number };
+    if (!r.ok) {
+      const open = r.open_cents ?? 0;
+      return toast(r.error === "too_much" ? `Es fehlen nur noch ${euroShort(open)}.` : r.error === "too_little" ? `Mindestens ${euroShort(Math.min(500, open))}.` : r.error === "fully_funded" ? "Es ist schon alles zusammen." : "Das hat nicht geklappt.");
+    }
+    close();
+    toast(`${euroShort(amount)} von ${name} eingetragen.`);
+    load();
   };
 
   const reserveFor = async (wish: Wish, name: string, qty: number, parentsBuy: boolean) => {
@@ -337,12 +354,21 @@ export function ListPage() {
               {sheet.wish.url && <a href={sheet.wish.url} target="_blank" rel="noopener noreferrer"><IconExt /> Im Shop öffnen</a>}
               <button type="button" onClick={() => openTransfer(sheet.wish, "move")}><IconMove /> In andere Liste verschieben</button>
               <button type="button" onClick={() => openTransfer(sheet.wish, "copy")}><IconCopy /> In andere Liste kopieren</button>
-              {showRes && sheet.wish.quantity - resOf(sheet.wish).reduce((a, r) => a + r.quantity, 0) > 0 && (
+              {showRes && !isGroupGift(sheet.wish) && sheet.wish.quantity - takenQuantity(sheet.wish, resOf(sheet.wish)) > 0 && (
                 <button type="button" onClick={() => setSheet({ kind: "reserveFor", wish: sheet.wish })}><IconGift /> Für jemanden reservieren</button>
               )}
+              {showRes && isGroupGift(sheet.wish) && (() => {
+                const open = Math.max(0, giftTarget(sheet.wish) - giftFunded(resOf(sheet.wish)));
+                return open > 0 ? (
+                  <>
+                    <button type="button" onClick={() => setSheet({ kind: "contributeFor", wish: sheet.wish })}><IconGift /> Beitrag für jemanden eintragen</button>
+                    <button type="button" disabled={busy} onClick={() => contributeFor(sheet.wish, firstNameOf(displayName) || "Wir", open)}><IconGift /> Rest selbst übernehmen ({euroShort(open)})</button>
+                  </>
+                ) : null;
+              })()}
               {showRes && resOf(sheet.wish).map((r) => (
                 <button type="button" key={r.id} onClick={() => setSheet({ kind: "release", wish: sheet.wish, reservation: r })}>
-                  <IconUndo /> Reservierung von {r.guest_name} freigeben
+                  <IconUndo /> {r.amount_cents != null ? `Beitrag von ${r.guest_name} (${euroShort(r.amount_cents)}) freigeben` : `Reservierung von ${r.guest_name} freigeben`}
                 </button>
               ))}
               <button type="button" className="danger" onClick={() => setSheet({ kind: "deleteWish", wish: sheet.wish })}><IconTrash /> Wunsch löschen</button>
@@ -374,6 +400,13 @@ export function ListPage() {
               </div>
             )}
           </>
+        )}
+      </Sheet>
+
+      <Sheet open={sheet?.kind === "contributeFor"} onClose={close} label="Beitrag eintragen">
+        {sheet?.kind === "contributeFor" && (
+          <ContributeForForm wish={sheet.wish} open={Math.max(0, giftTarget(sheet.wish) - giftFunded(resOf(sheet.wish)))}
+            busy={busy} onSubmit={(n, a) => contributeFor(sheet.wish, n, a)} />
         )}
       </Sheet>
 
@@ -499,6 +532,35 @@ function ReserveForForm({ wish, free, busy, onSubmit }: {
         <span><b>Wir besorgen das Geschenk</b><br /><span className="hint">Die Person gibt euch das Geld, ihr kauft es.</span></span>
       </label>
       <button type="submit" className="btn block big" disabled={busy}>{busy ? "Wird reserviert …" : "Reservieren"}</button>
+    </form>
+  );
+}
+
+const firstNameOf = (n: string) => {
+  const f = n.trim().split(/[\s._+-]+/)[0] ?? "";
+  return f ? f.charAt(0).toUpperCase() + f.slice(1) : "";
+};
+
+/** Eltern tragen einen Beitrag für jemanden ein (z. B. „Oma gibt 50 € dazu“). */
+function ContributeForForm({ wish, open, busy, onSubmit }: { wish: Wish; open: number; busy: boolean; onSubmit: (name: string, amount: number) => void }) {
+  const [name, setName] = useState("");
+  const [amount, setAmount] = useState("");
+  const cents = parsePrice(amount);
+  const ok = !!name.trim() && cents != null && cents >= Math.min(500, open) && cents <= open;
+  return (
+    <form onSubmit={(e) => { e.preventDefault(); if (ok) onSubmit(name.trim(), cents!); }}>
+      <h2>Beitrag eintragen</h2>
+      <p className="hint" style={{ marginBottom: 14 }}>Für „{wish.title}“ fehlen noch {euroShort(open)}.</p>
+      <label className="field">
+        <span>Von wem?</span>
+        <input required autoFocus maxLength={60} value={name} placeholder="z. B. Oma Gisela" onChange={(e) => setName(e.target.value)} />
+      </label>
+      <label className="field">
+        <span>Betrag</span>
+        <input required inputMode="decimal" value={amount} placeholder="z. B. 50" onChange={(e) => setAmount(e.target.value)} />
+        {cents != null && cents > open && <small className="field-error">Höchstens {euroShort(open)}.</small>}
+      </label>
+      <button type="submit" className="btn block big" disabled={busy || !ok}>{busy ? "Wird eingetragen …" : cents ? `${euroShort(cents)} eintragen` : "Eintragen"}</button>
     </form>
   );
 }

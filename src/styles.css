@@ -672,3 +672,19 @@ dialog.fsheet::backdrop { background: rgba(20,12,30,.48); }
 .parents-buy { margin: 4px 0 18px; padding: 12px; border-radius: 14px; background: var(--surface-2); }
 .notify-toggle button { min-height: 44px; padding: 0 18px; }
 .sheet-in > form > h2:first-child { padding-right: 48px; margin-bottom: 10px; }
+
+/* Gruppengeschenke */
+.group-badge { background: var(--plum-soft); color: var(--plum); }
+.badge-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.gift-box { display: grid; gap: 6px; padding: 10px 0 2px; }
+.gift-sum { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.gift-sum b { font-family: var(--font-display); font-size: 1.2rem; }
+.gift-sum small { color: var(--ink-2); font-size: .82rem; }
+.gift-progress { margin-top: 4px; max-width: 260px; }
+.amount-chips { display: grid; grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); gap: 8px; margin-bottom: 14px; }
+.amount-chip { min-height: 54px; border-radius: 14px; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink); font: 700 1rem var(--font-ui); line-height: 1.15; cursor: pointer; }
+.amount-chip small { font-weight: 400; font-size: .8rem; }
+.amount-chip[aria-pressed="true"] { border: 2px solid var(--plum); background: var(--plum-soft); }
+.field-error { color: var(--danger); font-size: .85rem; }
+.group-switch { margin: 6px 0 16px; padding: 12px; border-radius: 14px; background: var(--surface-2); }
+.group-switch.is-disabled { opacity: .7; }
