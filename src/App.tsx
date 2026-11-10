@@ -19,6 +19,20 @@ const AccessPage = lazy(() => import("./pages/AccessPage").then((m) => ({ defaul
 const SharePage = lazy(() => import("./pages/SharePage").then((m) => ({ default: m.SharePage })));
 const StatsPage = lazy(() => import("./pages/StatsPage").then((m) => ({ default: m.StatsPage })));
 
+/** Seltenere Seiten im Leerlauf vorladen, damit der Wechsel dorthin sofort geht (nicht für Gäste). */
+function prefetchPages() {
+  if (window.location.hash.startsWith("#/w/")) return;
+  const idle = (window as Window & { requestIdleCallback?: (cb: () => void) => void }).requestIdleCallback ?? ((cb: () => void) => setTimeout(cb, 1500));
+  idle(() => {
+    void import("./pages/Settings");
+    void import("./pages/StatsPage");
+    void import("./pages/TeamPage");
+    void import("./pages/AccessPage");
+    void import("./pages/SharePage");
+  });
+}
+if (typeof window !== "undefined") window.addEventListener("load", prefetchPages, { once: true });
+
 export const PENDING_INVITE = "paeckchen-pending-invite";
 
 /**

@@ -117,6 +117,9 @@ select id as puppe from wishes where title = 'Puppe' \gset
 delete from rate_events;
 select clock_timestamp() as vorher \gset
 select pg_temp.als('anon');
+select pg_temp.als('11111111-1111-1111-1111-111111111111');
+update lists set allow_parents_buy = true where id = :'liste';
+select pg_temp.als('anon');
 select pg_temp.pruefe((reserve_wish(:'gast', :'zelt', 1, 'Oma Gisela', true)->>'ok')::boolean, 'Gast reserviert mit „Bitte besorgt ihr es“');
 select pg_temp.als('22222222-2222-2222-2222-222222222222');
 select pg_temp.pruefe((select parents_buy from reservations r join wishes w on w.id = r.wish_id where w.title = 'Zelt'), 'Eltern sehen „Eltern besorgen“');
@@ -127,7 +130,7 @@ select pg_temp.als('33333333-3333-3333-3333-333333333333');
 do $$ begin perform reserve_for_guest((select id from wishes limit 1), 1, 'X'); raise exception 'FEHLGESCHLAGEN: Fremde konnten reservieren';
   exception when insufficient_privilege then raise notice 'OK: Fremde können nicht für andere reservieren'; end $$;
 select pg_temp.als('anon');
-select pg_temp.pruefe(guest_list(:'gast')::text not like '%Opa Heinz%' and guest_list(:'gast')::text not like '%parents_buy%', 'Gäste erfahren weder Namen noch „Eltern besorgen“');
+select pg_temp.pruefe(guest_list(:'gast')::text not like '%Opa Heinz%' and (guest_list(:'gast')->'wishes')::text not like '%parents_buy%', 'Gäste erfahren weder Namen noch „Eltern besorgen“');
 
 -- Benachrichtigungen: nur für den Server, ohne eigene Einträge
 select pg_temp.als('11111111-1111-1111-1111-111111111111');
@@ -186,5 +189,29 @@ select pg_temp.pruefe((cancel_reservation(:'beitrag')->>'ok')::boolean, 'Gast zi
 select pg_temp.pruefe((select (w->>'funded_cents')::int = 24900 and (w->>'available')::int = 1 from jsonb_array_elements(guest_list(:'gast')->'wishes') w where w->>'id' = :'gruppe'), 'Danach ist wieder etwas offen');
 select pg_temp.als(null);
 select pg_temp.pruefe((select count(*) from reservation_notices('daily', now() - interval '1 hour', now()) n, jsonb_array_elements(n.items) i where i->>'amount_cents' = '5000') >= 1, 'Tägliche Mail enthält die Beträge');
+
+
+-- „Bitte besorgt ihr es“ nur mit Erlaubnis der Eltern
+select pg_temp.als('11111111-1111-1111-1111-111111111111');
+select id as liste3, guest_token as gast3 from create_list('Ohne Besorgen') \gset
+select pg_temp.pruefe(not (select allow_parents_buy from lists where id = :'liste3'), 'Neue Listen erlauben „Bitte besorgt ihr es“ zunächst nicht');
+insert into wishes (list_id, title, created_by) values (:'liste3', 'Ball', auth.uid()), (:'liste3', 'Kreisel', auth.uid());
+select pg_temp.als(null);
+select id as ball from wishes where title = 'Ball' and list_id = :'liste3' \gset
+select id as kreisel from wishes where title = 'Kreisel' and list_id = :'liste3' \gset
+delete from rate_events;
+select pg_temp.als('anon');
+select pg_temp.pruefe((guest_list(:'gast3')->>'allow_parents_buy')::boolean = false, 'Gästeansicht weiß, dass die Option nicht angeboten wird');
+select reserve_wish(:'gast3', :'ball', 1, 'Oma', true) is not null as x \gset
+select pg_temp.als(null);
+select pg_temp.pruefe(not (select parents_buy from reservations where wish_id = :'ball'), 'Ohne Erlaubnis wird „Bitte besorgt ihr es“ ignoriert');
+select pg_temp.als('11111111-1111-1111-1111-111111111111');
+update lists set allow_parents_buy = true where id = :'liste3';
+select pg_temp.als('anon');
+select reserve_wish(:'gast3', :'kreisel', 1, 'Opa', true) is not null as x \gset
+select pg_temp.als(null);
+select pg_temp.pruefe((select parents_buy from reservations where wish_id = :'kreisel'), 'Mit Erlaubnis wird „Bitte besorgt ihr es“ gespeichert');
+select pg_temp.als('11111111-1111-1111-1111-111111111111');
+select pg_temp.pruefe((select allow_parents_buy from create_list('Mit Besorgen', null, 'birthday', null, 0, null, true)), 'Beim Anlegen lässt sich die Option gleich einschalten');
 
 \echo 'Alle Datenbank-Tests bestanden.'

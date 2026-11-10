@@ -23,7 +23,7 @@ const LIST = {
 export interface Calls { lists: string[]; rpc: string[]; writes: string[]; bodies: Record<string, unknown>[] }
 
 /** Beantwortet alle Supabase-Anfragen mit Testdaten und protokolliert sie. */
-export async function mockSupabase(page: Page, opts: { signedIn?: boolean } = {}): Promise<Calls> {
+export async function mockSupabase(page: Page, opts: { signedIn?: boolean; allowParentsBuy?: boolean; slowListMs?: number } = {}): Promise<Calls> {
   const calls: Calls = { lists: [], rpc: [], writes: [], bodies: [] };
   if (opts.signedIn) {
     const session = {
@@ -52,10 +52,11 @@ export async function mockSupabase(page: Page, opts: { signedIn?: boolean } = {}
       calls.rpc.push(fn);
       try { calls.bodies.push({ fn, ...JSON.parse(req.postData() ?? "{}") }); } catch { /* egal */ }
       if (fn === "reserve_for_guest") return json({ ok: true, code: "WXYZ-2345" });
+      if (fn === "create_list") return json({ ...LIST, id: LID });
       if (fn === "contribute" || fn === "contribute_for_guest") return json({ ok: true, code: "GIFT-2345", open_cents: 0 });
       if (fn === "guest_list") {
         const avail: Record<string, number> = { w1: 1, w2: 2, w3: 0, w4: 1 };
-        return json({ ...LIST, wishes: WISHES.map(({ list_id: _l, created_at: _c, ...w }) => ({
+        return json({ ...LIST, allow_parents_buy: opts.allowParentsBuy ?? false, wishes: WISHES.map(({ list_id: _l, created_at: _c, ...w }) => ({
           ...w, available: avail[w.id],
           ...(w.id === "w4" ? { target_cents: 30000, funded_cents: 10000, contributors: 1 } : {}),
         })) });
@@ -69,7 +70,10 @@ export async function mockSupabase(page: Page, opts: { signedIn?: boolean } = {}
     if (url.includes("/rest/v1/lists")) {
       calls.lists.push(url);
       const nested = { ...LIST, wishes: WISHES.map((w) => ({ ...w, reservations: RES.filter((r) => r.wish_id === w.id) })) };
-      if (url.includes("id=eq.")) return json(req.headers()["accept"]?.includes("object") ? nested : [nested]);
+      if (url.includes("id=eq.")) {
+        if (opts.slowListMs) await new Promise((r) => setTimeout(r, opts.slowListMs));
+        return json(req.headers()["accept"]?.includes("object") ? nested : [nested]);
+      }
       if (url.includes("list_members(user_id,show_reservations)")) return json([{ ...LIST, list_members: [{ user_id: UID, show_reservations: true }] }]);
       return json([{ ...LIST, wishes: WISHES.map((w) => ({ id: w.id, quantity: w.quantity, reservations: RES.filter((r) => r.wish_id === w.id).map((r) => ({ quantity: r.quantity })) })) }]);
     }

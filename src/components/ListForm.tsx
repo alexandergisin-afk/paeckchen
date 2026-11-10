@@ -8,6 +8,7 @@ export interface ListInput {
   event_date: string;
   cover: number;
   description: string;
+  allow_parents_buy: boolean;
 }
 
 export function ListForm({ list, formId, onSubmit }: { list?: WishList; formId: string; onSubmit: (v: ListInput) => void }) {
@@ -18,6 +19,7 @@ export function ListForm({ list, formId, onSubmit }: { list?: WishList; formId: 
     event_date: list?.event_date ?? "",
     cover: list?.cover ?? 0,
     description: list?.description ?? "",
+    allow_parents_buy: list?.allow_parents_buy ?? false,
   });
   const set = <K extends keyof ListInput>(k: K, val: ListInput[K]) => setV((o) => ({ ...o, [k]: val }));
 
@@ -67,6 +69,13 @@ export function ListForm({ list, formId, onSubmit }: { list?: WishList; formId: 
         <span>Ein Satz für die Schenkenden (optional)</span>
         <textarea maxLength={1000} value={v.description} onChange={(e) => set("description", e.target.value)} placeholder="z. B. Emma bastelt und liest gerade am liebsten." />
       </label>
+      <label className="switch list-option">
+        <input type="checkbox" checked={v.allow_parents_buy} onChange={(e) => set("allow_parents_buy", e.target.checked)} />
+        <span>
+          <b>Wir besorgen Geschenke auf Wunsch</b><br />
+          <span className="hint">Schenkende können beim Reservieren bitten, dass ihr das Geschenk kauft. Sie geben euch dann das Geld.</span>
+        </span>
+      </label>
     </form>
   );
 }
@@ -79,4 +88,5 @@ export const toRow = (v: ListInput) => ({
   event_date: v.event_date || null,
   cover: v.cover,
   description: v.description || null,
+  allow_parents_buy: v.allow_parents_buy,
 });

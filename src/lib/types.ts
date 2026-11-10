@@ -12,16 +12,18 @@ export interface WishList {
   guest_token: string;
   created_at: string;
   archived_at?: string | null;
+  /** Gäste dürfen bitten, dass die Eltern das Geschenk besorgen */
+  allow_parents_buy?: boolean;
   wishes?: { count: number }[];
   list_members?: { user_id: string; role: Role; show_reservations: boolean }[];
 }
 
 export const LIST_SELECT =
-  "id,title,description,recipient_name,occasion,event_date,cover,guest_token,created_at,archived_at,wishes(count),list_members(user_id,role,show_reservations)";
+  "id,title,description,recipient_name,occasion,event_date,cover,guest_token,created_at,archived_at,allow_parents_buy,wishes(count),list_members(user_id,role,show_reservations)";
 
 /** Listenseite: Liste, Wünsche und (falls sichtbar) Reservierungen in einer einzigen Abfrage. */
 export const LIST_PAGE_SELECT =
-  "id,title,description,recipient_name,occasion,event_date,cover,guest_token,created_at,archived_at,list_members(user_id,role,show_reservations)," +
+  "id,title,description,recipient_name,occasion,event_date,cover,guest_token,created_at,archived_at,allow_parents_buy,list_members(user_id,role,show_reservations)," +
   "wishes(id,list_id,title,url,shop,image_path,price_cents,quantity,priority,note,created_at,group_gift,reservations(id,wish_id,quantity,amount_cents,guest_name,created_at,parents_buy,entered_by))";
 
 export const OCCASIONS: Record<Occasion, string> = {
@@ -107,5 +109,6 @@ export interface GuestList {
   event_date: string | null;
   description: string | null;
   cover: number;
+  allow_parents_buy?: boolean;
   wishes: GuestWish[];
 }

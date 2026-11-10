@@ -7,7 +7,7 @@ import "@fontsource/atkinson-hyperlegible/latin-700.css";
 import "@fontsource-variable/bricolage-grotesque/opsz.css";
 import "./fonts.css";
 import "./styles.css";
-import { applyTextSize } from "./lib/device";
+import { forgetTextSize } from "./lib/device";
 import "./lib/install";
 import { captureShareFromLaunch } from "./lib/share";
 import { installErrorReporting } from "./lib/errorlog";
@@ -16,7 +16,7 @@ installErrorReporting();
 
 captureShareFromLaunch();
 
-applyTextSize();
+forgetTextSize();
 
 // Abgelaufene oder ungültige Anmeldelinks kommen als #error=… zurück. Das würde den Router verwirren,
 // deshalb lesen wir die Meldung vorher aus und räumen die Adresse auf.

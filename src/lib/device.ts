@@ -1,6 +1,6 @@
 /**
  * Was sich das Gerät eines Gastes merkt – nur lokal im Browser, nie auf dem Server:
- * die Reservierungscodes (Schlüssel zum Aufheben), den zuletzt verwendeten Namen und die Schriftgröße.
+ * die Reservierungscodes (Schlüssel zum Aufheben), und den zuletzt verwendeten Namen.
  */
 const CODES = "paeckchen-codes";
 const NAME = "paeckchen-name";
@@ -31,11 +31,7 @@ export const keepCodes = (valid: Set<string>) => write(CODES, getCodes().filter(
 export const getName = () => read<string>(NAME, "");
 export const setName = (name: string) => write(NAME, name);
 
-export const getLargeText = () => read<boolean>(SIZE, false);
-export function setLargeText(on: boolean) {
-  write(SIZE, on);
-  applyTextSize();
-}
-export function applyTextSize() {
-  document.documentElement.dataset.size = getLargeText() ? "large" : "normal";
+/** Die frühere Einstellung „Große Schrift“ gibt es nicht mehr: einmalig aufräumen. */
+export function forgetTextSize() {
+  try { localStorage.removeItem(SIZE); } catch { /* egal */ }
 }

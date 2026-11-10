@@ -4,6 +4,8 @@ import { db } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { cover, type Role } from "../lib/types";
 import { takenQuantity } from "../lib/gift";
+import { cached, isFresh, load as loadCached } from "../lib/cache";
+import { listKey, loadListPage } from "../lib/listData";
 import { dateLabel, daysUntil, friendlyError, toast } from "../lib/format";
 import { IconChart, IconChevron, IconPlus } from "../components/Icons";
 import { FormSheet } from "../components/FormSheet";
@@ -34,15 +36,25 @@ const firstName = (n: string) => {
 export function Dashboard() {
   const { session, displayName } = useAuth();
   const navigate = useNavigate();
-  const [lists, setLists] = useState<DashList[] | null>(null);
+  const [lists, setLists] = useState<DashList[] | null>(() => cached<DashList[]>("dashboard") ?? null);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    const { data, error } = await db().from("lists").select(DASH_SELECT).order("created_at", { ascending: false });
-    if (error) setError(friendlyError(error));
-    else setLists(data as unknown as DashList[]);
+    try {
+      const data = await loadCached("dashboard", async () => {
+        const { data, error } = await db().from("lists").select(DASH_SELECT).order("created_at", { ascending: false });
+        if (error) throw error;
+        return data as unknown as DashList[];
+      });
+      setLists(data);
+      // Im Leerlauf die aktiven Listen vorladen, damit das Antippen sofort geht
+      const idle = (window as Window & { requestIdleCallback?: (cb: () => void) => void }).requestIdleCallback ?? ((cb: () => void) => setTimeout(cb, 300));
+      idle(() => data.filter((l) => !l.archived_at).slice(0, 6).forEach((l) => { if (!isFresh(listKey(l.id))) loadListPage(l.id).catch(() => undefined); }));
+    } catch (e) {
+      if (!cached("dashboard")) setError(friendlyError(e));
+    }
   }, []);
 
   useEffect(() => {
@@ -54,7 +66,7 @@ export function Dashboard() {
     const r = toRow(v);
     const { data, error } = await db().rpc("create_list", {
       p_title: r.title, p_recipient_name: r.recipient_name, p_occasion: r.occasion,
-      p_event_date: r.event_date, p_cover: r.cover, p_description: r.description,
+      p_event_date: r.event_date, p_cover: r.cover, p_description: r.description, p_allow_parents_buy: r.allow_parents_buy,
     });
     setBusy(false);
     if (error) return toast(friendlyError(error));

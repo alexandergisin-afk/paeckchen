@@ -261,7 +261,7 @@ export function GuestPage() {
       </p>
 
       <Sheet open={sheet?.kind === "reserve"} onClose={close} label="Wunsch reservieren">
-        {sheet?.kind === "reserve" && <ReserveForm wish={sheet.wish} busy={busy} onSubmit={(q, n, pb) => reserve(sheet.wish, q, n, pb)} />}
+        {sheet?.kind === "reserve" && <ReserveForm wish={sheet.wish} allowParentsBuy={!!list?.allow_parents_buy} busy={busy} onSubmit={(q, n, pb) => reserve(sheet.wish, q, n, pb)} />}
       </Sheet>
 
       <Sheet open={sheet?.kind === "contribute"} onClose={close} label="Mitschenken">
@@ -338,14 +338,14 @@ export function GuestPage() {
   );
 }
 
-function ReserveForm({ wish, busy, onSubmit }: { wish: GuestWish; busy: boolean; onSubmit: (qty: number, name: string, parentsBuy: boolean) => void }) {
+function ReserveForm({ wish, allowParentsBuy, busy, onSubmit }: { wish: GuestWish; allowParentsBuy: boolean; busy: boolean; onSubmit: (qty: number, name: string, parentsBuy: boolean) => void }) {
   const [name, setNameValue] = useState(getName());
   const [qty, setQty] = useState("1");
   const [parentsBuy, setParentsBuy] = useState(false);
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    onSubmit(Math.max(1, Math.min(wish.available, Number.parseInt(qty) || 1)), name.trim(), parentsBuy);
+    onSubmit(Math.max(1, Math.min(wish.available, Number.parseInt(qty) || 1)), name.trim(), allowParentsBuy && parentsBuy);
   };
   return (
     <>
@@ -364,10 +364,12 @@ function ReserveForm({ wish, busy, onSubmit }: { wish: GuestWish; busy: boolean;
           <input required maxLength={60} autoComplete="name" autoFocus={!name} value={name} placeholder="z. B. Oma Gisela" onChange={(e) => setNameValue(e.target.value)} />
           <small>Damit die Eltern wissen, von wem das Geschenk kommt. Andere Gäste sehen deinen Namen nie.</small>
         </label>
-        <label className="switch parents-buy">
-          <input type="checkbox" checked={parentsBuy} onChange={(e) => setParentsBuy(e.target.checked)} />
-          <span><b>Bitte besorgt ihr das Geschenk</b><br /><span className="hint">Die Eltern kaufen es für dich, du gibst ihnen das Geld.</span></span>
-        </label>
+        {allowParentsBuy && (
+          <label className="switch parents-buy">
+            <input type="checkbox" checked={parentsBuy} onChange={(e) => setParentsBuy(e.target.checked)} />
+            <span><b>Bitte besorgt ihr das Geschenk</b><br /><span className="hint">Die Eltern kaufen es für dich, du gibst ihnen das Geld.</span></span>
+          </label>
+        )}
         <button className="btn ribbon block" type="submit" disabled={busy}><IconGift /> {busy ? "Wird reserviert …" : "Jetzt reservieren"}</button>
       </form>
     </>

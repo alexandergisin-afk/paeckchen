@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { db } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
-import { LIST_PAGE_SELECT, cover, sortWishes, type Reservation, type Wish, type WishList } from "../lib/types";
+import { cover, type Reservation, type Wish, type WishList } from "../lib/types";
 import { countdownLabel, dateLabel, daysUntil, friendlyError, toast } from "../lib/format";
 import { parsePrice, removeImage } from "../lib/wishes";
 import { copyWishes, moveWish } from "../lib/listOps";
+import { cachedListPage, loadListPage, type ListPageData } from "../lib/listData";
 import { euroShort, giftFunded, giftTarget, isGroupGift, takenQuantity } from "../lib/gift";
 import { IconArchive, IconBack, IconChevron, IconCopy, IconGift, IconEdit, IconExt, IconEye, IconGrid, IconMove, IconPlus, IconRepeat, IconRows, IconShare, IconTrash, IconUndo, IconUsers } from "../components/Icons";
 import { Sheet } from "../components/Sheet";
@@ -60,19 +61,25 @@ export function ListPage() {
     setParams({}, { replace: true });
   }, [params, setParams]);
 
-  const load = useCallback(async () => {
-    // Eine einzige Abfrage. Reservierungen liefert die Datenbank nur, wenn der eigene Schalter „anzeigen“ an ist.
-    const { data, error } = await db().from("lists").select(LIST_PAGE_SELECT).eq("id", id).maybeSingle();
-    if (error) return setState("error");
-    if (!data) return setState("missing");
-    const raw = data as unknown as Omit<WishList, "wishes"> & { wishes: (Wish & { reservations?: Reservation[] })[] };
-    const ws: Wish[] = (raw.wishes ?? []).map(({ reservations: _r, ...w }) => w as Wish);
-    const rs: Reservation[] = (raw.wishes ?? []).flatMap((w) => (Array.isArray(w.reservations) ? w.reservations : []));
-    setList({ ...raw, wishes: undefined } as WishList);
-    setWishes(sortWishes(ws));
-    setReservations(rs);
+  const apply = useCallback((d: ListPageData | null | undefined) => {
+    if (d === undefined) return;
+    if (d === null) return setState("missing");
+    setList(d.list);
+    setWishes(d.wishes);
+    setReservations(d.reservations);
     setState("ok");
-  }, [id]);
+  }, []);
+
+  // Bereits geladene Liste sofort zeigen, dann im Hintergrund frisch laden
+  const load = useCallback(async () => {
+    try {
+      apply(await loadListPage(id!));
+    } catch {
+      if (!cachedListPage(id!)) setState("error");
+    }
+  }, [id, apply]);
+
+  useLayoutEffect(() => { apply(cachedListPage(id!)); }, [id, apply]);
 
   useEffect(() => {
     load();
@@ -185,7 +192,7 @@ export function ListPage() {
     try {
       const { data, error } = await db().rpc("create_list", {
         p_title: form.title, p_recipient_name: list.recipient_name, p_occasion: list.occasion,
-        p_event_date: form.date || null, p_cover: list.cover, p_description: list.description,
+        p_event_date: form.date || null, p_cover: list.cover, p_description: list.description, p_allow_parents_buy: !!list.allow_parents_buy,
       });
       if (error) throw error;
       const newId = (data as { id: string }).id;

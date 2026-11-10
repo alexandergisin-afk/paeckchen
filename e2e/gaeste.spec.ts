@@ -37,8 +37,16 @@ test("Gästeansicht lässt sich zwischen Kacheln und Liste umschalten und merkt 
   await expect(page.locator(".ggrid.rows")).toBeVisible();
 });
 
+test("„Bitte besorgt ihr das Geschenk“ gibt es nur, wenn die Eltern es für die Liste erlauben", async ({ page }) => {
+  await mockSupabase(page, { allowParentsBuy: false });
+  await page.goto("/#/w/TOK");
+  await page.locator(".gcard", { hasText: "Kinderfahrrad" }).getByRole("button", { name: "Reservieren" }).click();
+  await expect(page.getByLabel("Dein Name")).toBeVisible();
+  await expect(page.getByRole("checkbox", { name: /Bitte besorgt ihr das Geschenk/ })).toHaveCount(0);
+});
+
 test("Gäste können bitten, dass die Eltern das Geschenk besorgen", async ({ page }) => {
-  const calls = await mockSupabase(page);
+  const calls = await mockSupabase(page, { allowParentsBuy: true });
   await page.goto("/#/w/TOK");
   await page.locator(".gcard", { hasText: "Kinderfahrrad" }).getByRole("button", { name: "Reservieren" }).click();
   await page.getByLabel("Dein Name").fill("Oma Gisela");

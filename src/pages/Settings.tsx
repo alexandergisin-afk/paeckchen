@@ -1,16 +1,15 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { canPrompt, isInstalled, isIOS, onInstallChange, promptInstall } from "../lib/install";
 import { appUrl, db } from "../lib/supabase";
+import { clearCache } from "../lib/cache";
 import { useAuth } from "../lib/auth";
 import { friendlyError, toast } from "../lib/format";
-import { getLargeText, setLargeText } from "../lib/device";
 import { IconBack, IconChevron, IconLogout, IconUsers } from "../components/Icons";
 import { Link } from "react-router-dom";
 
 export function Settings() {
   const { session, displayName, refreshProfile } = useAuth();
   const [name, setNameValue] = useState(displayName);
-  const [large, setLarge] = useState(getLargeText());
   const [busy, setBusy] = useState(false);
   const [installable, setInstallable] = useState(canPrompt());
   const [reminders, setReminders] = useState<boolean | null>(null);
@@ -53,10 +52,6 @@ export function Settings() {
     toast("Name gespeichert.");
   };
 
-  const toggle = (on: boolean) => {
-    setLargeText(on);
-    setLarge(on);
-  };
 
   return (
     <div className="wrap narrow">
@@ -79,13 +74,6 @@ export function Settings() {
           <span><b>Zugriff verwalten</b><span className="hint" style={{ display: "block" }}>Wer welche deiner Listen mitbearbeiten darf</span></span>
           <span className="list-chev" aria-hidden="true"><IconChevron /></span>
         </Link>
-        <section className="panel">
-          <h2 style={{ marginBottom: 12 }}>Darstellung</h2>
-          <div className="chips">
-            <button className="fchip" aria-pressed={!large} onClick={() => toggle(false)}>Normale Schrift</button>
-            <button className="fchip" aria-pressed={large} onClick={() => toggle(true)}>Große Schrift</button>
-          </div>
-        </section>
         <section className="panel">
           <label className="switch">
             <input type="checkbox" checked={notify ?? true} disabled={notify === null} onChange={(e) => toggleNotify(e.target.checked)} />
@@ -140,7 +128,7 @@ export function Settings() {
           </p>
         </section>
         <section className="panel">
-          <button className="btn soft" onClick={() => db().auth.signOut()}><IconLogout /> Abmelden</button>
+          <button className="btn soft" onClick={() => { clearCache(); db().auth.signOut(); }}><IconLogout /> Abmelden</button>
         </section>
       </div>
     </div>

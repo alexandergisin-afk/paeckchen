@@ -144,3 +144,48 @@ test("Gemeinsam schenken lässt sich nur mit Preis einschalten", async ({ page }
   await flow.getByRole("button", { name: "Auf die Liste setzen" }).click();
   await expect.poll(() => calls.writes.some((w) => w.includes('"group_gift":true') && w.includes('"price_cents":19900'))).toBe(true);
 });
+
+test("Listen-Einstellung „Wir besorgen Geschenke auf Wunsch“ lässt sich nachträglich einschalten", async ({ page }) => {
+  const calls = await mockSupabase(page, { signedIn: true });
+  await page.goto(`/#/liste/${LID}`);
+  await page.getByRole("button", { name: "Bearbeiten", exact: true }).click();
+  const sw = page.getByRole("checkbox", { name: /Wir besorgen Geschenke auf Wunsch/ });
+  await expect(sw).not.toBeChecked();
+  await sw.check();
+  await page.locator("dialog.fsheet[open] .fs-save").click();
+  await expect.poll(() => calls.writes.some((w) => w.startsWith("PATCH lists") && w.includes('"allow_parents_buy":true'))).toBe(true);
+});
+
+test("Beim Anlegen einer Liste lässt sich „Wir besorgen Geschenke auf Wunsch“ gleich einschalten", async ({ page }) => {
+  const calls = await mockSupabase(page, { signedIn: true });
+  await page.goto("/#/");
+  await page.getByRole("button", { name: "Neue Liste" }).click();
+  await page.getByLabel(/Name der Liste/).fill("Leons Geburtstag");
+  await page.getByRole("checkbox", { name: /Wir besorgen Geschenke auf Wunsch/ }).check();
+  await page.locator("dialog.fsheet[open] .fs-save").click();
+  await expect.poll(() => calls.bodies.find((b) => b.fn === "create_list")).toMatchObject({ p_title: "Leons Geburtstag", p_allow_parents_buy: true });
+});
+
+test("Die Funktion „A+“ für große Schrift gibt es nicht mehr", async ({ page }) => {
+  await mockSupabase(page);
+  await page.goto("/#/w/TOK");
+  await expect(page.getByRole("heading", { name: "Emmas 9. Geburtstag" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Größere Schrift" })).toHaveCount(0);
+});
+
+test("Geschwindigkeit: wichtige Programmteile werden gleich mitgeladen", async ({ request }) => {
+  const html = await (await request.get("/")).text();
+  for (const teil of ["Dashboard", "ListPage", "GuestPage"]) expect(html).toMatch(new RegExp(`modulepreload[^>]+${teil}-`));
+  expect(html).toMatch(/rel="preload" as="font"[^>]+atkinson-hyperlegible-latin-400/);
+});
+
+test("Geschwindigkeit: eine Liste erscheint sofort, auch wenn die Datenbank langsam antwortet", async ({ page }) => {
+  await mockSupabase(page, { signedIn: true, slowListMs: 2500 });
+  await page.goto("/#/");
+  await expect(page.locator(".list-row").first()).toBeVisible();
+  await page.waitForTimeout(3500); // Leerlauf: die Übersicht lädt die Listen vor
+  const start = Date.now();
+  await page.locator(".list-row").first().click();
+  await expect(page.locator(".wrow-btn").first()).toBeVisible();
+  expect(Date.now() - start).toBeLessThan(1000); // ohne Vorladen wären es über 2,5 Sekunden
+});
