@@ -4,11 +4,12 @@ import { db } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { cover, type Role } from "../lib/types";
 import { takenQuantity } from "../lib/gift";
-import { SORT_LABELS, moveItem, sortLists, type ListSort } from "../lib/listSort";
+import { SORT_LABELS, sortLists, type ListSort } from "../lib/listSort";
+import { useLongPressSort } from "../lib/useDragSort";
 import { cached, isFresh, load as loadCached, remember } from "../lib/cache";
 import { listKey, loadListPage } from "../lib/listData";
 import { dateLabel, daysUntil, friendlyError, toast } from "../lib/format";
-import { IconChart, IconChevron, IconPlus, IconReorder } from "../components/Icons";
+import { IconChart, IconChevron, IconPlus } from "../components/Icons";
 import { FormSheet } from "../components/FormSheet";
 import { ListForm, toRow, type ListInput } from "../components/ListForm";
 
@@ -42,7 +43,7 @@ export function Dashboard() {
   const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(false);
   const [sort, setSort] = useState<ListSort>(() => cached<ListSort>("list-sort") ?? "custom");
-  const [order, setOrder] = useState<string[] | null>(null); // gesetzt = Verschieben-Modus
+  const [dragTip, setDragTip] = useState(() => { try { return !localStorage.getItem("paeckli-drag-tipp"); } catch { return true; } });
 
   // Gewählte Sortierung aus dem Profil (gilt auf allen Geräten)
   useEffect(() => {
@@ -59,21 +60,17 @@ export function Dashboard() {
     await db().from("profiles").update({ list_sort: v }).eq("id", session!.user.id);
   };
 
-  const saveOrder = async () => {
-    if (!order) return;
-    setBusy(true);
-    const { error } = await db().rpc("set_list_order", { p_ids: order });
-    setBusy(false);
-    if (error) return toast(friendlyError(error));
-    // Sofort übernehmen, ohne auf das Neuladen zu warten
+  // Nach dem Loslassen sofort speichern (eigene Reihenfolge)
+  const saveOrder = async (order: string[]) => {
     setLists((ls) => ls && ls.map((l) => ({
       ...l,
       list_members: l.list_members.map((m) => (m.user_id === session?.user.id ? { ...m, sort_order: order.indexOf(l.id) + 1 || null } : m)),
     })));
-    if (sort !== "custom") await chooseSort("custom");
-    setOrder(null);
+    if (sort !== "custom") chooseSort("custom");
+    if (dragTip) { setDragTip(false); try { localStorage.setItem("paeckli-drag-tipp", "1"); } catch { /* egal */ } }
+    const { error } = await db().rpc("set_list_order", { p_ids: order });
+    if (error) { toast(friendlyError(error)); load(); return; }
     toast("Reihenfolge gespeichert.");
-    load();
   };
 
   const load = useCallback(async () => {
@@ -112,7 +109,8 @@ export function Dashboard() {
 
   const me = session?.user.id ?? "";
   const active = sortLists((lists ?? []).filter((l) => !l.archived_at), sort, me);
-  const shown = order ? order.map((id) => active.find((l) => l.id === id)!).filter(Boolean) : active;
+  const dnd = useLongPressSort(active.map((l) => l.id), saveOrder);
+  const shown = dnd.live ? dnd.live.map((id) => active.find((l) => l.id === id)!).filter(Boolean) : active;
   const archived = (lists ?? []).filter((l) => l.archived_at);
   const upcoming = active
     .filter((l) => (daysUntil(l.event_date) ?? -1) >= 0)
@@ -144,31 +142,20 @@ export function Dashboard() {
 
       {lists && active.length > 1 && (
         <div className="sort-bar">
-          {order ? (
-            <>
-              <span className="sort-hint">Mit den Pfeilen verschieben</span>
-              <span className="sort-actions">
-                <button className="btn soft small" onClick={() => setOrder(null)}>Abbrechen</button>
-                <button className="btn small" disabled={busy} onClick={saveOrder}>Fertig</button>
-              </span>
-            </>
-          ) : (
-            <>
-              <label className="sort-select">
-                <span className="sr">Sortieren</span>
-                <select className="select small" value={sort} onChange={(e) => chooseSort(e.target.value as ListSort)} aria-label="Listen sortieren">
-                  {(Object.keys(SORT_LABELS) as ListSort[]).map((k) => <option key={k} value={k}>{SORT_LABELS[k]}</option>)}
-                </select>
-              </label>
-              <button className="btn quiet small" onClick={() => setOrder(active.map((l) => l.id))}><IconReorder /> Verschieben</button>
-            </>
-          )}
+          <label className="sort-select">
+            <span className="sr">Sortieren</span>
+            <select className="select small" value={sort} onChange={(e) => chooseSort(e.target.value as ListSort)} aria-label="Listen sortieren">
+              {(Object.keys(SORT_LABELS) as ListSort[]).map((k) => <option key={k} value={k}>{SORT_LABELS[k]}</option>)}
+            </select>
+          </label>
+          {dragTip && <span className="sort-hint" id="drag-help">Tipp: Liste gedrückt halten und ziehen, um sie zu verschieben</span>}
         </div>
       )}
 
+      {active.length > 1 && <span className="sr" id="drag-kbd">Mit Alt und Pfeiltaste nach oben oder unten verschieben.</span>}
       {lists && active.length > 0 && (
-        <div className={`list-rows ${order ? "reordering" : ""}`}>
-          {shown.map((l, idx) => {
+        <div className={`list-rows ${dnd.drag ? "reordering" : ""}`}>
+          {shown.map((l) => {
             const c = cover(l.cover);
             const mine = l.list_members.find((m) => m.user_id === me);
             const show = mine?.show_reservations ?? true;
@@ -176,20 +163,12 @@ export function Dashboard() {
             const taken = l.wishes.reduce((a, w) => a + takenQuantity(w, w.reservations ?? []), 0);
             const pct = total ? Math.round((taken / total) * 100) : 0;
             const n = l.wishes.length;
-            if (order) {
-              return (
-                <div className="list-row" key={l.id}>
-                  <span className={`list-cover t${c.t}`} aria-hidden="true">{c.e}</span>
-                  <span className="list-text"><span className="list-title">{l.title}</span></span>
-                  <span className="move-btns">
-                    <button type="button" aria-label={`„${l.title}“ nach oben`} disabled={idx === 0} onClick={() => setOrder(moveItem(order, idx, -1))}>▲</button>
-                    <button type="button" aria-label={`„${l.title}“ nach unten`} disabled={idx === shown.length - 1} onClick={() => setOrder(moveItem(order, idx, 1))}>▼</button>
-                  </span>
-                </div>
-              );
-            }
+            const dragging = dnd.drag?.id === l.id;
             return (
-              <Link className="list-row" to={`/liste/${l.id}`} key={l.id}>
+              <Link className={`list-row ${dragging ? "is-dragging" : ""}`} to={`/liste/${l.id}`} key={l.id} draggable={false}
+                aria-describedby={active.length > 1 ? "drag-kbd" : undefined}
+                style={dragging ? { transform: `translateY(${dnd.drag!.offset}px) scale(1.02)` } : undefined}
+                {...dnd.rowProps(l.id)}>
                 <span className={`list-cover t${c.t}`} aria-hidden="true">{c.e}</span>
                 <span className="list-text">
                   <span className="list-title">{l.title}</span>

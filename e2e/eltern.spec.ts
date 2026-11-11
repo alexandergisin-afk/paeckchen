@@ -235,17 +235,54 @@ test("Listen in der Übersicht sortieren", async ({ page }) => {
   await expect.poll(() => calls.writes.some((w) => w.startsWith("PATCH profiles") && w.includes('"list_sort":"name"'))).toBe(true);
 });
 
-test("Listen in der Übersicht mit Pfeilen verschieben", async ({ page }) => {
+async function holdAndDrag(page: import("@playwright/test").Page, row: import("@playwright/test").Locator, dy: number, holdMs = 650) {
+  const box = (await row.boundingBox())!;
+  const x = box.x + box.width / 2, y = box.y + box.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.waitForTimeout(holdMs);
+  for (let i = 1; i <= 10; i++) await page.mouse.move(x, y + (dy * i) / 10);
+  await page.mouse.up();
+}
+
+test("Listen gedrückt halten und ziehen: wird sofort gespeichert, ohne die Liste zu öffnen", async ({ page }) => {
   const calls = await mockSupabase(page, { signedIn: true });
   await page.goto("/#/");
-  await page.getByRole("button", { name: "Verschieben" }).click();
-  await expect(page.getByRole("button", { name: "„Leons Weihnachten“ nach oben" })).toBeDisabled();
-  await page.getByRole("button", { name: "„Emmas 9. Geburtstag“ nach oben" }).click();
-  await expect(page.locator(".list-row .list-title")).toHaveText(["Emmas 9. Geburtstag", "Leons Weihnachten"]);
-  await page.getByRole("button", { name: "Fertig" }).click();
+  await expect(page.getByText("Tipp: Liste gedrückt halten")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Verschieben" })).toHaveCount(0);
+  const titles = page.locator(".list-row .list-title");
+  await expect(titles).toHaveText(["Leons Weihnachten", "Emmas 9. Geburtstag"]);
+  const emma = page.locator(".list-row", { hasText: "Emmas 9. Geburtstag" });
+  const rowH = (await emma.boundingBox())!.height;
+  await holdAndDrag(page, emma, -rowH);
+  await expect(titles).toHaveText(["Emmas 9. Geburtstag", "Leons Weihnachten"]);
   await expect.poll(() => calls.bodies.find((b) => b.fn === "set_list_order")).toMatchObject({ p_ids: [LID, LID2] });
-  await expect(page.locator(".list-row .list-title")).toHaveText(["Emmas 9. Geburtstag", "Leons Weihnachten"]);
-  await expect(page.getByRole("button", { name: "Verschieben" })).toBeVisible();
+  await expect(page).toHaveURL(/#\/$/); // die Liste wurde nicht geöffnet
+  await expect(page.getByText("Tipp: Liste gedrückt halten")).toHaveCount(0); // Hinweis verschwindet nach dem ersten Mal
+});
+
+test("Kurz tippen öffnet die Liste weiterhin", async ({ page }) => {
+  await mockSupabase(page, { signedIn: true });
+  await page.goto("/#/");
+  await page.locator(".list-row", { hasText: "Emmas 9. Geburtstag" }).click();
+  await expect(page).toHaveURL(new RegExp(`#/liste/${LID}`));
+});
+
+test("Sofort bewegen (wie beim Scrollen) verschiebt nichts", async ({ page }) => {
+  const calls = await mockSupabase(page, { signedIn: true });
+  await page.goto("/#/");
+  const emma = page.locator(".list-row", { hasText: "Emmas 9. Geburtstag" });
+  await holdAndDrag(page, emma, -120, 50);
+  await expect(page.locator(".list-row .list-title")).toHaveText(["Leons Weihnachten", "Emmas 9. Geburtstag"]);
+  expect(calls.bodies.find((b) => b.fn === "set_list_order")).toBeUndefined();
+});
+
+test("Listen verschieben geht auch mit der Tastatur (Alt + Pfeil)", async ({ page }) => {
+  const calls = await mockSupabase(page, { signedIn: true });
+  await page.goto("/#/");
+  await page.locator(".list-row", { hasText: "Leons Weihnachten" }).focus();
+  await page.keyboard.press("Alt+ArrowDown");
+  await expect.poll(() => calls.bodies.find((b) => b.fn === "set_list_order")).toMatchObject({ p_ids: [LID, LID2] });
 });
 
 test("Geteilter Wunsch: Schritt 2 lässt sich abbrechen, „Zurück“ springt nicht wieder vor", async ({ page }) => {
