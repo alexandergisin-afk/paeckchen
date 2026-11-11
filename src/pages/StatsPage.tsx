@@ -23,7 +23,8 @@ export function StatsPage() {
   const me = session?.user.id ?? "";
   const [data, setData] = useState<{ lists: StatList[]; wishes: StatWish[]; res: StatRes[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [scope, setScope] = useState("active");
+  const [scope, setScope] = useState("all"); // "all" oder die ID einer Liste
+  const [withArchived, setWithArchived] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -42,13 +43,20 @@ export function StatsPage() {
 
   const scopeIds = useMemo(() => {
     if (!data) return new Set<string>();
-    if (scope === "active") return new Set(data.lists.filter((l) => !l.archived_at).map((l) => l.id));
-    if (scope === "all") return new Set(data.lists.map((l) => l.id));
+    if (scope === "all") return new Set(data.lists.filter((l) => withArchived || !l.archived_at).map((l) => l.id));
     return new Set([scope]);
-  }, [data, scope]);
+  }, [data, scope, withArchived]);
 
   const s = useMemo(() => (data ? computeStats(data.lists, data.wishes, data.res, scopeIds, me) : null), [data, scopeIds, me]);
-  const review = useMemo(() => (data ? computeReview(data.lists, data.wishes, data.res) : []), [data]);
+  // Rückblick: bei einer einzelnen Liste nur für die beschenkte Person dieser Liste
+  const picked = data?.lists.find((l) => l.id === scope) ?? null;
+  const review = useMemo(() => {
+    if (!data) return [];
+    const all = computeReview(data.lists, data.wishes, data.res);
+    if (!picked) return all;
+    const who = (picked.recipient_name?.trim() || "Ohne Namen").toLowerCase();
+    return all.filter((g) => g.name.toLowerCase() === who);
+  }, [data, picked]);
 
   if (error) return <div className="wrap narrow"><p className="notice error">{error}</p></div>;
   if (!data || !s) return <p className="loading">Statistik wird berechnet …</p>;
@@ -62,14 +70,29 @@ export function StatsPage() {
     <div className="wrap narrow">
       <Link className="back" to="/"><IconBack /> Listen</Link>
       <h1>Statistik</h1>
-      <label className="field" style={{ marginTop: 16, maxWidth: 420 }}>
-        <span>Welche Listen?</span>
-        <select className="select" value={scope} onChange={(e) => setScope(e.target.value)}>
-          <option value="active">Alle aktiven Listen</option>
-          <option value="all">Alle Listen, auch abgeschlossene</option>
-          {data.lists.map((l) => <option key={l.id} value={l.id}>{l.title}{l.archived_at ? " (abgeschlossen)" : ""}</option>)}
-        </select>
-      </label>
+      <div className="stats-picker scroll-x" role="group" aria-label="Liste auswählen">
+        <button type="button" className="fchip" aria-pressed={scope === "all"} onClick={() => setScope("all")}>Alle Listen</button>
+        {data.lists.filter((l) => !l.archived_at).map((l) => (
+          <button key={l.id} type="button" className="fchip" aria-pressed={scope === l.id} onClick={() => setScope(l.id)}>{l.title}</button>
+        ))}
+        {data.lists.some((l) => l.archived_at) && <span className="picker-sep" aria-hidden="true">Abgeschlossen:</span>}
+        {data.lists.filter((l) => l.archived_at).map((l) => (
+          <button key={l.id} type="button" className="fchip archived" aria-pressed={scope === l.id} onClick={() => setScope(l.id)}>{l.title}</button>
+        ))}
+      </div>
+      {scope === "all" && data.lists.some((l) => l.archived_at) && (
+        <label className="switch stats-archived">
+          <input type="checkbox" checked={withArchived} onChange={(e) => setWithArchived(e.target.checked)} />
+          <span>Abgeschlossene Listen mitzählen</span>
+        </label>
+      )}
+      {picked && (
+        <p className="stats-for">
+          <b>{picked.title}</b>
+          {[picked.recipient_name ? `für ${picked.recipient_name}` : "", picked.event_date ? new Date(picked.event_date + "T12:00:00").toLocaleDateString("de-DE", { day: "numeric", month: "long", year: "numeric" }) : ""].filter(Boolean).join(", ")}
+          {picked.archived_at ? ", abgeschlossen" : ""}
+        </p>
+      )}
       {s.hiddenLists > 0 && (
         <p className="hint" style={{ marginBottom: 14 }}>
           Bei {s.hiddenLists === 1 ? "einer Liste" : `${s.hiddenLists} Listen`} hast du Reservierungen ausgeblendet. Sie werden hier nicht mitgezählt.
@@ -161,7 +184,7 @@ export function StatsPage() {
 
         <section className="panel">
           <h2>Rückblick</h2>
-          <p className="hint" style={{ margin: "6px 0 12px" }}>Pro beschenkter Person über alle Listen und Jahre</p>
+          <p className="hint" style={{ margin: "6px 0 12px" }}>{picked ? `${picked.recipient_name?.trim() || "Diese Person"} über alle Listen und Jahre` : "Pro beschenkter Person über alle Listen und Jahre"}</p>
           {review.length === 0 ? <p className="hint">Noch keine Listen.</p> : (
             <div className="review">
               {review.map((g) => (

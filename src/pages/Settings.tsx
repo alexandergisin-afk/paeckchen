@@ -4,7 +4,7 @@ import { appUrl, db } from "../lib/supabase";
 import { clearCache } from "../lib/cache";
 import { useAuth } from "../lib/auth";
 import { friendlyError, toast } from "../lib/format";
-import { IconBack, IconChevron, IconLogout, IconUsers } from "../components/Icons";
+import { IconBack, IconChevron, IconLogout, IconMail, IconUsers } from "../components/Icons";
 import { Link } from "react-router-dom";
 
 export function Settings() {
@@ -13,6 +13,16 @@ export function Settings() {
   const [busy, setBusy] = useState(false);
   const [installable, setInstallable] = useState(canPrompt());
   const [reminders, setReminders] = useState<boolean | null>(null);
+  // Nur Administratoren sehen die Zugangsanfragen (null = kein Administrator)
+  const [pendingCount, setPendingCount] = useState<number | null>(null);
+  useEffect(() => {
+    if (!session) return;
+    db().from("app_admins").select("user_id").eq("user_id", session.user.id).maybeSingle().then(async ({ data }) => {
+      if (!data) return;
+      const { data: rows } = await db().rpc("pending_access_requests");
+      setPendingCount(Array.isArray(rows) ? rows.length : 0);
+    });
+  }, [session]);
   const [notify, setNotify] = useState<boolean | null>(null);
   const [copied, setCopied] = useState(false);
   const shortcutUrl = `${appUrl()}#/teilen?url=`;
@@ -69,9 +79,16 @@ export function Settings() {
           </form>
           <p className="hint" style={{ marginTop: 14 }}>Angemeldet als {session?.user.email}</p>
         </section>
+        {pendingCount !== null && (
+          <Link className="panel settings-link" to="/einstellungen/anfragen">
+            <span className="settings-link-icon" aria-hidden="true"><IconMail /></span>
+            <span><b>Zugangsanfragen</b>{pendingCount > 0 && <span className="count-badge">{pendingCount}</span>}<span className="hint" style={{ display: "block" }}>{pendingCount > 0 ? "Neue Bearbeiter warten auf deine Freigabe" : "Keine offenen Anfragen"}</span></span>
+            <span className="list-chev" aria-hidden="true"><IconChevron /></span>
+          </Link>
+        )}
         <Link className="panel settings-link" to="/einstellungen/zugriff">
           <span className="settings-link-icon" aria-hidden="true"><IconUsers /></span>
-          <span><b>Zugriff verwalten</b><span className="hint" style={{ display: "block" }}>Wer welche deiner Listen mitbearbeiten darf</span></span>
+          <span><b>Zugriff verwalten</b><span className="hint" style={{ display: "block" }}>Wer welche Listen mitbearbeiten darf und was jede Rolle darf</span></span>
           <span className="list-chev" aria-hidden="true"><IconChevron /></span>
         </Link>
         <section className="panel">

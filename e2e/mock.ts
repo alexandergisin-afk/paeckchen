@@ -20,11 +20,21 @@ const LIST = {
   list_members: [{ user_id: UID, role: "owner", show_reservations: true }],
 };
 
+export const LID2 = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+const LIST2 = {
+  id: LID2, title: "Leons Weihnachten", description: null, recipient_name: "Leon", occasion: "christmas",
+  event_date: "2026-12-24", cover: 1, guest_token: "TOK2", created_at: "2026-11-05", archived_at: null,
+  list_members: [{ user_id: UID, role: "owner", show_reservations: true, sort_order: null }],
+};
+
 export interface Calls { lists: string[]; rpc: string[]; writes: string[]; bodies: Record<string, unknown>[] }
 
 /** Beantwortet alle Supabase-Anfragen mit Testdaten und protokolliert sie. */
-export async function mockSupabase(page: Page, opts: { signedIn?: boolean; allowParentsBuy?: boolean; slowListMs?: number } = {}): Promise<Calls> {
+export async function mockSupabase(page: Page, opts: { signedIn?: boolean; allowParentsBuy?: boolean; slowListMs?: number; recent?: string[]; admin?: boolean; loginBlocked?: boolean; invitePending?: boolean } = {}): Promise<Calls> {
   const calls: Calls = { lists: [], rpc: [], writes: [], bodies: [] };
+  const order = new Map<string, number>(); // gespeicherte Reihenfolge wie in der echten Datenbank
+  const withOrder = <T extends { id: string; list_members: object[] }>(l: T): T =>
+    ({ ...l, list_members: l.list_members.map((m) => ({ ...m, sort_order: order.get(l.id) ?? null })) });
   if (opts.signedIn) {
     const session = {
       access_token: "a", refresh_token: "r", token_type: "bearer", expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600,
@@ -36,6 +46,18 @@ export async function mockSupabase(page: Page, opts: { signedIn?: boolean; allow
     const req = route.request();
     const url = decodeURIComponent(req.url());
     const json = (body: unknown, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
+    if (url.includes("/auth/v1/otp") && opts.loginBlocked) {
+      return json({ code: 500, error_code: "unexpected_failure", msg: "Database error saving new user" }, 500);
+    }
+    if (url.includes("/functions/v1/zugang")) {
+      const b = JSON.parse(req.postData() ?? "{}");
+      calls.bodies.push({ fn: "zugang", ...b });
+      if (b.action === "request") return json({ status: "pending" });
+      if (b.action === "invite") return json({ status: opts.invitePending ? "pending" : "allowed" });
+      if (b.action === "decide") return json({ ok: true, email: "anna@test.de", mail_sent: true });
+    }
+    if (url.includes("/rest/v1/list_members")) return json([{ user_id: UID, role: "owner", profiles: { display_name: "Julia" } }]);
+    if (url.includes("/rest/v1/app_admins")) return json(opts.admin ? { user_id: UID } : null);
     if (url.includes("/functions/v1/produkt-suche")) {
       calls.rpc.push("produkt-suche");
       return json({ market: "EBAY_DE", results: Array.from({ length: 25 }, (_, i) => ({
@@ -53,6 +75,13 @@ export async function mockSupabase(page: Page, opts: { signedIn?: boolean; allow
       try { calls.bodies.push({ fn, ...JSON.parse(req.postData() ?? "{}") }); } catch { /* egal */ }
       if (fn === "reserve_for_guest") return json({ ok: true, code: "WXYZ-2345" });
       if (fn === "create_list") return json({ ...LIST, id: LID });
+      if (fn === "pending_access_requests") return json([{ id: "req1", email: "anna@test.de", created_at: "2026-11-09T10:00:00Z", invited_by_name: "Markus", list_title: "Emmas 9. Geburtstag" }]);
+      if (fn === "create_invite") return json("EINLADUNG123");
+      if (fn === "set_list_order") {
+        const ids = (JSON.parse(req.postData() ?? "{}").p_ids ?? []) as string[];
+        ids.forEach((id, i) => order.set(id, i + 1));
+        return route.fulfill({ status: 204 });
+      }
       if (fn === "contribute" || fn === "contribute_for_guest") return json({ ok: true, code: "GIFT-2345", open_cents: 0 });
       if (fn === "guest_list") {
         const avail: Record<string, number> = { w1: 1, w2: 2, w3: 0, w4: 1 };
@@ -66,7 +95,11 @@ export async function mockSupabase(page: Page, opts: { signedIn?: boolean; allow
       return json(null);
     }
     if (req.method() !== "GET") { calls.writes.push(`${req.method()} ${url.split("/rest/v1/")[1] ?? url} ${req.postData() ?? ""}`); return route.fulfill({ status: 204 }); }
-    if (url.includes("/rest/v1/profiles")) return json({ display_name: "Julia", reminder_emails: true, notify_reservations: "daily" });
+    if (url.includes("/rest/v1/recent_searches")) {
+      const row = { user_id: UID, terms: opts.recent ?? [] };
+      return json(req.headers()["accept"]?.includes("object") ? row : [row]);
+    }
+    if (url.includes("/rest/v1/profiles")) return json({ display_name: "Julia", reminder_emails: true, notify_reservations: "daily", list_sort: "custom" });
     if (url.includes("/rest/v1/lists")) {
       calls.lists.push(url);
       const nested = { ...LIST, wishes: WISHES.map((w) => ({ ...w, reservations: RES.filter((r) => r.wish_id === w.id) })) };
@@ -75,7 +108,10 @@ export async function mockSupabase(page: Page, opts: { signedIn?: boolean; allow
         return json(req.headers()["accept"]?.includes("object") ? nested : [nested]);
       }
       if (url.includes("list_members(user_id,show_reservations)")) return json([{ ...LIST, list_members: [{ user_id: UID, show_reservations: true }] }]);
-      return json([{ ...LIST, wishes: WISHES.map((w) => ({ id: w.id, quantity: w.quantity, reservations: RES.filter((r) => r.wish_id === w.id).map((r) => ({ quantity: r.quantity })) })) }]);
+      return json([
+        { ...withOrder(LIST), wishes: WISHES.map((w) => ({ id: w.id, quantity: w.quantity, price_cents: w.price_cents, group_gift: !!w.group_gift, reservations: RES.filter((r) => r.wish_id === w.id).map((r) => ({ quantity: r.quantity, amount_cents: r.amount_cents ?? null })) })) },
+        { ...withOrder(LIST2), wishes: [] },
+      ]);
     }
     if (url.includes("/rest/v1/wishes")) return json(WISHES);
     if (url.includes("/rest/v1/reservations")) return json(RES);

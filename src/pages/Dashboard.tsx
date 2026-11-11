@@ -4,16 +4,17 @@ import { db } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { cover, type Role } from "../lib/types";
 import { takenQuantity } from "../lib/gift";
-import { cached, isFresh, load as loadCached } from "../lib/cache";
+import { SORT_LABELS, moveItem, sortLists, type ListSort } from "../lib/listSort";
+import { cached, isFresh, load as loadCached, remember } from "../lib/cache";
 import { listKey, loadListPage } from "../lib/listData";
 import { dateLabel, daysUntil, friendlyError, toast } from "../lib/format";
-import { IconChart, IconChevron, IconPlus } from "../components/Icons";
+import { IconChart, IconChevron, IconPlus, IconReorder } from "../components/Icons";
 import { FormSheet } from "../components/FormSheet";
 import { ListForm, toRow, type ListInput } from "../components/ListForm";
 
 /** Für die Übersicht: pro Liste die Wünsche mit Menge und (falls sichtbar) den Reservierungen. */
 const DASH_SELECT =
-  "id,title,recipient_name,event_date,cover,created_at,archived_at,list_members(user_id,role,show_reservations),wishes(id,quantity,price_cents,group_gift,reservations(quantity,amount_cents))";
+  "id,title,recipient_name,event_date,cover,created_at,archived_at,list_members(user_id,role,show_reservations,sort_order),wishes(id,quantity,price_cents,group_gift,reservations(quantity,amount_cents))";
 
 interface DashList {
   id: string;
@@ -40,6 +41,40 @@ export function Dashboard() {
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [sort, setSort] = useState<ListSort>(() => cached<ListSort>("list-sort") ?? "custom");
+  const [order, setOrder] = useState<string[] | null>(null); // gesetzt = Verschieben-Modus
+
+  // Gewählte Sortierung aus dem Profil (gilt auf allen Geräten)
+  useEffect(() => {
+    if (!session) return;
+    loadCached("list-sort", async () => {
+      const { data } = await db().from("profiles").select("list_sort").eq("id", session.user.id).maybeSingle();
+      return ((data?.list_sort as ListSort) ?? "custom");
+    }).then(setSort, () => undefined);
+  }, [session]);
+
+  const chooseSort = async (v: ListSort) => {
+    setSort(v);
+    remember("list-sort", v);
+    await db().from("profiles").update({ list_sort: v }).eq("id", session!.user.id);
+  };
+
+  const saveOrder = async () => {
+    if (!order) return;
+    setBusy(true);
+    const { error } = await db().rpc("set_list_order", { p_ids: order });
+    setBusy(false);
+    if (error) return toast(friendlyError(error));
+    // Sofort übernehmen, ohne auf das Neuladen zu warten
+    setLists((ls) => ls && ls.map((l) => ({
+      ...l,
+      list_members: l.list_members.map((m) => (m.user_id === session?.user.id ? { ...m, sort_order: order.indexOf(l.id) + 1 || null } : m)),
+    })));
+    if (sort !== "custom") await chooseSort("custom");
+    setOrder(null);
+    toast("Reihenfolge gespeichert.");
+    load();
+  };
 
   const load = useCallback(async () => {
     try {
@@ -75,7 +110,9 @@ export function Dashboard() {
     navigate(`/liste/${(data as { id: string }).id}`);
   };
 
-  const active = (lists ?? []).filter((l) => !l.archived_at);
+  const me = session?.user.id ?? "";
+  const active = sortLists((lists ?? []).filter((l) => !l.archived_at), sort, me);
+  const shown = order ? order.map((id) => active.find((l) => l.id === id)!).filter(Boolean) : active;
   const archived = (lists ?? []).filter((l) => l.archived_at);
   const upcoming = active
     .filter((l) => (daysUntil(l.event_date) ?? -1) >= 0)
@@ -105,16 +142,52 @@ export function Dashboard() {
         </div>
       )}
 
+      {lists && active.length > 1 && (
+        <div className="sort-bar">
+          {order ? (
+            <>
+              <span className="sort-hint">Mit den Pfeilen verschieben</span>
+              <span className="sort-actions">
+                <button className="btn soft small" onClick={() => setOrder(null)}>Abbrechen</button>
+                <button className="btn small" disabled={busy} onClick={saveOrder}>Fertig</button>
+              </span>
+            </>
+          ) : (
+            <>
+              <label className="sort-select">
+                <span className="sr">Sortieren</span>
+                <select className="select small" value={sort} onChange={(e) => chooseSort(e.target.value as ListSort)} aria-label="Listen sortieren">
+                  {(Object.keys(SORT_LABELS) as ListSort[]).map((k) => <option key={k} value={k}>{SORT_LABELS[k]}</option>)}
+                </select>
+              </label>
+              <button className="btn quiet small" onClick={() => setOrder(active.map((l) => l.id))}><IconReorder /> Verschieben</button>
+            </>
+          )}
+        </div>
+      )}
+
       {lists && active.length > 0 && (
-        <div className="list-rows">
-          {active.map((l) => {
+        <div className={`list-rows ${order ? "reordering" : ""}`}>
+          {shown.map((l, idx) => {
             const c = cover(l.cover);
-            const me = l.list_members.find((m) => m.user_id === session?.user.id);
-            const show = me?.show_reservations ?? true;
+            const mine = l.list_members.find((m) => m.user_id === me);
+            const show = mine?.show_reservations ?? true;
             const total = l.wishes.reduce((a, w) => a + w.quantity, 0);
             const taken = l.wishes.reduce((a, w) => a + takenQuantity(w, w.reservations ?? []), 0);
             const pct = total ? Math.round((taken / total) * 100) : 0;
             const n = l.wishes.length;
+            if (order) {
+              return (
+                <div className="list-row" key={l.id}>
+                  <span className={`list-cover t${c.t}`} aria-hidden="true">{c.e}</span>
+                  <span className="list-text"><span className="list-title">{l.title}</span></span>
+                  <span className="move-btns">
+                    <button type="button" aria-label={`„${l.title}“ nach oben`} disabled={idx === 0} onClick={() => setOrder(moveItem(order, idx, -1))}>▲</button>
+                    <button type="button" aria-label={`„${l.title}“ nach unten`} disabled={idx === shown.length - 1} onClick={() => setOrder(moveItem(order, idx, 1))}>▼</button>
+                  </span>
+                </div>
+              );
+            }
             return (
               <Link className="list-row" to={`/liste/${l.id}`} key={l.id}>
                 <span className={`list-cover t${c.t}`} aria-hidden="true">{c.e}</span>
@@ -122,7 +195,7 @@ export function Dashboard() {
                   <span className="list-title">{l.title}</span>
                   <span className="list-meta">
                     {[l.recipient_name ? `Für ${l.recipient_name}` : "", dateLabel(l.event_date)].filter(Boolean).join(", ")}
-                    {me?.role === "editor" && <span className="badge" style={{ marginLeft: 6 }}>Mitbearbeitung</span>}
+                    {mine?.role === "editor" && <span className="badge" style={{ marginLeft: 6 }}>Mitbearbeitung</span>}
                   </span>
                   {n === 0 ? (
                     <span className="list-progress-text">Noch keine Wünsche</span>

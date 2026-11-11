@@ -214,4 +214,79 @@ select pg_temp.pruefe((select parents_buy from reservations where wish_id = :'kr
 select pg_temp.als('11111111-1111-1111-1111-111111111111');
 select pg_temp.pruefe((select allow_parents_buy from create_list('Mit Besorgen', null, 'birthday', null, 0, null, true)), 'Beim Anlegen lässt sich die Option gleich einschalten');
 
+
+-- Listen-Reihenfolge: jeder nur seine eigene
+select pg_temp.als('11111111-1111-1111-1111-111111111111');
+select set_list_order(array[:'liste2', :'liste']::uuid[]);
+select pg_temp.pruefe((select sort_order from list_members where list_id = :'liste2' and user_id = auth.uid()) = 1
+  and (select sort_order from list_members where list_id = :'liste' and user_id = auth.uid()) = 2, 'Eigene Reihenfolge wird gespeichert');
+select pg_temp.pruefe((select sort_order from list_members where list_id = :'liste' and user_id = '22222222-2222-2222-2222-222222222222') is null, 'Die Reihenfolge anderer Mitglieder bleibt unberührt');
+update profiles set list_sort = 'name' where id = auth.uid();
+select pg_temp.pruefe((select list_sort from profiles where id = auth.uid()) = 'name', 'Sortierung lässt sich pro Person merken');
+select pg_temp.als('33333333-3333-3333-3333-333333333333');
+select set_list_order(array[:'liste']::uuid[]);
+select pg_temp.als(null);
+select pg_temp.pruefe(not exists (select 1 from list_members where list_id = :'liste' and user_id = '33333333-3333-3333-3333-333333333333'), 'Fremde können über die Reihenfolge keinen Zugang erlangen');
+
+
+-- Zuletzt gesucht: nur für einen selbst
+select pg_temp.als('11111111-1111-1111-1111-111111111111');
+insert into recent_searches (terms) values (array['Lego Baumhaus', 'Hörspiel']);
+select pg_temp.pruefe((select terms from recent_searches) = array['Lego Baumhaus', 'Hörspiel'], 'Eigene Suchbegriffe werden gespeichert');
+do $$ begin update recent_searches set terms = array['a', 'b', 'c', 'd'] where user_id = auth.uid(); raise exception 'FEHLGESCHLAGEN: mehr als 3 Begriffe';
+  exception when check_violation then raise notice 'OK: Höchstens 3 Begriffe'; end $$;
+select pg_temp.als('22222222-2222-2222-2222-222222222222');
+select pg_temp.pruefe((select count(*) from recent_searches) = 0, 'Mitbearbeiter sehen die Suchen anderer nicht');
+update recent_searches set terms = array['Hack'] where user_id = '11111111-1111-1111-1111-111111111111';
+do $$ begin insert into recent_searches (user_id, terms) values ('11111111-1111-1111-1111-111111111111', array['Hack']); raise exception 'FEHLGESCHLAGEN: fremde Suchen angelegt';
+  exception when insufficient_privilege or unique_violation then raise notice 'OK: Fremde Suchen lassen sich nicht anlegen'; end $$;
+select pg_temp.als(null);
+select pg_temp.pruefe((select terms from recent_searches where user_id = '11111111-1111-1111-1111-111111111111') = array['Lego Baumhaus', 'Hörspiel'], 'Fremde können die Suchen nicht ändern');
+select pg_temp.als('anon');
+select pg_temp.pruefe((select count(*) from recent_searches) = 0, 'Gäste sehen keine Suchbegriffe');
+select pg_temp.als(null);
+
+
+-- Freigabe neuer Bearbeiter
+select pg_temp.als(null);
+insert into app_admins (user_id) values ('11111111-1111-1111-1111-111111111111');
+select pg_temp.als('anon');
+do $$ begin perform request_access('neu@test.de', '1.1.1.1'); raise exception 'FEHLGESCHLAGEN: Gäste rufen request_access direkt auf';
+  exception when insufficient_privilege then raise notice 'OK: Anfragen laufen nur über den Server'; end $$;
+select pg_temp.als(null);
+set role service_role;
+delete from rate_events where bucket like 'access:%';
+select pg_temp.pruefe(request_access('Neu@Test.de', '1.1.1.1') = '{"status": "pending", "notify": true}'::jsonb, 'Unbekannte Adresse erzeugt eine Anfrage und benachrichtigt die Verwaltung');
+select pg_temp.pruefe(request_access('neu@test.de', '1.1.1.1') = '{"status": "pending", "notify": false}'::jsonb, 'Wiederholte Anfrage benachrichtigt nicht erneut');
+select pg_temp.pruefe(request_access('julia@test.de', '1.1.1.1')->>'status' = 'allowed', 'Bekannte Adresse bekommt sofort ihren Code');
+reset role;
+
+select pg_temp.als('11111111-1111-1111-1111-111111111111');
+select pg_temp.pruefe(is_admin(), 'Julia ist Administratorin');
+select pg_temp.pruefe(allow_email('direkt@test.de') = 'allowed', 'Administratorin lädt ein: sofort freigeschaltet');
+select pg_temp.als('22222222-2222-2222-2222-222222222222');
+select pg_temp.pruefe(not is_admin(), 'Markus ist kein Administrator');
+select id as markusliste from create_list('Markus’ Liste') \gset
+select pg_temp.pruefe(allow_email('anna@test.de', :'markusliste') = 'pending', 'Markus lädt ein: es entsteht eine Anfrage');
+do $$ begin perform pending_access_requests(); raise exception 'FEHLGESCHLAGEN: Nicht-Admin sieht Anfragen';
+  exception when insufficient_privilege then raise notice 'OK: Nur Administratoren sehen Anfragen'; end $$;
+do $$ begin insert into auth.users values ('55555555-5555-5555-5555-555555555555', 'anna@test.de'); raise exception 'FEHLGESCHLAGEN: Anna kam ohne Freigabe rein';
+  exception when insufficient_privilege then raise notice 'OK: Ohne Freigabe kein Konto'; end $$;
+
+select pg_temp.als('11111111-1111-1111-1111-111111111111');
+select pg_temp.pruefe((select count(*) from pending_access_requests()) = 2, 'Administratorin sieht beide offenen Anfragen');
+select pg_temp.pruefe((select invited_by_name || ' / ' || list_title from pending_access_requests() where email = 'anna@test.de') like '% / Markus’ Liste', 'Anfrage zeigt, wer wozu eingeladen hat');
+select id as anna_req from pending_access_requests() where email = 'anna@test.de' \gset
+select id as neu_req from pending_access_requests() where email = 'neu@test.de' \gset
+select pg_temp.pruefe(decide_access(:'anna_req', true) = 'anna@test.de', 'Freigeben liefert die Adresse für die Code-Mail');
+select pg_temp.pruefe(decide_access(:'neu_req', false) = 'neu@test.de', 'Ablehnen geht auch');
+select pg_temp.pruefe((select count(*) from pending_access_requests()) = 0, 'Danach ist nichts mehr offen');
+select pg_temp.als(null);
+insert into auth.users values ('55555555-5555-5555-5555-555555555555', 'anna@test.de');
+select pg_temp.pruefe(exists (select 1 from profiles where id = '55555555-5555-5555-5555-555555555555'), 'Nach der Freigabe kann Anna ihr Konto anlegen');
+set role service_role;
+select pg_temp.pruefe(request_access('neu@test.de', '1.1.1.1') = '{"status": "pending", "notify": false}'::jsonb, 'Abgelehnte Adresse erfährt nichts und löst keine neue Mail aus');
+select pg_temp.pruefe((select count(*) from admin_emails()) = 1, 'Der Server findet die Adresse der Verwaltung');
+reset role;
+
 \echo 'Alle Datenbank-Tests bestanden.'

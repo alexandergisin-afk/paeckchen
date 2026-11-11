@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { LID, mockSupabase, watchProblems } from "./mock";
+import { LID, LID2, mockSupabase, watchProblems } from "./mock";
 
 test("Listenseite lädt mit einer einzigen Abfrage und zeigt Reservierungen", async ({ page }) => {
   const problems = watchProblems(page);
@@ -188,4 +188,174 @@ test("Geschwindigkeit: eine Liste erscheint sofort, auch wenn die Datenbank lang
   await page.locator(".list-row").first().click();
   await expect(page.locator(".wrow-btn").first()).toBeVisible();
   expect(Date.now() - start).toBeLessThan(1000); // ohne Vorladen wären es über 2,5 Sekunden
+});
+
+test("Zuletzt gesuchte Begriffe gehören der Person und lassen sich einzeln entfernen", async ({ page }) => {
+  const calls = await mockSupabase(page, { signedIn: true, recent: ["Hörspiel", "Fahrradhelm"] });
+  await page.addInitScript(() => localStorage.setItem("paeckli-recent-searches", JSON.stringify(["Vom Gerät"])));
+  await page.goto(`/#/liste/${LID}`);
+  await page.getByRole("button", { name: "Wunsch hinzufügen" }).click();
+  const flow = page.locator("dialog.add-flow[open]");
+  await expect(flow.getByRole("button", { name: "Hörspiel", exact: true })).toBeVisible();
+  await expect(flow.getByRole("button", { name: "Vom Gerät", exact: true })).toHaveCount(0); // alter Gerätespeicher zählt nicht
+  await flow.getByRole("button", { name: "„Hörspiel“ aus den letzten Suchen entfernen" }).click();
+  await expect(flow.getByRole("button", { name: "Hörspiel", exact: true })).toHaveCount(0);
+  await expect.poll(() => calls.writes.some((w) => w.startsWith("POST recent_searches") && w.includes('"terms":["Fahrradhelm"]'))).toBe(true);
+  expect(await page.evaluate(() => localStorage.getItem("paeckli-recent-searches"))).toBeNull();
+});
+
+test("Zuletzt gesucht zeigt und speichert höchstens 3 Begriffe, der neueste vorne", async ({ page }) => {
+  const calls = await mockSupabase(page, { signedIn: true, recent: ["Hörspiel", "Fahrradhelm", "Bastelset"] });
+  await page.goto(`/#/liste/${LID}`);
+  await page.getByRole("button", { name: "Wunsch hinzufügen" }).click();
+  const flow = page.locator("dialog.add-flow[open]");
+  await expect(flow.locator(".recent-term")).toHaveCount(3);
+  await flow.getByLabel("Produkt suchen").fill("Lego Baumhaus");
+  await flow.getByLabel("Produkt suchen").press("Enter");
+  await expect.poll(() => calls.writes.some((w) => w.startsWith("POST recent_searches") && w.includes('"terms":["Lego Baumhaus","Hörspiel","Fahrradhelm"]'))).toBe(true);
+});
+
+test("Zugriff verwalten erklärt, wer was darf", async ({ page }) => {
+  await mockSupabase(page, { signedIn: true });
+  await page.goto("/#/einstellungen/zugriff");
+  await page.getByText("Wer darf was?").click();
+  const row = page.getByRole("row", { name: /Liste löschen/ });
+  await expect(row.getByRole("cell").nth(0)).toHaveText("✓");
+  await expect(row.getByRole("cell").nth(1)).toHaveText("–");
+  await expect(page.getByRole("row", { name: /Wünsche hinzufügen/ }).getByRole("cell").nth(1)).toHaveText("✓");
+});
+
+test("Listen in der Übersicht sortieren", async ({ page }) => {
+  const calls = await mockSupabase(page, { signedIn: true });
+  await page.goto("/#/");
+  const titles = page.locator(".list-row .list-title");
+  await expect(titles).toHaveText(["Leons Weihnachten", "Emmas 9. Geburtstag"]); // eigene Reihenfolge: neue oben
+  await page.getByLabel("Listen sortieren").selectOption("name");
+  await expect(titles).toHaveText(["Emmas 9. Geburtstag", "Leons Weihnachten"]);
+  await expect.poll(() => calls.writes.some((w) => w.startsWith("PATCH profiles") && w.includes('"list_sort":"name"'))).toBe(true);
+});
+
+test("Listen in der Übersicht mit Pfeilen verschieben", async ({ page }) => {
+  const calls = await mockSupabase(page, { signedIn: true });
+  await page.goto("/#/");
+  await page.getByRole("button", { name: "Verschieben" }).click();
+  await expect(page.getByRole("button", { name: "„Leons Weihnachten“ nach oben" })).toBeDisabled();
+  await page.getByRole("button", { name: "„Emmas 9. Geburtstag“ nach oben" }).click();
+  await expect(page.locator(".list-row .list-title")).toHaveText(["Emmas 9. Geburtstag", "Leons Weihnachten"]);
+  await page.getByRole("button", { name: "Fertig" }).click();
+  await expect.poll(() => calls.bodies.find((b) => b.fn === "set_list_order")).toMatchObject({ p_ids: [LID, LID2] });
+  await expect(page.locator(".list-row .list-title")).toHaveText(["Emmas 9. Geburtstag", "Leons Weihnachten"]);
+  await expect(page.getByRole("button", { name: "Verschieben" })).toBeVisible();
+});
+
+test("Geteilter Wunsch: Schritt 2 lässt sich abbrechen, „Zurück“ springt nicht wieder vor", async ({ page }) => {
+  await mockSupabase(page, { signedIn: true });
+  await page.goto(`/#/liste/${LID}?neu=${encodeURIComponent("https://www.thalia.de/shop/artikel/12345")}`);
+  const flow = page.locator("dialog.add-flow[open]");
+  await expect(flow.locator(".product-title")).toHaveText("Hörbuch-Box für Kinder ab 8");
+  await expect(flow.getByRole("button", { name: "Abbrechen" })).toBeVisible();
+  // Zurück: bleibt beim Link, statt automatisch wieder zu Schritt 2 zu springen
+  await flow.getByRole("button", { name: "Zurück" }).click();
+  await expect(flow.getByRole("heading", { name: "Link einfügen" })).toBeVisible();
+  await page.waitForTimeout(800);
+  await expect(flow.getByRole("heading", { name: "Link einfügen" })).toBeVisible();
+  await expect(flow.locator("input[type=url]")).toHaveValue("https://www.thalia.de/shop/artikel/12345");
+  // Weiter führt wieder zu Schritt 2, Abbrechen schließt
+  await flow.getByRole("button", { name: "Weiter" }).click();
+  await expect(flow.locator(".product-title")).toBeVisible();
+  await flow.getByRole("button", { name: "Abbrechen" }).click();
+  await expect(page.locator("dialog.add-flow[open]")).toHaveCount(0);
+});
+
+test("„Abbrechen“ ist in jedem Schritt da", async ({ page }) => {
+  await mockSupabase(page, { signedIn: true });
+  await page.goto(`/#/liste/${LID}`);
+  await page.getByRole("button", { name: "Wunsch hinzufügen" }).click();
+  const flow = page.locator("dialog.add-flow[open]");
+  await expect(flow.getByRole("button", { name: "Abbrechen" })).toBeVisible();
+  await flow.getByRole("button", { name: /Link einfügen/ }).click();
+  await expect(flow.getByRole("button", { name: "Abbrechen" })).toBeVisible();
+  await flow.getByRole("button", { name: "Zurück" }).click();
+  await flow.getByRole("button", { name: /Selbst eintragen/ }).click();
+  await expect(flow.getByRole("button", { name: "Abbrechen" })).toBeVisible();
+  await expect(flow.getByRole("button", { name: "Zurück" })).toBeVisible();
+});
+
+test("Wunsch direkt im Shop öffnen: beim Bearbeiten oben und in der Liste", async ({ page }) => {
+  await mockSupabase(page, { signedIn: true });
+  await page.goto(`/#/liste/${LID}`);
+  const rowLink = page.getByRole("link", { name: "„Kinderfahrrad 24 Zoll“ bei Decathlon öffnen" });
+  await expect(rowLink).toHaveAttribute("href", "https://www.decathlon.de/x");
+  await expect(rowLink).toHaveAttribute("target", "_blank");
+  // Wünsche ohne Link haben keinen Shop-Knopf
+  await expect(page.getByRole("link", { name: /„Schwimmbrille“.*öffnen/ })).toHaveCount(0);
+  // Der Rest der Zeile öffnet weiterhin das Bearbeiten
+  await page.locator(".wrow-btn", { hasText: "Kinderfahrrad" }).click();
+  const top = page.locator("dialog.fsheet[open] .product-card").getByRole("link", { name: "Bei Decathlon öffnen" });
+  await expect(top).toHaveAttribute("href", "https://www.decathlon.de/x");
+  await page.locator("dialog.fsheet[open] .fs-cancel").click();
+  // Auch in der Kachelansicht
+  await page.getByRole("button", { name: "Kacheln" }).click();
+  await expect(page.locator(".wcard-wrap").getByRole("link", { name: "„Kinderfahrrad 24 Zoll“ bei Decathlon öffnen" })).toBeVisible();
+});
+
+test("Reservierungen ausblenden: schmale Zeile mit einem Knopf", async ({ page }) => {
+  const calls = await mockSupabase(page, { signedIn: true });
+  await page.goto(`/#/liste/${LID}`);
+  const bar = page.getByRole("region", { name: "Stand der Reservierungen" });
+  await expect(bar).toContainText("vergeben");
+  expect((await bar.boundingBox())!.height).toBeLessThan(60);
+  await bar.getByRole("button", { name: "Reservierungen für mich ausblenden" }).click();
+  await expect.poll(() => calls.bodies.find((b) => b.fn === "set_show_reservations")).toMatchObject({ p_list: LID, p_show: false });
+});
+
+test("Unbekannte Adresse: statt Fehlermeldung geht eine Anfrage an die Verwaltung", async ({ page }) => {
+  const calls = await mockSupabase(page, { loginBlocked: true });
+  await page.goto("/#/");
+  await page.getByLabel(/E-Mail/).fill("neu@test.de");
+  await page.getByRole("button", { name: /Anmelde-Mail/ }).click();
+  await expect(page.getByRole("heading", { name: "Deine Anfrage ist unterwegs" })).toBeVisible();
+  expect(calls.bodies.find((b) => b.fn === "zugang")).toMatchObject({ action: "request", email: "neu@test.de" });
+  await page.getByRole("button", { name: "Ich habe den Code schon" }).click();
+  await expect(page.getByLabel("Code aus der Mail")).toBeVisible();
+});
+
+test("Einladen ohne Administratorrechte: Hinweis, dass die Freigabe noch aussteht", async ({ page }) => {
+  const calls = await mockSupabase(page, { signedIn: true, invitePending: true });
+  await page.goto(`/#/liste/${LID}/mitglieder`);
+  await page.getByRole("button", { name: "Zum Mitbearbeiten einladen" }).click();
+  await page.getByLabel("E-Mail-Adresse der Person").fill("anna@test.de");
+  await page.getByRole("button", { name: "Einladungslink erstellen" }).click();
+  await expect(page.getByText("Wartet auf Freigabe:")).toBeVisible();
+  expect(calls.bodies.find((b) => b.fn === "zugang")).toMatchObject({ action: "invite", email: "anna@test.de", list_id: LID });
+});
+
+test("Administratoren sehen Zugangsanfragen und geben frei", async ({ page }) => {
+  const calls = await mockSupabase(page, { signedIn: true, admin: true });
+  await page.goto("/#/einstellungen");
+  await expect(page.getByRole("link", { name: /Zugangsanfragen/ })).toContainText("1");
+  await page.getByRole("link", { name: /Zugangsanfragen/ }).click();
+  await expect(page.getByText("Eingeladen von Markus zu „Emmas 9. Geburtstag“")).toBeVisible();
+  await page.getByRole("button", { name: "Freigeben" }).click();
+  await expect(page.locator("#toast")).toContainText("bekommt jetzt die Mail mit dem Code");
+  expect(calls.bodies.find((b) => b.fn === "zugang")).toMatchObject({ action: "decide", id: "req1", approve: true });
+});
+
+test("Nicht-Administratoren sehen keine Zugangsanfragen", async ({ page }) => {
+  await mockSupabase(page, { signedIn: true });
+  await page.goto("/#/einstellungen");
+  await expect(page.getByRole("heading", { name: "Einstellungen" })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Zugangsanfragen/ })).toHaveCount(0);
+});
+
+test("Statistik: Listen oben auswählen, Alle ist eine Option", async ({ page }) => {
+  await mockSupabase(page, { signedIn: true });
+  await page.goto("/#/statistik");
+  const picker = page.getByRole("group", { name: "Liste auswählen" });
+  await expect(picker.getByRole("button", { name: "Alle Listen" })).toHaveAttribute("aria-pressed", "true");
+  await picker.getByRole("button", { name: "Emmas 9. Geburtstag" }).click();
+  await expect(picker.getByRole("button", { name: "Emmas 9. Geburtstag" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".stats-for")).toContainText("Emmas 9. Geburtstag");
+  await picker.getByRole("button", { name: "Alle Listen" }).click();
+  await expect(page.locator(".stats-for")).toHaveCount(0);
 });

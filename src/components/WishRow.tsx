@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { PRIORITIES, type Reservation, type Wish } from "../lib/types";
 import { formatPrice, guessEmoji, imageUrl, tintFor } from "../lib/wishes";
 import { euroShort, giftFunded, giftTarget, isGroupGift, takenQuantity } from "../lib/gift";
-import { Bow, IconChevron } from "./Icons";
+import { Bow, IconChevron, IconExt } from "./Icons";
 
 /** Produktkachel. „wrapped“ legt die Geschenkschleife darum (= vergeben), „animate“ bindet sie sichtbar zu. */
 export function WishTile({ wish, wrapped = false, animate = false, className = "" }: {
@@ -74,6 +74,7 @@ export function WishRow({ wish, reservations, showReservations, onOpen }: {
     wish.shop ?? "",
   ].filter(Boolean).join(", ");
   return (
+    <div className={`wrow-wrap ${wish.url ? "has-shop" : ""}`}>
     <button type="button" className="wrow-btn" onClick={onOpen} aria-label={`${wish.title} bearbeiten`}>
       <WishTile wish={wish} wrapped={showReservations && taken >= wish.quantity} />
       <span className="wrow-info">
@@ -85,6 +86,18 @@ export function WishRow({ wish, reservations, showReservations, onOpen }: {
       </span>
       <span className="wrow-chev" aria-hidden="true"><IconChevron /></span>
     </button>
+    {wish.url && <ShopLink wish={wish} className="wrow-shop" />}
+    </div>
+  );
+}
+
+/** Kleiner runder Knopf, der den Wunsch im Shop öffnet (eigener Tipp-Bereich neben dem Bearbeiten). */
+export function ShopLink({ wish, className }: { wish: Wish; className: string }) {
+  return (
+    <a className={className} href={wish.url!} target="_blank" rel="noopener noreferrer"
+      aria-label={`„${wish.title}“ ${wish.shop ? `bei ${wish.shop}` : "im Shop"} öffnen`} title={wish.shop ? `Bei ${wish.shop} öffnen` : "Im Shop öffnen"}>
+      <IconExt />
+    </a>
   );
 }
 
@@ -98,6 +111,7 @@ export function WishCard({ wish, reservations, showReservations, onOpen }: {
   const taken = takenQuantity(wish, reservations);
   const status = reservationStatus(wish, reservations);
   return (
+    <div className="wcard-wrap">
     <button type="button" className="wcard" onClick={onOpen} aria-label={`${wish.title} bearbeiten`}>
       <WishTile wish={wish} wrapped={showReservations && taken >= wish.quantity} />
       <span className="wcard-body">
@@ -108,6 +122,8 @@ export function WishCard({ wish, reservations, showReservations, onOpen }: {
         {showReservations && isGroupGift(wish) && <GiftProgress wish={wish} reservations={reservations} />}
       </span>
     </button>
+    {wish.url && <ShopLink wish={wish} className="wcard-shop" />}
+    </div>
   );
 }
 

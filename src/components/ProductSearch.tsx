@@ -1,4 +1,6 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useAuth } from "../lib/auth";
+import { cached, load as loadCached, remember } from "../lib/cache";
 import { db } from "../lib/supabase";
 import { SEARCH_SHOPS, formatPrice } from "../lib/wishes";
 import { IconSearch } from "./Icons";
@@ -18,20 +20,39 @@ type State =
   | { kind: "results"; items: SearchResult[] }
   | { kind: "error"; message: string };
 
-const RECENT = "paeckli-recent-searches";
-const loadRecent = (): string[] => { try { return JSON.parse(localStorage.getItem(RECENT) ?? "[]"); } catch { return []; } };
-const saveRecent = (q: string) => {
-  try {
-    const list = [q, ...loadRecent().filter((x) => x.toLowerCase() !== q.toLowerCase())].slice(0, 5);
-    localStorage.setItem(RECENT, JSON.stringify(list));
-  } catch { /* egal */ }
-};
+/** „Zuletzt gesucht“ gehört der angemeldeten Person (gilt auf allen Geräten), höchstens 3 Begriffe. */
+const MAX_RECENT = 3;
+const OLD_DEVICE_KEY = "paeckli-recent-searches"; // früher pro Gerät gespeichert
+
+async function fetchRecent(uid: string): Promise<string[]> {
+  const { data } = await db().from("recent_searches").select("terms").eq("user_id", uid).maybeSingle();
+  return ((data?.terms as string[] | undefined) ?? []).slice(0, MAX_RECENT);
+}
+
+async function storeRecent(uid: string, terms: string[]) {
+  remember(`recent:${uid}`, terms);
+  await db().from("recent_searches").upsert({ user_id: uid, terms, updated_at: new Date().toISOString() });
+}
 
 /** Produktsuche direkt in Päckli. Ein Tipp auf ein Ergebnis übernimmt Name, Bild, Preis und Link. */
 export function ProductSearch({ onPick, compact = false }: { onPick: (r: SearchResult) => void; compact?: boolean }) {
   const [q, setQ] = useState("");
   const [state, setState] = useState<State>({ kind: "idle" });
-  const [recent] = useState(loadRecent);
+  const { session } = useAuth();
+  const uid = session?.user.id ?? "";
+  const [recent, setRecent] = useState<string[]>(() => (uid ? cached<string[]>(`recent:${uid}`) ?? [] : []));
+
+  useEffect(() => {
+    try { localStorage.removeItem(OLD_DEVICE_KEY); } catch { /* egal */ }
+    if (!uid) return;
+    loadCached(`recent:${uid}`, () => fetchRecent(uid)).then(setRecent, () => undefined);
+  }, [uid]);
+
+  const saveRecent = (next: string[]) => {
+    setRecent(next);
+    if (uid) storeRecent(uid, next).catch(() => undefined);
+  };
+  const removeRecent = (term: string) => saveRecent(recent.filter((x) => x !== term));
   const inputRef = useRef<HTMLInputElement>(null);
 
   const search = async (term = q) => {
@@ -39,7 +60,7 @@ export function ProductSearch({ onPick, compact = false }: { onPick: (r: SearchR
     if (query.length < 2) return inputRef.current?.focus();
     inputRef.current?.blur(); // Tastatur schließen, damit die Ergebnisse sichtbar sind
     setQ(query);
-    saveRecent(query);
+    saveRecent([query, ...recent.filter((x) => x.toLowerCase() !== query.toLowerCase())].slice(0, MAX_RECENT));
     setState({ kind: "loading" });
     try {
       const { data, error } = await db().functions.invoke("produkt-suche", { body: { q: query, limit: 25 } });
@@ -79,7 +100,12 @@ export function ProductSearch({ onPick, compact = false }: { onPick: (r: SearchR
       {state.kind === "idle" && recent.length > 0 && (
         <div className="recent">
           <span className="hint">Zuletzt gesucht:</span>
-          {recent.map((r) => <button key={r} type="button" className="fchip" onClick={() => search(r)}>{r}</button>)}
+          {recent.slice(0, MAX_RECENT).map((r) => (
+            <span key={r} className="recent-chip">
+              <button type="button" className="recent-term" onClick={() => search(r)}>{r}</button>
+              <button type="button" className="recent-x" aria-label={`„${r}“ aus den letzten Suchen entfernen`} onClick={() => removeRecent(r)}>×</button>
+            </span>
+          ))}
         </div>
       )}
 

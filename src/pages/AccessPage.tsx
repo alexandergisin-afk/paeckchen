@@ -79,6 +79,7 @@ export function AccessPage() {
       <Link className="back" to="/einstellungen"><IconBack /> Einstellungen</Link>
       <h1>Zugriff verwalten</h1>
       <p className="lead">Wer welche deiner Listen mitbearbeiten darf. Neue Personen lädst du in einer Liste unter „Mitglieder“ ein.</p>
+      <RolesTable />
 
       <div className="stack" style={{ marginTop: 22 }}>
         {owned.length === 0 && <section className="panel"><p className="hint">Du hast noch keine eigene Liste.</p></section>}
@@ -94,7 +95,7 @@ export function AccessPage() {
           <section className="panel person" key={p.id}>
             <div className="member" style={{ borderBottom: 0, paddingTop: 0 }}>
               <span className="avatar" aria-hidden="true">{p.name.charAt(0).toUpperCase()}</span>
-              <div className="who"><b>{p.name}</b><div className="hint">Zugriff auf {owned.filter((l) => roleIn(l, p.id)).length} von {owned.length} deiner Listen</div></div>
+              <div className="who"><b>{p.name}</b><div className="hint">Mitbearbeiter bei {owned.filter((l) => roleIn(l, p.id)).length} von {owned.length} deiner Listen</div></div>
             </div>
             <ul className="access-list" aria-label={`Listen von ${p.name}`}>
               {owned.map((l) => {
@@ -104,7 +105,7 @@ export function AccessPage() {
                   <li key={l.id}>
                     <label className="access-row">
                       <span className={`access-cover t${c.t}`} aria-hidden="true">{c.e}</span>
-                      <span className="access-title">{l.title}</span>
+                      <span className="access-title">{l.title}<span className={`role-tag ${has ? "on" : ""}`}>{has ? "Mitbearbeiter" : "Kein Zugriff"}</span></span>
                       <span className="mini-switch">
                         <input type="checkbox" role="switch" checked={has} disabled={busyKey === `${p.id}:${l.id}`}
                           onChange={(e) => toggle(p, l, e.target.checked)} aria-label={`${p.name} darf „${l.title}“ mitbearbeiten`} />
@@ -127,7 +128,7 @@ export function AccessPage() {
                 return (
                   <li key={l.id} className="access-row">
                     <span className={`access-cover t${c.t}`} aria-hidden="true">{c.e}</span>
-                    <span className="access-title">{l.title}<span className="hint" style={{ display: "block" }}>von {owner}</span></span>
+                    <span className="access-title">{l.title}<span className="hint" style={{ display: "block" }}>Besitzer: {owner}, deine Rolle: Mitbearbeiter</span></span>
                     <button className="btn quiet small" onClick={() => setConfirm({ kind: "leave", list: l })}>Verlassen</button>
                   </li>
                 );
@@ -163,5 +164,37 @@ export function AccessPage() {
         )}
       </Sheet>
     </div>
+  );
+}
+
+/** Übersicht, was Besitzer, Mitbearbeiter und Gäste jeweils dürfen (entspricht den Regeln der Datenbank). */
+function RolesTable() {
+  const rows: [string, boolean, boolean, boolean | string][] = [
+    ["Liste und Wünsche ansehen", true, true, "ohne Namen"],
+    ["Reservieren und mitschenken", true, true, true],
+    ["Wünsche hinzufügen, bearbeiten, löschen", true, true, false],
+    ["Liste bearbeiten, abschließen, wiederverwenden", true, true, false],
+    ["Sehen, wer was reserviert hat", true, true, false],
+    ["Reservierungen freigeben", true, true, false],
+    ["Mitbearbeiter einladen und entfernen", true, false, false],
+    ["Gast-Link erneuern", true, false, false],
+    ["Liste löschen", true, false, false],
+  ];
+  const cell = (v: boolean | string) =>
+    typeof v === "string" ? <span className="perm-note">{v}</span> : v ? <span className="perm-yes" aria-label="ja">✓</span> : <span className="perm-no" aria-label="nein">–</span>;
+  return (
+    <details className="panel roles" style={{ marginTop: 18 }}>
+      <summary><b>Wer darf was?</b> <span className="hint">Besitzer, Mitbearbeiter und Gäste</span></summary>
+      <div className="table-scroll">
+        <table className="perm-table">
+          <thead><tr><th scope="col">Aktion</th><th scope="col">Besitzer</th><th scope="col">Mit­bearbeiter</th><th scope="col">Gäste</th></tr></thead>
+          <tbody>{rows.map(([label, o, e, g]) => <tr key={label}><th scope="row">{label}</th><td>{cell(o)}</td><td>{cell(e)}</td><td>{cell(g)}</td></tr>)}</tbody>
+        </table>
+      </div>
+      <p className="hint" style={{ marginTop: 10 }}>
+        <b>Besitzer</b> ist, wer die Liste angelegt hat. <b>Mitbearbeiter</b> kommen über eine Einladung dazu. <b>Gäste</b> brauchen kein Konto, nur den Gast-Link.
+        Reservierungen sieht jeder nur, solange der eigene Schalter „Anzeigen“ an ist. Mitbearbeiter können eine Liste jederzeit selbst verlassen.
+      </p>
+    </details>
   );
 }

@@ -176,15 +176,21 @@ function InviteFlow({ listId, listTitle, onDone }: { listId: string; listTitle: 
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [link, setLink] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
-    const a = await db().rpc("allow_email", { p_email: email.trim() });
-    if (a.error) {
+    // Administratoren schalten direkt frei; sonst entsteht eine Anfrage an die Verwaltung
+    const a = await db().functions.invoke("zugang", { body: { action: "invite", email: email.trim(), list_id: listId } });
+    const res = a.data as { status?: string; error?: string } | null;
+    if (a.error || !res?.status) {
       setBusy(false);
-      return toast(/invalid_email/.test(a.error.message) ? "Diese E-Mail-Adresse sieht nicht richtig aus." : friendlyError(a.error));
+      let code = res?.error;
+      try { code = code ?? (await (a.error as { context?: Response }).context?.json())?.error; } catch { /* egal */ }
+      return toast(code === "invalid_email" ? "Diese E-Mail-Adresse sieht nicht richtig aus." : code === "forbidden" ? "Dafür fehlt dir die Berechtigung." : "Die Einladung hat gerade nicht geklappt. Bitte versuch es noch einmal.");
     }
+    setPending(res.status === "pending");
     const { data, error } = await db().rpc("create_invite", { p_list: listId });
     setBusy(false);
     if (error) return toast(friendlyError(error));
@@ -198,6 +204,11 @@ function InviteFlow({ listId, listTitle, onDone }: { listId: string; listTitle: 
       <>
         <h2>Einladung ist fertig</h2>
         <p>Schick den Link an <b>{email.trim()}</b>. Er funktioniert einmal und 7 Tage lang. Angemeldet wird mit genau dieser E-Mail-Adresse.</p>
+        {pending && (
+          <p className="notice" style={{ marginTop: 12 }}>
+            <b>Wartet auf Freigabe:</b> Die Verwaltung muss {email.trim()} noch freigeben und wurde per Mail informiert. Danach bekommt {email.trim()} eine Mail mit dem Anmeldecode, und der Link funktioniert.
+          </p>
+        )}
         <div className="linkbox"><code>{link}</code><CopyButton text={link} /></div>
         <div className="sharegrid">
           <a className="btn soft" href={`https://wa.me/?text=${encodeURIComponent(text)}`} target="_blank" rel="noopener noreferrer"><IconChat /> WhatsApp</a>

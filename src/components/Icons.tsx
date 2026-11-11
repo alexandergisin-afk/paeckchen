@@ -52,3 +52,5 @@ export const IconCopy = () => <Svg d="M9 9h11v11H9zM5 15H4V4h11v1" />;
 export const IconMove = () => <Svg d="M5 12h14M13 6l6 6-6 6" />;
 export const IconRepeat = () => <Svg d="M17 2l4 4-4 4M3 11v-1a4 4 0 014-4h14M7 22l-4-4 4-4M21 13v1a4 4 0 01-4 4H3" />;
 export const IconChart = () => <Svg d="M3 3v18h18M7 15v3M12 10v8M17 6v12" />;
+export const IconReorder = () => <Svg d="M8 4v16M4 8l4-4 4 4M16 20V4M12 16l4 4 4-4" />;
+export const IconEyeOff = () => <Svg d="M3 3l18 18M10.6 5.1A9.8 9.8 0 0112 5c5.5 0 9 7 9 7a16 16 0 01-3.2 4.2M6.6 6.6C3.9 8.4 3 12 3 12s3.5 7 9 7c1.6 0 3-.4 4.3-1.1M9.9 9.9a3 3 0 004.2 4.2" />;

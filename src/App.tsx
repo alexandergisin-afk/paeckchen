@@ -14,6 +14,7 @@ const ListPage = lazy(() => import("./pages/ListPage").then((m) => ({ default: m
 const GuestPage = lazy(() => import("./pages/GuestPage").then((m) => ({ default: m.GuestPage })));
 const TeamPage = lazy(() => import("./pages/TeamPage").then((m) => ({ default: m.TeamPage })));
 const InvitePage = lazy(() => import("./pages/InvitePage").then((m) => ({ default: m.InvitePage })));
+const RequestsPage = lazy(() => import("./pages/RequestsPage").then((m) => ({ default: m.RequestsPage })));
 const Settings = lazy(() => import("./pages/Settings").then((m) => ({ default: m.Settings })));
 const AccessPage = lazy(() => import("./pages/AccessPage").then((m) => ({ default: m.AccessPage })));
 const SharePage = lazy(() => import("./pages/SharePage").then((m) => ({ default: m.SharePage })));
@@ -29,6 +30,7 @@ function prefetchPages() {
     void import("./pages/TeamPage");
     void import("./pages/AccessPage");
     void import("./pages/SharePage");
+    void import("./pages/RequestsPage");
   });
 }
 if (typeof window !== "undefined") window.addEventListener("load", prefetchPages, { once: true });
@@ -77,6 +79,7 @@ export function App({ linkError }: { linkError: string | null }) {
             <Route path="/einladung/:token" element={parent(<InvitePage />)} />
             <Route path="/einstellungen" element={parent(<Settings />)} />
             <Route path="/einstellungen/zugriff" element={parent(<AccessPage />)} />
+            <Route path="/einstellungen/anfragen" element={parent(<RequestsPage />)} />
             <Route path="/teilen" element={parent(<SharePage />)} />
             <Route path="/statistik" element={parent(<StatsPage />)} />
             <Route path="*" element={<Navigate to="/" replace />} />

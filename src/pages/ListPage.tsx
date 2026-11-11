@@ -8,7 +8,7 @@ import { parsePrice, removeImage } from "../lib/wishes";
 import { copyWishes, moveWish } from "../lib/listOps";
 import { cachedListPage, loadListPage, type ListPageData } from "../lib/listData";
 import { euroShort, giftFunded, giftTarget, isGroupGift, takenQuantity } from "../lib/gift";
-import { IconArchive, IconBack, IconChevron, IconCopy, IconGift, IconEdit, IconExt, IconEye, IconGrid, IconMove, IconPlus, IconRepeat, IconRows, IconShare, IconTrash, IconUndo, IconUsers } from "../components/Icons";
+import { IconEyeOff, IconArchive, IconBack, IconChevron, IconCopy, IconGift, IconEdit, IconEye, IconGrid, IconMove, IconPlus, IconRepeat, IconRows, IconShare, IconTrash, IconUndo, IconUsers } from "../components/Icons";
 import { Sheet } from "../components/Sheet";
 import { FormSheet } from "../components/FormSheet";
 import { ListForm, toRow, type ListInput } from "../components/ListForm";
@@ -286,19 +286,21 @@ export function ListPage() {
         </nav>
 
         {wishes.length > 0 && (
-          <section className="status-card" aria-label="Stand der Reservierungen">
-            <div className="status-top">
-              <b>{showRes ? `${takenQty} von ${totalQty} ${totalQty === 1 ? "Wunsch" : "Wünschen"} vergeben` : "Reservierungen ausgeblendet"}</b>
-              <label className="mini-switch">
-                <span>Anzeigen</span>
-                <input type="checkbox" role="switch" checked={showRes} onChange={(e) => toggleShow(e.target.checked)} aria-label="Reservierungen anzeigen" />
-              </label>
-            </div>
+          <section className={`status-line-bar ${showRes ? "" : "is-hidden"}`} aria-label="Stand der Reservierungen">
             {showRes ? (
-              <span className="progress big" aria-hidden="true"><span style={{ width: `${pct}%` }} /></span>
+              <>
+                <span className="progress" aria-hidden="true"><span style={{ width: `${pct}%` }} /></span>
+                <span className="status-text"><b>{takenQty} von {totalQty}</b> vergeben</span>
+              </>
             ) : (
-              <span className="hint">Praktisch, wenn die Liste für dich selbst ist. Gilt nur für dich.</span>
+              <span className="status-text" title="Gilt nur für dich. Praktisch, wenn die Liste für dich selbst ist.">
+                <IconEyeOff /> Reservierungen ausgeblendet
+              </span>
             )}
+            <button type="button" className="btn quiet small status-toggle" aria-pressed={!showRes} onClick={() => toggleShow(!showRes)}
+              aria-label={showRes ? "Reservierungen für mich ausblenden" : "Reservierungen wieder anzeigen"}>
+              {showRes ? <><IconEyeOff /> Ausblenden</> : <><IconEye /> Anzeigen</>}
+            </button>
           </section>
         )}
 
@@ -358,7 +360,6 @@ export function ListPage() {
           <>
             <WishForm formId="edit-wish" listId={list.id} wish={sheet.wish} recipient={list.recipient_name} onSaved={saved} onBusyChange={setWishBusy} />
             <div className="menu form-extra">
-              {sheet.wish.url && <a href={sheet.wish.url} target="_blank" rel="noopener noreferrer"><IconExt /> Im Shop öffnen</a>}
               <button type="button" onClick={() => openTransfer(sheet.wish, "move")}><IconMove /> In andere Liste verschieben</button>
               <button type="button" onClick={() => openTransfer(sheet.wish, "copy")}><IconCopy /> In andere Liste kopieren</button>
               {showRes && !isGroupGift(sheet.wish) && sheet.wish.quantity - takenQuantity(sheet.wish, resOf(sheet.wish)) > 0 && (

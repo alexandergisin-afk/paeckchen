@@ -5,6 +5,7 @@ import { type Priority, type Wish } from "../lib/types";
 import { formatPrice, imageUrl, parsePrice, priceInput, removeImage, resizeImage, uploadImage } from "../lib/wishes";
 import type { Draft } from "../lib/linkPreview";
 import { friendlyError, toast } from "../lib/format";
+import { IconExt } from "./Icons";
 
 /** Die drei Stufen, jeweils mit kurzer Erklärung: macht die wichtigste Entscheidung leichter. */
 const PRIO_CHOICES: { value: Priority; label: string; hint: string }[] = [
@@ -120,6 +121,11 @@ export function WishForm({ listId, wish, draft, formId, recipient, onSaved, onBu
               Name oder Preis ändern
             </button>
           </div>
+          {url.trim() && (
+            <a className="btn soft shop-open" href={/^https?:\/\//i.test(url.trim()) ? url.trim() : `https://${url.trim()}`} target="_blank" rel="noopener noreferrer">
+              <IconExt /> {shop ? `Bei ${shop} öffnen` : "Im Shop öffnen"}
+            </a>
+          )}
         </section>
       ) : (
         <div className={`title-row ${showPreview ? "has-img" : ""}`}>

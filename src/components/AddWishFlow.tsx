@@ -25,6 +25,8 @@ export function AddWishFlow({ open, onClose, listId, recipient, initialUrl, onSa
   const [step, setStep] = useState<Step>("source");
   const [draft, setDraft] = useState<Draft | null>(null);
   const [cameFromSource, setCameFromSource] = useState(true);
+  // Geteilter Link wird nur beim ersten Öffnen automatisch ausgewertet (sonst springt „Zurück“ gleich wieder vor)
+  const [autoRead, setAutoRead] = useState(true);
   const [busy, setBusy] = useState(false);
 
   // Dialog öffnen/schließen (wie FormSheet)
@@ -39,12 +41,18 @@ export function AddWishFlow({ open, onClose, listId, recipient, initialUrl, onSa
   useEffect(() => {
     if (!open) return;
     setDraft(null);
+    setAutoRead(true);
     if (initialUrl) { setStep("link"); setCameFromSource(false); } else { setStep("source"); setCameFromSource(true); }
   }, [open, initialUrl]);
 
   const toDetails = (d: Draft) => { setDraft(d); setStep("details"); };
   const pick = (r: SearchResult) => toDetails({ title: r.title, url: r.url, shop: r.shop, price_cents: r.price_cents, image: r.image, source: "search" });
-  const back = () => { if (step === "details" && draft?.source === "link") setStep("link"); else setStep("source"); };
+  const back = () => {
+    setAutoRead(false);
+    if (step === "details" && draft?.source === "link") setStep("link"); else setStep("source");
+  };
+  // „Zurück“ gibt es nur, wenn es einen Schritt davor gibt; „Abbrechen“ gibt es immer
+  const canGoBack = step === "details" || (step === "link" && cameFromSource);
   const name = recipient?.trim();
 
   return (
@@ -53,12 +61,11 @@ export function AddWishFlow({ open, onClose, listId, recipient, initialUrl, onSa
       {open && (
         <>
           <header className="fs-bar step-bar">
-            {step === "source" || !cameFromSource && step === "link" ? (
-              <button type="button" className="fs-cancel" onClick={onClose}>Abbrechen</button>
-            ) : (
-              <button type="button" className="fs-cancel back" onClick={back}><IconBack /> Zurück</button>
-            )}
-            <span className="step-info">{step === "details" ? "Schritt 2 von 2" : "Schritt 1 von 2"}</span>
+            {canGoBack
+              ? <button type="button" className="fs-cancel back" onClick={back}><IconBack /> Zurück</button>
+              : <span className="step-info">Schritt 1 von 2</span>}
+            {canGoBack && <span className="step-info">{step === "details" ? "Schritt 2 von 2" : "Schritt 1 von 2"}</span>}
+            <button type="button" className="fs-cancel cancel-right" onClick={onClose}>Abbrechen</button>
           </header>
 
           <div className="fs-body">
@@ -83,7 +90,7 @@ export function AddWishFlow({ open, onClose, listId, recipient, initialUrl, onSa
               </div>
             )}
 
-            {step === "link" && <LinkStep initialUrl={initialUrl} onDone={toDetails} />}
+            {step === "link" && <LinkStep initialUrl={draft?.url ?? initialUrl} autoRead={autoRead && !!initialUrl} onDone={toDetails} />}
 
             {step === "details" && draft && (
               <WishForm formId="add-wish" listId={listId} draft={draft} recipient={recipient} onSaved={onSaved} onBusyChange={setBusy} />
@@ -102,16 +109,16 @@ export function AddWishFlow({ open, onClose, listId, recipient, initialUrl, onSa
 }
 
 /** Schritt 1b: Link einfügen und auswerten. Bei Erfolg geht es automatisch weiter. */
-function LinkStep({ initialUrl, onDone }: { initialUrl?: string; onDone: (d: Draft) => void }) {
+function LinkStep({ initialUrl, autoRead, onDone }: { initialUrl?: string; autoRead: boolean; onDone: (d: Draft) => void }) {
   const [url, setUrl] = useState(initialUrl ?? "");
   const [reading, setReading] = useState(false);
   const [message, setMessage] = useState("Name, Bild und Preis übernehmen wir, soweit der Shop es zulässt.");
   const [fallback, setFallback] = useState<Draft | null>(null);
   const started = useRef("");
 
-  const run = async (value: string) => {
+  const run = async (value: string, force = false) => {
     const v = value.trim();
-    if (!v || started.current === v) return;
+    if (!v || (started.current === v && !force)) return;
     started.current = v;
     setReading(true);
     setFallback(null);
@@ -124,7 +131,7 @@ function LinkStep({ initialUrl, onDone }: { initialUrl?: string; onDone: (d: Dra
     else if (r.draft) setFallback(r.draft);
   };
 
-  useEffect(() => { if (initialUrl) run(initialUrl); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+  useEffect(() => { if (initialUrl && autoRead) run(initialUrl); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
 
   const paste = async () => {
     try {
@@ -149,7 +156,9 @@ function LinkStep({ initialUrl, onDone }: { initialUrl?: string; onDone: (d: Dra
         </div>
         <small className={`detect ${reading ? "busy" : ""}`} role="status">{message}</small>
       </label>
-      {fallback && <button type="button" className="btn block big" onClick={() => onDone(fallback)}>Weiter</button>}
+      {(fallback || (url.trim() && !reading)) && (
+        <button type="button" className="btn block big" onClick={() => (fallback ? onDone(fallback) : run(url, true))}>Weiter</button>
+      )}
     </div>
   );
 }
