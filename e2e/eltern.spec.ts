@@ -108,6 +108,7 @@ test("Tägliche Benachrichtigung lässt sich ausschalten", async ({ page }) => {
   const calls = await mockSupabase(page, { signedIn: true });
   await page.goto("/#/einstellungen");
   const sw = page.getByRole("checkbox", { name: /Neue Reservierungen per Mail/ });
+  await expect(sw).toBeEnabled(); // erst wenn die Einstellungen geladen sind
   await expect(sw).toBeChecked();
   await expect(page.getByText("Sofort", { exact: true })).toHaveCount(0);
   await sw.uncheck();

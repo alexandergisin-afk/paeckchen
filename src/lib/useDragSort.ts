@@ -4,7 +4,10 @@ import { moveItem } from "./listSort";
 const HOLD_MS = 450;   // so lange gedrückt halten, bis die Liste „angehoben“ wird
 const SLOP_PX = 8;     // wer sich vorher weiter bewegt, will scrollen
 
-type Session = { id: string; x: number; y: number; startY: number; order: string[]; timer: number; active: boolean };
+type Session = {
+  id: string; x: number; y: number; startY: number; order: string[]; timer: number; active: boolean;
+  kind: "touch" | "mouse"; moved: boolean; capture?: { el: HTMLElement; pointerId: number };
+};
 
 /**
  * Verschieben durch Gedrückthalten und Ziehen, wie auf dem Startbildschirm des Handys.
@@ -39,12 +42,16 @@ export function useLongPressSort(ids: string[], commit: (order: string[]) => voi
   };
 
   // ---- gemeinsame Logik für Finger und Maus ----
-  const start = (id: string, x: number, y: number) => {
+  const start = (id: string, x: number, y: number, kind: Session["kind"], capture?: Session["capture"]) => {
+    suppressClick.current = false; // neue Berührung: ein alter „Klick unterdrücken“ gilt nicht mehr
     if (idsRef.current.length < 2) return;
-    const s: Session = { id, x, y, startY: y, order: [...idsRef.current], timer: 0, active: false };
+    const s: Session = { id, x, y, startY: y, order: [...idsRef.current], timer: 0, active: false, kind, moved: false, capture };
     s.timer = window.setTimeout(() => {
       if (st.current !== s) return;
       s.active = true;
+      // Erst jetzt den Mauszeiger an die Zeile binden (früher würde der Browser
+      // ein späteres Loslassen woanders als Klick auf diese Zeile werten)
+      if (s.capture) { try { s.capture.el.setPointerCapture(s.capture.pointerId); } catch { /* egal */ } }
       navigator.vibrate?.(12);
       setLive(s.order);
       setDrag({ id, offset: 0 });
@@ -57,7 +64,11 @@ export function useLongPressSort(ids: string[], commit: (order: string[]) => voi
     const s = st.current;
     if (!s) return false;
     if (!s.active) {
-      if (Math.hypot(x - s.x, y - s.y) > SLOP_PX) reset(); // das ist Scrollen, kein Verschieben
+      if (Math.hypot(x - s.x, y - s.y) > SLOP_PX) {
+        // Das ist Scrollen bzw. Wegziehen, kein Verschieben. Bei der Maus darf daraus kein Klick werden.
+        if (s.kind === "mouse") suppressClick.current = true;
+        reset();
+      }
       return false;
     }
     let offset = y - s.startY;
@@ -88,7 +99,7 @@ export function useLongPressSort(ids: string[], commit: (order: string[]) => voi
     rows.current.set(id, el);
     if (wired.current.has(el)) return;
     wired.current.add(el);
-    el.addEventListener("touchstart", (e) => { if (e.touches.length === 1) start(id, e.touches[0].clientX, e.touches[0].clientY); }, { passive: true });
+    el.addEventListener("touchstart", (e) => { if (e.touches.length === 1) start(id, e.touches[0].clientX, e.touches[0].clientY, "touch"); }, { passive: true });
     el.addEventListener("touchmove", (e) => {
       const t = e.touches[0];
       if (t && move(t.clientX, t.clientY) && e.cancelable) e.preventDefault();
@@ -100,8 +111,7 @@ export function useLongPressSort(ids: string[], commit: (order: string[]) => voi
   // ---- Maus: Pointer-Ereignisse ----
   const onPointerDown = (id: string) => (e: PointerEvent<HTMLElement>) => {
     if (e.pointerType !== "mouse" || e.button !== 0) return;
-    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* egal */ }
-    start(id, e.clientX, e.clientY);
+    start(id, e.clientX, e.clientY, "mouse", { el: e.currentTarget, pointerId: e.pointerId });
   };
   const onPointerMove = (e: PointerEvent<HTMLElement>) => { if (e.pointerType === "mouse") move(e.clientX, e.clientY); };
   const onPointerUp = (e: PointerEvent<HTMLElement>) => { if (e.pointerType === "mouse") end(); };

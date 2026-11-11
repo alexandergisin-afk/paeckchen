@@ -30,7 +30,11 @@ export function Settings() {
   useEffect(() => {
     if (!session) return;
     db().from("profiles").select("reminder_emails,notify_reservations").eq("id", session.user.id).maybeSingle()
-      .then(({ data }) => { setReminders(data?.reminder_emails ?? true); setNotify((data?.notify_reservations ?? "daily") !== "off"); });
+      .then(({ data }) => {
+        // Nur übernehmen, wenn man nicht schon selbst umgeschaltet hat (späte Antwort darf nichts überschreiben)
+        setReminders((cur) => cur ?? (data?.reminder_emails ?? true));
+        setNotify((cur) => cur ?? ((data?.notify_reservations ?? "daily") !== "off"));
+      });
   }, [session]);
 
   const toggleNotify = async (on: boolean) => {
