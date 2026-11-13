@@ -35,6 +35,7 @@ export function useLongPressSort(ids: string[], commit: (order: string[]) => voi
   };
 
   const reset = () => {
+    delete document.body.dataset.dragging;
     if (st.current) window.clearTimeout(st.current.timer);
     st.current = null;
     setDrag(null);
@@ -49,6 +50,7 @@ export function useLongPressSort(ids: string[], commit: (order: string[]) => voi
     s.timer = window.setTimeout(() => {
       if (st.current !== s) return;
       s.active = true;
+      document.body.dataset.dragging = "1"; // „Ziehen zum Aktualisieren“ pausiert währenddessen
       // Erst jetzt den Mauszeiger an die Zeile binden (früher würde der Browser
       // ein späteres Loslassen woanders als Klick auf diese Zeile werten)
       if (s.capture) { try { s.capture.el.setPointerCapture(s.capture.pointerId); } catch { /* egal */ } }

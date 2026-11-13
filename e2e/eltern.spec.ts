@@ -397,3 +397,16 @@ test("Statistik: Listen oben auswählen, Alle ist eine Option", async ({ page })
   await picker.getByRole("button", { name: "Alle Listen" }).click();
   await expect(page.locator(".stats-for")).toHaveCount(0);
 });
+
+test("Nach unten ziehen lädt die Liste neu", async ({ page }) => {
+  const calls = await mockSupabase(page, { signedIn: true });
+  await page.goto(`/#/liste/${LID}`);
+  await expect(page.getByRole("heading", { name: "Emmas 9. Geburtstag" })).toBeVisible();
+  const before = calls.lists.filter((u) => u.includes(`id=eq.${LID}`)).length;
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: 200, y: 300 }] });
+  for (let i = 1; i <= 12; i++) await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: 200, y: 300 + i * 18 }] });
+  await expect(page.getByText("Zum Aktualisieren loslassen")).toBeAttached();
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  await expect.poll(() => calls.lists.filter((u) => u.includes(`id=eq.${LID}`)).length).toBeGreaterThan(before);
+});

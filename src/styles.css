@@ -800,3 +800,60 @@ dialog.fsheet::backdrop { background: rgba(20,12,30,.48); }
 .list-rows .list-row { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
 .list-row.is-dragging { position: relative; z-index: 5; box-shadow: 0 14px 32px rgba(35, 26, 49, .25); transition: box-shadow .15s; cursor: grabbing; }
 .sort-bar .sort-hint { font-size: .85rem; flex: 1 1 200px; }
+
+/* Nach unten ziehen zum Aktualisieren */
+html, body { overscroll-behavior-y: contain; }
+.pull-indicator { position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 8px); z-index: 30; pointer-events: none; }
+.pull-circle { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--surface); color: var(--plum); box-shadow: 0 4px 14px rgba(35, 26, 49, .2); transition: transform .1s; }
+.pull-circle.spinning { animation: pull-spin .8s linear infinite; }
+@keyframes pull-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .pull-circle.spinning { animation-duration: 2.4s; } }
+
+/* ================= Gästekarten: fester Aufbau, gleich hoch, antippbar ================= */
+.gcard { position: relative; display: flex; flex-direction: column; }
+.gcard-open { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.gcard-open:focus-visible { outline: 3px solid var(--plum); outline-offset: -3px; border-radius: inherit; }
+.gcard-open .body { display: flex; flex-direction: column; gap: 6px; }
+.gcard .gtitle { font-weight: 700; font-family: var(--font-display); font-size: 1.05rem; line-height: 1.25; overflow-wrap: anywhere; }
+.gcard .actions { margin-top: auto; }
+.gshop { position: absolute; top: 8px; right: 8px; z-index: 2; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: rgba(255, 255, 255, .94); color: var(--plum); box-shadow: 0 1px 4px rgba(35, 26, 49, .18); }
+.gshop svg { width: 19px; height: 19px; }
+
+/* Kacheln: Name höchstens 2 Zeilen (Platz für 2 reserviert), Notiz 1 Zeile, Preis und Status kompakt */
+.ggrid.tiles { align-items: stretch; }
+.ggrid.tiles .gcard .gtitle { font-size: 1rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 2.5em; }
+.ggrid.tiles .gcard .note { font-size: .85rem; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+.ggrid.tiles .gcard .note.avail { -webkit-line-clamp: 2; }
+.ggrid.tiles .gcard .price { font-size: 1.1rem; margin-top: auto; }
+.ggrid.tiles .gcard .gift-box { padding: 2px 0 0; gap: 4px; }
+.ggrid.tiles .gcard .gift-sum b { font-size: 1rem; }
+.ggrid.tiles .gcard-open .body { flex: 1 1 auto; padding: 10px 12px 6px; }
+
+/* Listenansicht: Bild links, Text rechts */
+.gcard.row { display: grid; grid-template-columns: minmax(0, 1fr); padding: 0; }
+.gcard.row .gcard-open { display: grid; grid-template-columns: 96px minmax(0, 1fr); column-gap: 14px; padding: 12px; align-items: start; }
+.gcard.row .gcard-open .tile { aspect-ratio: 1; border-radius: 14px; }
+.gcard.row .gcard-open .body { padding: 0; }
+.gcard.row .actions { padding: 0 12px 12px; }
+.gcard.row .gshop { top: 16px; left: 68px; right: auto; width: 36px; height: 36px; }
+
+/* Detailansicht */
+.gdetail { display: grid; gap: 10px; }
+.gdetail .tile { aspect-ratio: 4 / 3; border-radius: 18px; max-height: 260px; }
+.gdetail h2 { margin: 4px 0 0; font-size: 1.4rem; line-height: 1.2; overflow-wrap: anywhere; }
+.gdetail .price { font-family: var(--font-display); font-weight: 800; font-size: 1.35rem; margin: 0; }
+.gdetail-note { margin: 0; line-height: 1.5; white-space: pre-line; }
+.gdetail-actions { display: grid; gap: 8px; margin-top: 4px; }
+.gdetail .badge-row { margin-top: 4px; }
+
+/* Erklärung eingeklappt, sobald man schon einmal reserviert hat */
+.howto-mini { margin: 4px 0 6px; }
+.howto-mini summary { cursor: pointer; color: var(--plum); font-weight: 700; font-size: .92rem; padding: 6px 0; }
+.howto-mini p { margin: 4px 0 8px; color: var(--ink-2); }
+
+/* Verwaltung: Kacheln gleich hoch, Status unten bündig */
+.wgrid { align-items: stretch; }
+.wcard-wrap > .wcard { height: 100%; }
+.wcard-body { flex: 1 1 auto; display: flex; flex-direction: column; }
+.wcard-title { min-height: 2.6em; }
+.wcard .status-line { margin-top: auto; padding-top: 2px; }

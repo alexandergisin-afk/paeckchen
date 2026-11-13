@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useState } from "react";
+import { usePullToRefresh, useRefreshOnReturn } from "../lib/useRefresh";
+import { PullIndicator } from "../components/PullIndicator";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { db } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
@@ -80,6 +82,8 @@ export function ListPage() {
   }, [id, apply]);
 
   useLayoutEffect(() => { apply(cachedListPage(id!)); }, [id, apply]);
+  const ptr = usePullToRefresh(() => load());
+  useRefreshOnReturn(() => load());
 
   useEffect(() => {
     load();
@@ -247,6 +251,7 @@ export function ListPage() {
 
   return (
     <>
+      <PullIndicator {...ptr} />
       <header className="page-bar">
         <div className="page-bar-in">
           <Link className="bar-back" to="/"><IconBack /> Listen</Link>

@@ -13,7 +13,7 @@ test("Gäste sehen die Liste ohne Anmeldung, filtern und reservieren mit Namen",
 
   // Preisfilter
   await page.getByRole("button", { name: "bis 20 €" }).click();
-  await expect(page.locator(".gcard h3", { hasText: "Kinderfahrrad" })).toHaveCount(0);
+  await expect(page.locator(".gcard .gtitle", { hasText: "Kinderfahrrad" })).toHaveCount(0);
   await page.getByRole("button", { name: "Alle", exact: true }).click();
 
   // Reservieren: ohne Namen geht es nicht
@@ -60,8 +60,8 @@ test("Gruppengeschenk: Gäste sehen nur die Summe und steuern einen Betrag bei",
   const calls = await mockSupabase(page);
   await page.goto("/#/w/TOK");
   const card = page.locator(".gcard", { hasText: "Laufrad gemeinsam" });
-  await expect(card.getByText("Gemeinsam schenken")).toBeVisible();
-  await expect(card.getByText("1 Person macht mit")).toBeVisible();
+  await expect(card.getByText("Gemeinsam", { exact: true })).toBeVisible();
+  await expect(card).toContainText("100 € von 300 €");
   await expect(card).not.toContainText("Onkel Tobias");
   await expect(card.getByRole("button", { name: "Ich schenke es ganz" })).toHaveCount(0); // es gibt schon einen Beitrag
   await card.getByRole("button", { name: "Mitschenken" }).click();
@@ -82,4 +82,37 @@ test("Gruppengeschenk: zu hohe Beträge lassen sich gar nicht erst abschicken", 
   await dlg.getByLabel("Dein Name").fill("Test");
   await expect(dlg.getByText("Höchstens 200 €")).toBeVisible();
   await expect(dlg.getByRole("button", { name: /beisteuern/ })).toBeDisabled();
+});
+
+test("Kacheln: ein Tipp zeigt alle Details, auch die vollständige Notiz", async ({ page }) => {
+  await mockSupabase(page);
+  await page.goto("/#/w/TOK");
+  await page.getByRole("button", { name: "Kinderfahrrad 24 Zoll: alle Details" }).click();
+  const sheet = page.locator("dialog.sheet[open]");
+  await expect(sheet.getByRole("heading", { name: "Kinderfahrrad 24 Zoll" })).toBeVisible();
+  await expect(sheet).toContainText("Mintgrün");
+  await expect(sheet.getByRole("link", { name: "Bei Decathlon ansehen" })).toHaveAttribute("href", "https://www.decathlon.de/x");
+  await sheet.getByRole("button", { name: "Reservieren" }).click();
+  await expect(page.getByLabel("Dein Name")).toBeVisible();
+});
+
+test("Kacheln: in einer Reihe gleich hoch, Knöpfe auf einer Linie, Shop als Symbol", async ({ page }) => {
+  await mockSupabase(page);
+  await page.goto("/#/w/TOK");
+  const tops = await page.locator(".ggrid.tiles .gcard .actions .btn.big").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
+  expect(tops[0]).toBe(tops[1]); // erste Reihe: beide Knöpfe auf gleicher Höhe
+  await expect(page.getByRole("link", { name: "„Kinderfahrrad 24 Zoll“ bei Decathlon ansehen" })).toBeVisible();
+});
+
+test("Erklärkasten: beim ersten Besuch offen, nach einer Reservierung eingeklappt", async ({ page }) => {
+  await mockSupabase(page);
+  await page.goto("/#/w/TOK");
+  await expect(page.locator(".howto-text")).toBeVisible();
+  await page.locator(".gcard", { hasText: "Kinderfahrrad" }).getByRole("button", { name: "Reservieren" }).click();
+  await page.getByLabel("Dein Name").fill("Oma Gisela");
+  await page.getByRole("button", { name: "Jetzt reservieren" }).click();
+  await expect(page.getByRole("heading", { name: "Reserviert!" })).toBeVisible();
+  await page.reload();
+  await expect(page.getByText("So funktioniert’s")).toBeVisible();
+  await expect(page.locator(".howto-text")).toHaveCount(0);
 });

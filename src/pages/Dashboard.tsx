@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+import { usePullToRefresh, useRefreshOnReturn } from "../lib/useRefresh";
+import { PullIndicator } from "../components/PullIndicator";
 import { Link, useNavigate } from "react-router-dom";
 import { db } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
@@ -117,8 +119,12 @@ export function Dashboard() {
     .sort((a, b) => (daysUntil(a.event_date) ?? 0) - (daysUntil(b.event_date) ?? 0))[0];
   const upcomingDays = upcoming ? daysUntil(upcoming.event_date) : null;
 
+  const ptr = usePullToRefresh(() => load());
+  useRefreshOnReturn(() => load());
+
   return (
     <div className="wrap with-bottom-bar">
+      <PullIndicator {...ptr} />
       <div className="page-head">
         <div className="page-head-top">
           <h1>Hallo {firstName(displayName)}</h1>

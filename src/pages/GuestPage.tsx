@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { usePullToRefresh, useRefreshOnReturn } from "../lib/useRefresh";
+import { PullIndicator } from "../components/PullIndicator";
 import { Link, useParams } from "react-router-dom";
 import { db } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
@@ -15,6 +17,7 @@ interface Mine { code: string; wish_id: string; quantity: number; amount_cents?:
 type Price = "all" | "20" | "50" | "more";
 type GSheet =
   | null
+  | { kind: "details"; wish: GuestWish; mode: "open" | "mine" }
   | { kind: "reserve"; wish: GuestWish }
   | { kind: "contribute"; wish: GuestWish; full: boolean }
   | { kind: "contributed"; wish: GuestWish; amount: number }
@@ -62,6 +65,8 @@ export function GuestPage() {
     setMine(rows);
     setState("ok");
   }, [token]);
+  const ptr = usePullToRefresh(() => load());
+  useRefreshOnReturn(() => load());
 
   useEffect(() => {
     load();
@@ -87,6 +92,9 @@ export function GuestPage() {
   const ids = new Set(list.wishes.map((w) => w.id));
   const myHere = mine.filter((m) => ids.has(m.wish_id));
   const mineOf = (w: GuestWish) => myHere.filter((m) => m.wish_id === w.id);
+  const howtoKey = `paeckli-howto-${token}`;
+  const firstVisit = myHere.length === 0 && (() => { try { return !localStorage.getItem(howtoKey); } catch { return true; } })();
+  const markHowtoSeen = () => { try { localStorage.setItem(howtoKey, "1"); } catch { /* egal */ } };
   const myWishes = list.wishes.filter((w) => mineOf(w).length);
   const open = list.wishes.filter((w) => w.available > 0 && inPrice(w, price));
   const taken = list.wishes.filter((w) => w.available <= 0 && !mineOf(w).length);
@@ -101,6 +109,7 @@ export function GuestPage() {
     const r = data as { ok: boolean; code?: string; error?: string; available?: number };
     if (r.ok && r.code) {
       addCode(r.code);
+      markHowtoSeen();
       setName(name);
       setSheet({ kind: "done", wish, parentsBuy });
     } else if (r.error === "already_taken") setSheet({ kind: "taken", available: r.available ?? 0 });
@@ -118,6 +127,7 @@ export function GuestPage() {
     const r = data as { ok: boolean; code?: string; error?: string; open_cents?: number };
     if (r.ok && r.code) {
       addCode(r.code);
+      markHowtoSeen();
       setName(name);
       setSheet({ kind: "contributed", wish, amount });
     } else if (r.error === "too_much") setSheet({ kind: "giftInfo", text: `Inzwischen fehlen nur noch ${euroShort(r.open_cents ?? 0)}. Du kannst gern diesen Rest übernehmen.` });
@@ -148,10 +158,6 @@ export function GuestPage() {
     const group = !!w.group_gift && w.target_cents != null;
     const funded = w.funded_cents ?? 0;
     const target = w.target_cents ?? 0;
-    const open = Math.max(0, target - funded);
-    const shopLink = w.url && (
-      <a className="shop-link" href={w.url} target="_blank" rel="noopener noreferrer">{view === "grid" ? "Zum Shop" : w.shop ? `Bei ${w.shop} ansehen` : "Im Shop ansehen"}<IconExt /></a>
-    );
     if (mode === "taken") {
       return (
         <article className="gcard compact taken" key={`taken-${w.id}`}>
@@ -164,36 +170,48 @@ export function GuestPage() {
         </article>
       );
     }
+    const tiles = view === "grid";
     return (
-      <article className={`gcard ${view === "rows" ? "row" : ""}`} key={`${mode}-${w.id}`}>
-        <WishTile wish={w} wrapped={mode === "mine"} />
-        <div className="body">
-          <span className="badge-row"><PriorityBadge priority={w.priority} />{group && <span className="badge group-badge">Gemeinsam schenken</span>}</span>
-          <h3>{w.title}</h3>
-          {w.note && <p className="note">{w.note}</p>}
-          <div className="price-row">
-            {w.price_cents != null ? <span className="price">{formatPrice(w.price_cents)}</span> : <span />}
-            {shopLink}
-          </div>
-          {group && (
-            <div className="gift-box">
-              <div className="gift-sum"><span><b>{euroShort(funded)}</b> von {euroShort(target)}</span>{(w.contributors ?? 0) > 0 && <small>{w.contributors} {w.contributors === 1 ? "Person macht" : "Personen machen"} mit</small>}</div>
-              <span className="progress big" aria-hidden="true"><span style={{ width: `${target ? Math.min(100, Math.round((funded / target) * 100)) : 0}%` }} /></span>
-              {mode === "open" && <small className="note">Es fehlen noch <b>{euroShort(open)}</b>. Die Eltern kaufen das Geschenk, sobald alles zusammen ist.</small>}
-            </div>
-          )}
-          {mode === "open" && !group && w.quantity > 1 && <p className="note">Noch {w.available} von {w.quantity} frei</p>}
-          {mode === "mine" && <p className="mine-tag"><IconCheck /> {myAmount > 0 ? `Du steuerst ${euroShort(myAmount)} bei` : `Von dir reserviert${myQty > 1 ? ` (${myQty} Stück)` : ""}`}</p>}
-        </div>
-        <div className="actions">
-          {mode === "open" && !group && <button className="btn ribbon big" onClick={() => setSheet({ kind: "reserve", wish: w })}><IconGift /> Reservieren</button>}
-          {mode === "open" && group && <button className="btn ribbon big" onClick={() => setSheet({ kind: "contribute", wish: w, full: false })}><IconGift /> Mitschenken</button>}
-          {mode === "open" && group && funded === 0 && <button className="btn quiet" onClick={() => setSheet({ kind: "contribute", wish: w, full: true })}>Ich schenke es ganz</button>}
-          {mode === "mine" && my.map((m) => (
-            <button key={m.code} className="btn quiet" onClick={() => setSheet({ kind: "cancel", wish: w, code: m.code })}>{m.amount_cents != null ? "Beitrag zurückziehen" : "Reservierung aufheben"}</button>
-          ))}
-        </div>
+      <article className={`gcard ${tiles ? "" : "row"}`} key={`${mode}-${w.id}`}>
+        <button type="button" className="gcard-open" onClick={() => setSheet({ kind: "details", wish: w, mode })} aria-label={`${w.title}: alle Details`}>
+          <WishTile wish={w} wrapped={mode === "mine"} />
+          <span className="body">
+            <span className="badge-row"><PriorityBadge priority={w.priority} />{group && <span className="badge group-badge">Gemeinsam</span>}</span>
+            <span className="gtitle">{w.title}</span>
+            {w.note && <span className="note">{w.note}</span>}
+            {w.price_cents != null && <span className="price">{formatPrice(w.price_cents)}</span>}
+            {group && (
+              <span className="gift-box">
+                <span className="gift-sum"><span><b>{euroShort(funded)}</b> von {euroShort(target)}</span>{!tiles && (w.contributors ?? 0) > 0 && <small>{w.contributors} {w.contributors === 1 ? "Person macht" : "Personen machen"} mit</small>}</span>
+                <span className="progress" aria-hidden="true"><span style={{ width: `${target ? Math.min(100, Math.round((funded / target) * 100)) : 0}%` }} /></span>
+              </span>
+            )}
+            {mode === "open" && !group && w.quantity > 1 && <span className="note avail">Noch {w.available} von {w.quantity} frei</span>}
+            {mode === "mine" && <span className="mine-tag"><IconCheck /> {myAmount > 0 ? `Du steuerst ${euroShort(myAmount)} bei` : `Von dir reserviert${myQty > 1 ? ` (${myQty} Stück)` : ""}`}</span>}
+          </span>
+        </button>
+        {w.url && (
+          <a className="gshop" href={w.url} target="_blank" rel="noopener noreferrer" aria-label={`„${w.title}“ ${w.shop ? `bei ${w.shop}` : "im Shop"} ansehen`}>
+            <IconExt />
+          </a>
+        )}
+        <div className="actions">{actionsFor(w, mode, my, funded)}</div>
       </article>
+    );
+  };
+
+  /** Knöpfe eines Wunsches, gleich in Karte und Detailansicht */
+  const actionsFor = (w: GuestWish, mode: "open" | "mine", my: Mine[], funded: number) => {
+    const group = !!w.group_gift && w.target_cents != null;
+    return (
+      <>
+        {mode === "open" && !group && <button className="btn ribbon big" onClick={() => setSheet({ kind: "reserve", wish: w })}><IconGift /> Reservieren</button>}
+        {mode === "open" && group && <button className="btn ribbon big" onClick={() => setSheet({ kind: "contribute", wish: w, full: false })}><IconGift /> Mitschenken</button>}
+        {mode === "open" && group && funded === 0 && <button className="btn quiet" onClick={() => setSheet({ kind: "contribute", wish: w, full: true })}>Ich schenke es ganz</button>}
+        {mode === "mine" && my.map((m) => (
+          <button key={m.code} className="btn quiet" onClick={() => setSheet({ kind: "cancel", wish: w, code: m.code })}>{m.amount_cents != null ? "Beitrag zurückziehen" : "Reservierung aufheben"}</button>
+        ))}
+      </>
     );
   };
 
@@ -203,6 +221,7 @@ export function GuestPage() {
 
   return (
     <div className="wrap">
+      <PullIndicator {...ptr} />
       {session && (
         <div className="preview">
           <span><b>Vorschau:</b> So sehen Gäste diese Liste. Namen von Schenkenden sind hier nie sichtbar.</span>
@@ -218,7 +237,14 @@ export function GuestPage() {
         </div>
       </section>
       {list.description && <p className="hero-desc">{list.description}</p>}
-      <p className="howto-text">Such dir ein Geschenk aus und tippe auf <b>Reservieren</b>. Dann sehen alle anderen, dass es vergeben ist. Ein Konto brauchst du nicht.</p>
+      {firstVisit ? (
+        <p className="howto-text">Such dir ein Geschenk aus und tippe auf <b>Reservieren</b>. Dann sehen alle anderen, dass es vergeben ist. Ein Konto brauchst du nicht.</p>
+      ) : (
+        <details className="howto-mini">
+          <summary>So funktioniert’s</summary>
+          <p>Such dir ein Geschenk aus und tippe auf <b>Reservieren</b>. Dann sehen alle anderen, dass es vergeben ist. Ein Konto brauchst du nicht. Tippe auf einen Wunsch für alle Details.</p>
+        </details>
+      )}
 
       {/* Wie in der Verwaltung: Überschrift links, Umschalter Liste/Kacheln rechts */}
       <div className="wl-bar">
@@ -262,6 +288,40 @@ export function GuestPage() {
 
       <Sheet open={sheet?.kind === "reserve"} onClose={close} label="Wunsch reservieren">
         {sheet?.kind === "reserve" && <ReserveForm wish={sheet.wish} allowParentsBuy={!!list?.allow_parents_buy} busy={busy} onSubmit={(q, n, pb) => reserve(sheet.wish, q, n, pb)} />}
+      </Sheet>
+
+      <Sheet open={sheet?.kind === "details"} onClose={close} label="Wunsch im Detail">
+        {sheet?.kind === "details" && (() => {
+          const w = list?.wishes.find((x) => x.id === sheet.wish.id) ?? sheet.wish;
+          const my = mineOf(w);
+          const mode = my.length ? "mine" : sheet.mode;
+          const group = !!w.group_gift && w.target_cents != null;
+          const funded = w.funded_cents ?? 0, target = w.target_cents ?? 0, open = Math.max(0, target - funded);
+          const myAmount = my.reduce((a, m) => a + (m.amount_cents ?? 0), 0);
+          const myQty = my.reduce((a, m) => a + m.quantity, 0);
+          return (
+            <div className="gdetail">
+              <WishTile wish={w} wrapped={mode === "mine"} />
+              <span className="badge-row"><PriorityBadge priority={w.priority} />{group && <span className="badge group-badge">Gemeinsam schenken</span>}</span>
+              <h2>{w.title}</h2>
+              {w.price_cents != null && <p className="price">{formatPrice(w.price_cents)}{w.quantity > 1 && !group ? ` pro Stück` : ""}</p>}
+              {w.note && <p className="gdetail-note">{w.note}</p>}
+              {group && (
+                <div className="gift-box">
+                  <div className="gift-sum"><span><b>{euroShort(funded)}</b> von {euroShort(target)}</span>{(w.contributors ?? 0) > 0 && <small>{w.contributors} {w.contributors === 1 ? "Person macht" : "Personen machen"} mit</small>}</div>
+                  <span className="progress big" aria-hidden="true"><span style={{ width: `${target ? Math.min(100, Math.round((funded / target) * 100)) : 0}%` }} /></span>
+                  {mode === "open" && <small className="note">Es fehlen noch <b>{euroShort(open)}</b>. Die Eltern kaufen das Geschenk, sobald alles zusammen ist.</small>}
+                </div>
+              )}
+              {mode === "open" && !group && w.quantity > 1 && <p className="note">Noch {w.available} von {w.quantity} frei</p>}
+              {mode === "mine" && <p className="mine-tag"><IconCheck /> {myAmount > 0 ? `Du steuerst ${euroShort(myAmount)} bei` : `Von dir reserviert${myQty > 1 ? ` (${myQty} Stück)` : ""}`}</p>}
+              {w.url && (
+                <a className="btn soft block" href={w.url} target="_blank" rel="noopener noreferrer"><IconExt /> {w.shop ? `Bei ${w.shop} ansehen` : "Im Shop ansehen"}</a>
+              )}
+              <div className="gdetail-actions">{actionsFor(w, mode, my, funded)}</div>
+            </div>
+          );
+        })()}
       </Sheet>
 
       <Sheet open={sheet?.kind === "contribute"} onClose={close} label="Mitschenken">
