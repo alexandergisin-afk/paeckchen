@@ -11,6 +11,12 @@ export function prefersCalm(): boolean {
 
 export function celebrate(strength: "small" | "big" = "small") {
   if (typeof document === "undefined" || prefersCalm()) return;
+  // Erst starten, wenn ein gleichzeitig geöffneter Dialog (z. B. „Reserviert!“) steht:
+  // Was zuletzt in die oberste Ebene kommt, liegt obenauf.
+  requestAnimationFrame(() => requestAnimationFrame(() => window.setTimeout(() => burst(strength), 30)));
+}
+
+function burst(strength: "small" | "big") {
   navigator.vibrate?.(strength === "big" ? [12, 60, 12] : 12);
   const canvas = document.createElement("canvas");
   canvas.className = "confetti";
@@ -18,7 +24,18 @@ export function celebrate(strength: "small" | "big" = "small") {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   canvas.width = innerWidth * dpr;
   canvas.height = innerHeight * dpr;
-  document.body.appendChild(canvas);
+  // Dialoge liegen in der obersten Ebene des Browsers. Damit das Konfetti darüber zu sehen ist,
+  // kommt es als „Popover“ ebenfalls dorthin (als letztes, also obenauf).
+  const supportsPopover = typeof (canvas as HTMLElement & { showPopover?: () => void }).showPopover === "function";
+  if (supportsPopover) {
+    canvas.setAttribute("popover", "manual");
+    document.body.appendChild(canvas);
+    try { (canvas as HTMLElement & { showPopover: () => void }).showPopover(); } catch { /* egal */ }
+  } else {
+    // Ältere Browser: in den offenen Dialog setzen, sonst auf die Seite
+    const open = [...document.querySelectorAll("dialog[open]")].pop();
+    (open ?? document.body).appendChild(canvas);
+  }
   const ctx = canvas.getContext("2d");
   if (!ctx) { canvas.remove(); return; }
   ctx.scale(dpr, dpr);

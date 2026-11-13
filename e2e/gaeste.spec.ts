@@ -117,13 +117,28 @@ test("Erklärkasten: beim ersten Besuch offen, nach einer Reservierung eingeklap
   await expect(page.locator(".howto-text")).toHaveCount(0);
 });
 
-test("Freudenmoment: nach dem Reservieren kurzer Konfetti-Regen", async ({ page }) => {
+test("Freudenmoment: nach dem Reservieren kurzer Konfetti-Regen, sichtbar über dem Dialog", async ({ page }) => {
   await mockSupabase(page);
+  // Reihenfolge festhalten, in der Dialog und Konfetti erscheinen (was zuletzt kommt, liegt obenauf)
+  await page.addInitScript(() => {
+    const order: string[] = ((window as unknown as { __order: string[] }).__order = []);
+    new MutationObserver((muts) => {
+      for (const m of muts) {
+        if (m.type === "attributes" && (m.target as Element).tagName === "DIALOG" && (m.target as HTMLDialogElement).open) order.push("dialog:" + ((m.target as Element).querySelector("h2")?.textContent ?? ""));
+        if (m.type === "childList") m.addedNodes.forEach((n) => { if ((n as Element).classList?.contains("confetti")) order.push("konfetti"); });
+      }
+    }).observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ["open"] });
+  });
   await page.goto("/#/w/TOK");
   await page.locator(".gcard", { hasText: "Kinderfahrrad" }).getByRole("button", { name: "Reservieren" }).click();
   await page.getByLabel("Dein Name").fill("Oma Gisela");
   await page.getByRole("button", { name: "Jetzt reservieren" }).click();
   await expect(page.locator("canvas.confetti")).toHaveCount(1);
+  // liegt in der obersten Ebene (wie die Dialoge) …
+  expect(await page.locator("canvas.confetti").evaluate((c) => c.matches(":popover-open"))).toBe(true);
+  // … und kommt erst nach dem „Reserviert!“-Dialog dorthin, liegt also obenauf
+  const order = await page.evaluate(() => (window as unknown as { __order: string[] }).__order);
+  expect(order.indexOf("konfetti")).toBeGreaterThan(order.lastIndexOf("dialog:Reserviert!"));
   await expect(page.locator("canvas.confetti")).toHaveCount(0, { timeout: 5000 }); // räumt sich selbst weg
 });
 
