@@ -1228,3 +1228,27 @@ revoke execute on function public.request_access(text, text), public.admin_email
   from public, anon, authenticated;
 grant execute on function public.request_access(text, text), public.admin_emails(), public.access_request_info(text) to service_role;
 grant execute on function public.allow_email(text, uuid), public.pending_access_requests(), public.decide_access(uuid, boolean), public.is_admin() to authenticated;
+
+-- ---------------------------------------------------------------------
+-- Funktionsrechte nachschärfen (identisch mit 18_rechte_nachschaerfen.sql)
+-- ---------------------------------------------------------------------
+revoke execute on function public.allow_email(text, uuid),
+  public.reserve_for_guest(uuid, int, text, boolean),
+  public.contribute_for_guest(uuid, int, text),
+  public.pending_access_requests(),
+  public.decide_access(uuid, boolean),
+  public.is_admin()
+  from public, anon;
+grant execute on function public.allow_email(text, uuid),
+  public.reserve_for_guest(uuid, int, text, boolean),
+  public.contribute_for_guest(uuid, int, text),
+  public.pending_access_requests(),
+  public.decide_access(uuid, boolean),
+  public.is_admin()
+  to authenticated;
+
+-- Gäste-Funktionen: Gäste und Angemeldete ja, sonst niemand
+revoke execute on function public.reserve_wish(text, uuid, int, text, boolean), public.contribute(text, uuid, int, text),
+  public.my_reservations(text[]) from public;
+grant execute on function public.reserve_wish(text, uuid, int, text, boolean), public.contribute(text, uuid, int, text),
+  public.my_reservations(text[]) to anon, authenticated;

@@ -289,4 +289,13 @@ select pg_temp.pruefe(request_access('neu@test.de', '1.1.1.1') = '{"status": "pe
 select pg_temp.pruefe((select count(*) from admin_emails()) = 1, 'Der Server findet die Adresse der Verwaltung');
 reset role;
 
+
+-- Zweite Sicherungsschicht: nur für Angemeldete gedachte Funktionen sind für Gäste gar nicht aufrufbar
+select pg_temp.pruefe(not has_function_privilege('anon', 'public.' || f, 'execute'), 'Gäste können ' || split_part(f, '(', 1) || ' nicht aufrufen')
+from unnest(array['allow_email(text, uuid)', 'reserve_for_guest(uuid, integer, text, boolean)', 'contribute_for_guest(uuid, integer, text)',
+                  'pending_access_requests()', 'decide_access(uuid, boolean)', 'is_admin()']) f;
+select pg_temp.pruefe(has_function_privilege('anon', 'public.' || f, 'execute'), 'Gäste dürfen ' || split_part(f, '(', 1) || ' weiterhin nutzen')
+from unnest(array['guest_list(text)', 'reserve_wish(text, uuid, integer, text, boolean)', 'contribute(text, uuid, integer, text)',
+                  'cancel_reservation(text)', 'my_reservations(text[])', 'log_client_error(text, text, text, text)']) f;
+
 \echo 'Alle Datenbank-Tests bestanden.'
