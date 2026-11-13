@@ -410,3 +410,73 @@ test("Nach unten ziehen lädt die Liste neu", async ({ page }) => {
   await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
   await expect.poll(() => calls.lists.filter((u) => u.includes(`id=eq.${LID}`)).length).toBeGreaterThan(before);
 });
+
+test("Wunsch ohne Reservierung löschen: sofort weg, mit „Rückgängig“", async ({ page }) => {
+  const calls = await mockSupabase(page, { signedIn: true });
+  await page.goto(`/#/liste/${LID}`);
+  await page.locator(".wrow-btn", { hasText: "Kinderfahrrad" }).click();
+  await page.getByRole("button", { name: "Wunsch löschen" }).click();
+  await expect(page.locator("dialog[open]")).toHaveCount(0); // keine Rückfrage
+  await expect(page.locator(".wrow-btn", { hasText: "Kinderfahrrad" })).toHaveCount(0);
+  await page.locator("#toast").getByRole("button", { name: "Rückgängig" }).click();
+  await expect(page.locator(".wrow-btn", { hasText: "Kinderfahrrad" })).toBeVisible();
+  await page.waitForTimeout(6500);
+  expect(calls.writes.some((w) => w.startsWith("DELETE wishes"))).toBe(false); // nichts gelöscht
+});
+
+test("Wunsch löschen ohne Rückgängig: wird nach kurzer Zeit wirklich gelöscht", async ({ page }) => {
+  const calls = await mockSupabase(page, { signedIn: true });
+  await page.goto(`/#/liste/${LID}`);
+  await page.locator(".wrow-btn", { hasText: "Kinderfahrrad" }).click();
+  await page.getByRole("button", { name: "Wunsch löschen" }).click();
+  await expect.poll(() => calls.writes.some((w) => w.startsWith("DELETE wishes") && w.includes("w1")), { timeout: 9000 }).toBe(true);
+});
+
+test("Wunsch mit fremder Reservierung löschen: Rückfrage nennt die Person", async ({ page }) => {
+  await mockSupabase(page, { signedIn: true });
+  await page.goto(`/#/liste/${LID}`);
+  await page.locator(".wrow-btn", { hasText: "Schwimmbrille" }).click();
+  await page.getByRole("button", { name: "Wunsch löschen" }).click();
+  await expect(page.locator("dialog.sheet[open]")).toContainText("Oma Gisela hat diesen Wunsch schon reserviert");
+});
+
+test("Reservierung freigeben: sofort, mit „Rückgängig“", async ({ page }) => {
+  const calls = await mockSupabase(page, { signedIn: true });
+  await page.goto(`/#/liste/${LID}`);
+  await page.locator(".wrow-btn", { hasText: "Schwimmbrille" }).click();
+  await page.getByRole("button", { name: /Reservierung von Oma Gisela freigeben/ }).click();
+  await expect(page.locator("#toast")).toContainText("Reservierung von Oma Gisela freigegeben");
+  await page.locator("#toast").getByRole("button", { name: "Rückgängig" }).click();
+  await page.waitForTimeout(6500);
+  expect(calls.writes.some((w) => w.startsWith("DELETE reservations"))).toBe(false);
+});
+
+test("Einstellungen: in Gruppen geordnet, Name speichert sich automatisch", async ({ page }) => {
+  const calls = await mockSupabase(page, { signedIn: true });
+  await page.goto("/#/einstellungen");
+  for (const g of ["Konto", "Familie & Zugriff", "Benachrichtigungen", "App"]) {
+    await expect(page.getByRole("heading", { name: g, exact: true })).toBeVisible();
+  }
+  await expect(page.getByRole("button", { name: "Name speichern" })).toHaveCount(0);
+  await page.getByLabel(/Dein Name/).fill("Julia M.");
+  await expect(page.getByText("Gespeichert ✓")).toBeVisible();
+  expect(calls.writes.some((w) => w.startsWith("PATCH profiles") && w.includes('"display_name":"Julia M."'))).toBe(true);
+  // Die lange iPhone-Anleitung ist eingeklappt
+  await expect(page.getByText("In der App Kurzbefehle", { exact: false })).toBeHidden();
+});
+
+test("Leere Liste: erster Schritt statt Teilen", async ({ page }) => {
+  await mockSupabase(page, { signedIn: true, emptyList: true });
+  await page.goto(`/#/liste/${LID}`);
+  await expect(page.getByRole("heading", { name: "Was wünscht sich Emma?" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Teilen" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Ersten Wunsch hinzufügen" }).click();
+  await expect(page.locator("dialog.add-flow[open]")).toBeVisible();
+});
+
+test("Beim Laden erscheinen Platzhalter statt Text", async ({ page }) => {
+  await mockSupabase(page, { signedIn: true, slowListMs: 1500 });
+  await page.goto(`/#/liste/${LID}`);
+  await expect(page.getByRole("status", { name: "Liste wird geladen" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Emmas 9. Geburtstag" })).toBeVisible();
+});

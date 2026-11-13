@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useLayoutEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { SkeletonListPage } from "../components/Skeleton";
 import { usePullToRefresh, useRefreshOnReturn } from "../lib/useRefresh";
 import { PullIndicator } from "../components/PullIndicator";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { db } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { cover, type Reservation, type Wish, type WishList } from "../lib/types";
-import { countdownLabel, dateLabel, daysUntil, friendlyError, toast } from "../lib/format";
+import { countdownLabel, dateLabel, daysUntil, friendlyError, toast, toastAction } from "../lib/format";
+import { deferred } from "../lib/undo";
 import { parsePrice, removeImage } from "../lib/wishes";
 import { copyWishes, moveWish } from "../lib/listOps";
 import { cachedListPage, loadListPage, type ListPageData } from "../lib/listData";
@@ -63,12 +65,15 @@ export function ListPage() {
     setParams({}, { replace: true });
   }, [params, setParams]);
 
+  // Ausgeblendet, solange „Rückgängig“ noch möglich ist (auch beim Neuladen)
+  const hidden = useRef({ wishes: new Set<string>(), res: new Set<string>() });
+
   const apply = useCallback((d: ListPageData | null | undefined) => {
     if (d === undefined) return;
     if (d === null) return setState("missing");
     setList(d.list);
-    setWishes(d.wishes);
-    setReservations(d.reservations);
+    setWishes(d.wishes.filter((w) => !hidden.current.wishes.has(w.id)));
+    setReservations(d.reservations.filter((r) => !hidden.current.res.has(r.id)));
     setState("ok");
   }, []);
 
@@ -89,7 +94,7 @@ export function ListPage() {
     load();
   }, [load]);
 
-  if (state === "loading") return <p className="loading">Liste wird geladen …</p>;
+  if (state === "loading") return <SkeletonListPage />;
   if (state !== "ok" || !list)
     return (
       <div className="wrap narrow">
@@ -137,25 +142,45 @@ export function ListPage() {
     navigate("/");
   };
 
-  const deleteWish = async (w: Wish) => {
-    setBusy(true);
-    const { error } = await db().from("wishes").delete().eq("id", w.id);
-    setBusy(false);
-    if (error) return toast(friendlyError(error));
-    await removeImage(w.image_path);
-    close();
-    toast("Wunsch gelöscht.");
-    load();
+  /** Mit Rückfrage nur, wenn eine fremde Reservierung betroffen sein kann. */
+  const askDeleteWish = (w: Wish) => {
+    if (!showRes || resOf(w).length > 0) return setSheet({ kind: "deleteWish", wish: w });
+    deleteWish(w);
   };
 
-  const release = async (r: Reservation) => {
-    setBusy(true);
-    const { error } = await db().from("reservations").delete().eq("id", r.id);
-    setBusy(false);
-    if (error) return toast(friendlyError(error));
+  const deleteWish = (w: Wish) => {
     close();
-    toast("Reservierung freigegeben.");
-    load();
+    hidden.current.wishes.add(w.id);
+    setWishes((ws) => ws.filter((x) => x.id !== w.id));
+    const job = deferred(async () => {
+      const { error } = await db().from("wishes").delete().eq("id", w.id);
+      if (error) toast(friendlyError(error));
+      else await removeImage(w.image_path);
+      hidden.current.wishes.delete(w.id);
+      load();
+    });
+    toastAction(`„${w.title}“ gelöscht.`, "Rückgängig", () => {
+      job.cancel();
+      hidden.current.wishes.delete(w.id);
+      load();
+    });
+  };
+
+  const release = (r: Reservation) => {
+    close();
+    hidden.current.res.add(r.id);
+    setReservations((rs) => rs.filter((x) => x.id !== r.id));
+    const job = deferred(async () => {
+      const { error } = await db().from("reservations").delete().eq("id", r.id);
+      if (error) toast(friendlyError(error));
+      hidden.current.res.delete(r.id);
+      load();
+    });
+    toastAction(`Reservierung von ${r.guest_name} freigegeben.`, "Rückgängig", () => {
+      job.cancel();
+      hidden.current.res.delete(r.id);
+      load();
+    });
   };
 
   const openTransfer = async (wish: Wish, mode: "move" | "copy") => {
@@ -284,11 +309,11 @@ export function ListPage() {
           </div>
         ) : null}
 
-        <nav className="action-grid" aria-label="Aktionen für diese Liste">
+        {wishes.length > 0 && <nav className="action-grid" aria-label="Aktionen für diese Liste">
           <button className="action-tile" onClick={() => setSheet({ kind: "share" })}><IconShare /> Teilen</button>
           <Link className="action-tile" to={`/w/${list.guest_token}`}><IconEye /> Gästeansicht</Link>
           <Link className="action-tile" to={`/liste/${list.id}/mitglieder`}><IconUsers /> Mitglieder</Link>
-        </nav>
+        </nav>}
 
         {wishes.length > 0 && (
           <section className={`status-line-bar ${showRes ? "" : "is-hidden"}`} aria-label="Stand der Reservierungen">
@@ -309,7 +334,7 @@ export function ListPage() {
           </section>
         )}
 
-        <div className="wl-bar">
+        {wishes.length > 0 && <div className="wl-bar">
           <h2 className="section-title">Wünsche</h2>
           {wishes.length > 0 && (
             <div className="view-toggle" role="group" aria-label="Ansicht der Wünsche">
@@ -317,11 +342,15 @@ export function ListPage() {
               <button type="button" aria-pressed={view === "grid"} onClick={() => chooseView("grid")}><IconGrid /> Kacheln</button>
             </div>
           )}
-        </div>
+        </div>}
         {wishes.length === 0 ? (
-          <div className="empty">
-            <p>Noch keine Wünsche. Tippe unten auf „Wunsch hinzufügen“ und such direkt nach einem Produkt.</p>
-          </div>
+          <section className="start-card">
+            <span className="start-icon" aria-hidden="true">🎁</span>
+            <h2>Was wünscht sich {list.recipient_name?.trim() || "das Kind"}?</h2>
+            <p>Trag zuerst ein paar Wünsche ein. Danach kannst du die Liste mit der Familie teilen.</p>
+            <button className="btn big block" onClick={() => setSheet({ kind: "addWish" })}><IconPlus /> Ersten Wunsch hinzufügen</button>
+            <Link className="start-secondary" to={`/liste/${list.id}/mitglieder`}><IconUsers /> Mitbearbeiter einladen</Link>
+          </section>
         ) : view === "grid" ? (
           <div className="wgrid">
             {wishes.map((w) => (
@@ -380,11 +409,11 @@ export function ListPage() {
                 ) : null;
               })()}
               {showRes && resOf(sheet.wish).map((r) => (
-                <button type="button" key={r.id} onClick={() => setSheet({ kind: "release", wish: sheet.wish, reservation: r })}>
+                <button type="button" key={r.id} onClick={() => release(r)}>
                   <IconUndo /> {r.amount_cents != null ? `Beitrag von ${r.guest_name} (${euroShort(r.amount_cents)}) freigeben` : `Reservierung von ${r.guest_name} freigeben`}
                 </button>
               ))}
-              <button type="button" className="danger" onClick={() => setSheet({ kind: "deleteWish", wish: sheet.wish })}><IconTrash /> Wunsch löschen</button>
+              <button type="button" className="danger" onClick={() => askDeleteWish(sheet.wish)}><IconTrash /> Wunsch löschen</button>
             </div>
           </>
         )}
@@ -456,7 +485,9 @@ export function ListPage() {
         {sheet?.kind === "deleteWish" && (
           <>
             <h2>„{sheet.wish.title}“ löschen?</h2>
-            <p>Falls schon jemand diesen Wunsch reserviert hat, verliert die Person ihre Reservierung.</p>
+            <p>{resOf(sheet.wish).length > 0
+              ? `${resOf(sheet.wish).map((r) => r.guest_name).join(", ")} ${resOf(sheet.wish).length === 1 ? "hat" : "haben"} diesen Wunsch schon reserviert und ${resOf(sheet.wish).length === 1 ? "verliert die Reservierung" : "verlieren ihre Reservierungen"}. Sprich dich am besten vorher ab.`
+              : "Deine Reservierungen sind ausgeblendet. Falls schon jemand diesen Wunsch reserviert hat, verliert die Person ihre Reservierung."}</p>
             <div className="toolbar" style={{ marginTop: 18 }}>
               <button className="btn danger" onClick={() => deleteWish(sheet.wish)} disabled={busy}>Löschen</button>
               <button className="btn soft" onClick={close}>Abbrechen</button>
@@ -465,18 +496,6 @@ export function ListPage() {
         )}
       </Sheet>
 
-      <Sheet open={sheet?.kind === "release"} onClose={close} label="Reservierung freigeben">
-        {sheet?.kind === "release" && (
-          <>
-            <h2>Reservierung freigeben?</h2>
-            <p>„{sheet.wish.title}“ ist danach wieder für alle frei. Sprich dich am besten vorher mit {sheet.reservation.guest_name} ab, damit nichts doppelt gekauft wird.</p>
-            <div className="toolbar" style={{ marginTop: 18 }}>
-              <button className="btn" disabled={busy} onClick={() => release(sheet.reservation)}>Freigeben</button>
-              <button className="btn soft" onClick={close}>Abbrechen</button>
-            </div>
-          </>
-        )}
-      </Sheet>
     </>
   );
 }

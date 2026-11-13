@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { SkeletonRows } from "../components/Skeleton";
 import { Link, useParams } from "react-router-dom";
 import { db, guestLink, inviteLink } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
@@ -49,7 +50,7 @@ export function TeamPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  if (state === "loading") return <p className="loading">Wird geladen …</p>;
+  if (state === "loading") return <div className="wrap narrow"><SkeletonRows count={2} /></div>;
   if (state === "missing" || !list)
     return (
       <div className="wrap narrow">

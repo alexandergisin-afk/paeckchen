@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { SkeletonRows } from "../components/Skeleton";
 import { usePullToRefresh, useRefreshOnReturn } from "../lib/useRefresh";
 import { PullIndicator } from "../components/PullIndicator";
 import { Link, useNavigate } from "react-router-dom";
@@ -138,7 +139,7 @@ export function Dashboard() {
       </div>
 
       {error && <p className="notice error" role="alert">{error} <button className="btn small soft" onClick={load}>Erneut laden</button></p>}
-      {!lists && !error && <p className="loading">Listen werden geladen …</p>}
+      {!lists && !error && <SkeletonRows count={3} label="Listen werden geladen" />}
 
       {lists && active.length === 0 && (
         <div className="empty">

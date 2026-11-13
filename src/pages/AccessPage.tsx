@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { SkeletonRows } from "../components/Skeleton";
 import { Link } from "react-router-dom";
 import { db } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
@@ -27,7 +28,7 @@ export function AccessPage() {
   }, []);
   useEffect(() => { load(); }, [load]);
 
-  if (!lists) return <p className="loading">Wird geladen …</p>;
+  if (!lists) return <div className="wrap narrow"><SkeletonRows count={2} /></div>;
 
   const roleIn = (l: AccessList, uid: string) => l.list_members.find((m) => m.user_id === uid)?.role;
   const owned = lists.filter((l) => roleIn(l, me) === "owner");

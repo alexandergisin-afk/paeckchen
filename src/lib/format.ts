@@ -40,3 +40,20 @@ export function toast(text: string) {
   window.clearTimeout(toastTimer);
   toastTimer = window.setTimeout(() => el.classList.remove("show"), 3200);
 }
+
+/** Meldung mit Knopf, z. B. „Wunsch gelöscht – Rückgängig“. */
+export function toastAction(text: string, label: string, onAction: () => void, ms = 6000) {
+  const el = document.getElementById("toast");
+  if (!el) return;
+  el.textContent = "";
+  const span = document.createElement("span");
+  span.textContent = text;
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.textContent = label;
+  btn.onclick = () => { el.classList.remove("show"); onAction(); };
+  el.append(span, btn);
+  el.classList.add("show");
+  window.clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(() => el.classList.remove("show"), ms);
+}

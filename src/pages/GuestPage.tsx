@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { SkeletonGuest } from "../components/Skeleton";
 import { usePullToRefresh, useRefreshOnReturn } from "../lib/useRefresh";
 import { PullIndicator } from "../components/PullIndicator";
 import { Link, useParams } from "react-router-dom";
@@ -72,7 +73,7 @@ export function GuestPage() {
     load();
   }, [load]);
 
-  if (state === "loading") return <p className="loading">Wunschliste wird geladen …</p>;
+  if (state === "loading") return <SkeletonGuest />;
   if (state === "invalid")
     return (
       <div className="wrap narrow">

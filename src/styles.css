@@ -857,3 +857,46 @@ html, body { overscroll-behavior-y: contain; }
 .wcard-body { flex: 1 1 auto; display: flex; flex-direction: column; }
 .wcard-title { min-height: 2.6em; }
 .wcard .status-line { margin-top: auto; padding-top: 2px; }
+
+/* Einstellungen: Gruppen und aufklappbare Hilfen */
+.settings-groups { display: grid; gap: 12px; margin-top: 18px; }
+.settings-group { font-size: .82rem; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); margin: 14px 4px 0; font-family: var(--font-ui); font-weight: 700; }
+.settings-group:first-child { margin-top: 0; }
+.settings-more summary { cursor: pointer; display: grid; gap: 2px; list-style: none; }
+.settings-more summary::-webkit-details-marker { display: none; }
+.settings-more summary::after { content: "Anzeigen"; justify-self: start; margin-top: 6px; color: var(--plum); font-weight: 700; font-size: .9rem; }
+.settings-more[open] summary::after { content: "Ausblenden"; }
+.settings-switches { display: grid; gap: 16px; }
+.save-state { color: var(--mint); font-weight: 700; min-height: 1.2em; }
+
+/* Platzhalter beim Laden */
+.sk { display: block; background: linear-gradient(90deg, var(--surface-2) 0%, #ECE8F3 40%, var(--surface-2) 80%); background-size: 200% 100%; animation: sk-shine 1.4s ease-in-out infinite; }
+@keyframes sk-shine { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+@media (prefers-reduced-motion: reduce) { .sk { animation: none; } }
+.sk-lines { display: grid; gap: 10px; align-content: center; min-width: 0; }
+.sk-rows { display: grid; gap: 12px; margin-top: 8px; max-width: 760px; }
+.sk-row { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 14px; align-items: center; padding: 14px; border-radius: 20px; background: var(--surface); box-shadow: var(--shadow); }
+.sk-thumb { width: 56px; height: 56px; border-radius: 14px; }
+.sk-hero { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 14px; align-items: center; margin: 18px 0; }
+.sk-cover { width: 64px; height: 64px; border-radius: 16px; }
+.sk-tiles3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 18px; }
+.sk-tiles3 .sk { height: 76px; border-radius: 18px; }
+.sk-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.sk-card { border-radius: 18px; overflow: hidden; background: var(--surface); box-shadow: var(--shadow); }
+.sk-img { aspect-ratio: 1; border-radius: 0; }
+.sk-panel { display: grid; gap: 14px; padding: 18px; border-radius: 22px; background: var(--surface); box-shadow: var(--shadow); margin-bottom: 14px; }
+.sk-tiles2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.sk-tiles2 .sk { height: 84px; border-radius: 16px; }
+
+/* Leere Liste: erster Schritt statt Teilen */
+.start-card { display: grid; justify-items: center; gap: 10px; text-align: center; margin: 22px 0 8px; padding: 26px 20px 20px; border-radius: 24px; background: var(--surface); box-shadow: var(--shadow); max-width: 560px; }
+.start-icon { font-size: 2.6rem; line-height: 1; }
+.start-card h2 { margin: 4px 0 0; font-size: 1.3rem; }
+.start-card p { margin: 0 0 8px; color: var(--ink-2); max-width: 36ch; }
+.start-secondary { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-weight: 700; font-size: .95rem; }
+.start-secondary svg { width: 18px; height: 18px; }
+.settings-more summary::before { content: none !important; display: none !important; }
+/* Meldungen unten: so breit wie nötig, höchstens Bildschirmbreite (vorher auf halbe Breite begrenzt) */
+#toast { width: max-content; max-width: min(520px, calc(100vw - 32px)); }
+#toast span { min-width: 0; }
+#toast button { flex: none; }

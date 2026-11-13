@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { SkeletonPanels } from "../components/Skeleton";
 import { Link } from "react-router-dom";
 import { db } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
@@ -59,7 +60,7 @@ export function StatsPage() {
   }, [data, picked]);
 
   if (error) return <div className="wrap narrow"><p className="notice error">{error}</p></div>;
-  if (!data || !s) return <p className="loading">Statistik wird berechnet …</p>;
+  if (!data || !s) return <SkeletonPanels count={3} />;
 
   const pct = (a: number, b: number) => (b ? Math.round((a / b) * 100) : 0);
   const maxBucket = Math.max(1, ...s.geld.buckets.map((b) => b.count));
