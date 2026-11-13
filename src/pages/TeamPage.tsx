@@ -12,7 +12,7 @@ interface Member { user_id: string; role: Role; profiles: { display_name: string
 interface Invite { id: string; expires_at: string; revoked_at: string | null; used_at: string | null }
 type TSheet = null | { kind: "invite" } | { kind: "remove"; member: Member } | { kind: "renew" };
 
-const ROLE_LABEL: Record<Role, string> = { owner: "Besitzer:in", editor: "Mitbearbeitung" };
+const ROLE_LABEL: Record<Role, string> = { owner: "Besitzer", editor: "Mitbearbeiter" };
 
 function CopyButton({ text, label = "Kopieren" }: { text: string; label?: string }) {
   const [state, setState] = useState<null | "ok" | "fail">(null);
@@ -60,7 +60,7 @@ export function TeamPage() {
     );
 
   const isOwner = members.some((m) => m.user_id === session?.user.id && m.role === "owner");
-  const ownerName = members.find((m) => m.role === "owner")?.profiles?.display_name ?? "die Besitzerin";
+  const ownerName = members.find((m) => m.role === "owner")?.profiles?.display_name ?? "der Besitzer";
   const now = Date.now();
   const pending = invites.filter((i) => !i.used_at && !i.revoked_at && new Date(i.expires_at).getTime() > now);
 
@@ -114,7 +114,7 @@ export function TeamPage() {
                   <h3 style={{ marginTop: 18 }}>Offene Einladungen</h3>
                   {pending.map((i) => (
                     <div className="member" key={i.id}>
-                      <div className="who"><b>Einladung zur Mitbearbeitung</b><div className="hint">gültig bis {new Date(i.expires_at).toLocaleDateString("de-DE")}</div></div>
+                      <div className="who"><b>Einladung als Mitbearbeiter</b><div className="hint">gültig bis {new Date(i.expires_at).toLocaleDateString("de-DE")}</div></div>
                       <button className="btn quiet" onClick={() => revoke(i)}>Zurückziehen</button>
                     </div>
                   ))}
@@ -138,9 +138,9 @@ export function TeamPage() {
 
         <section className="panel roles">
           <h2>Wer darf was?</h2>
-          <div><b>Besitzer:in</b><span className="hint">Alles, auch einladen, Zugang entziehen, Gast-Link erneuern und die Liste löschen.</span></div>
-          <div><b>Mitbearbeitung</b><span className="hint">Wünsche hinzufügen, bearbeiten, löschen, die Liste teilen und Reservierungen freigeben.</span></div>
-          <div><b>Schenkende</b><span className="hint">Brauchen kein Konto. Sehen die Wünsche und reservieren. Die Namen anderer Schenkender sehen sie nie.</span></div>
+          <div><b>Besitzer</b><span className="hint">Alles, auch einladen, Zugang entziehen, Gast-Link erneuern und die Liste löschen.</span></div>
+          <div><b>Mitbearbeiter</b><span className="hint">Wünsche hinzufügen, bearbeiten, löschen, die Liste teilen und Reservierungen freigeben.</span></div>
+          <div><b>Gäste</b><span className="hint">Brauchen kein Konto. Sehen die Wünsche und reservieren. Die Namen anderer Schenkender sehen sie nie.</span></div>
         </section>
       </div>
 

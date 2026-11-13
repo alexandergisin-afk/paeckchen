@@ -14,6 +14,13 @@ export function dateLabel(date: string | null): string {
   return d.toLocaleDateString("de-DE", opts);
 }
 
+/** Kurzform für die Übersicht: „heute“, „morgen“, „in 31 Tagen“. Vorbei: null. */
+export function daysChip(date: string | null): { text: string; soon: boolean } | null {
+  const n = daysUntil(date);
+  if (n == null || n < 0) return null;
+  return { text: n === 0 ? "heute" : n === 1 ? "morgen" : `in ${n} Tagen`, soon: n <= 7 };
+}
+
 export function countdownLabel(date: string | null): string | null {
   const n = daysUntil(date);
   if (n == null || n < 0) return null;

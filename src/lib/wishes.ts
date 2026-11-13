@@ -3,7 +3,9 @@ import { db } from "./supabase";
 export const BUCKET = "wish-images";
 
 const EUR = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" });
-export const formatPrice = (cents: number | null) => (cents == null ? "" : EUR.format(cents / 100));
+const EUR_WHOLE = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
+/** „349 €“ bei glatten Beträgen, sonst „16,99 €“. */
+export const formatPrice = (cents: number | null) => (cents == null ? "" : cents % 100 === 0 ? EUR_WHOLE.format(cents / 100) : EUR.format(cents / 100));
 
 /** Versteht „12,99“, „12.99“, „1.299,00 €“ und „15“. Leere Eingabe ergibt null. */
 export function parsePrice(input: string): number | null {

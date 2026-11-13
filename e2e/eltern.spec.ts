@@ -460,7 +460,8 @@ test("Einstellungen: in Gruppen geordnet, Name speichert sich automatisch", asyn
   await expect(page.getByRole("button", { name: "Name speichern" })).toHaveCount(0);
   await page.getByLabel(/Dein Name/).fill("Julia M.");
   await expect(page.getByText("Gespeichert ✓")).toBeVisible();
-  expect(calls.writes.some((w) => w.startsWith("PATCH profiles") && w.includes('"display_name":"Julia M."'))).toBe(true);
+  await expect.poll(() => calls.writes.filter((w) => w.startsWith("PATCH profiles") && w.includes('"display_name":"Julia M."')).length).toBe(1); // genau einmal
+  await expect(page.getByLabel(/Dein Name/)).toHaveValue("Julia M."); // springt nicht zurück
   // Die lange iPhone-Anleitung ist eingeklappt
   await expect(page.getByText("In der App Kurzbefehle", { exact: false })).toBeHidden();
 });
@@ -479,4 +480,29 @@ test("Beim Laden erscheinen Platzhalter statt Text", async ({ page }) => {
   await page.goto(`/#/liste/${LID}`);
   await expect(page.getByRole("status", { name: "Liste wird geladen" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Emmas 9. Geburtstag" })).toBeVisible();
+});
+
+test("Vom Stand der Liste direkt zur passenden Statistik und zurück", async ({ page }) => {
+  await mockSupabase(page, { signedIn: true });
+  await page.goto(`/#/liste/${LID}`);
+  await page.getByRole("link", { name: /vergeben/ }).click();
+  await expect(page).toHaveURL(new RegExp(`statistik\\?liste=${LID}`));
+  await expect(page.getByRole("group", { name: "Liste auswählen" }).getByRole("button", { name: "Emmas 9. Geburtstag" })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("link", { name: "Zur Liste" }).click();
+  await expect(page).toHaveURL(new RegExp(`#/liste/${LID}`));
+});
+
+test("Übersicht zeigt bei jeder Liste, wie lange es noch dauert", async ({ page }) => {
+  await mockSupabase(page, { signedIn: true });
+  await page.goto("/#/");
+  await expect(page.locator(".list-row", { hasText: "Emmas 9. Geburtstag" }).locator(".days-chip")).toHaveText(/^(heute|morgen|in \d+ Tagen)$/);
+});
+
+test("Einheitliche Begriffe und kurze Preise", async ({ page }) => {
+  await mockSupabase(page, { signedIn: true });
+  await page.goto(`/#/liste/${LID}`);
+  await expect(page.getByText("349 €", { exact: false }).first()).toBeVisible();
+  await expect(page.getByText("349,00 €")).toHaveCount(0);
+  await page.goto(`/#/liste/${LID}/mitglieder`);
+  await expect(page.getByText("Mitbearbeitung")).toHaveCount(0);
 });

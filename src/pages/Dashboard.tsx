@@ -11,7 +11,7 @@ import { SORT_LABELS, sortLists, type ListSort } from "../lib/listSort";
 import { useLongPressSort } from "../lib/useDragSort";
 import { cached, isFresh, load as loadCached, remember } from "../lib/cache";
 import { listKey, loadListPage } from "../lib/listData";
-import { dateLabel, daysUntil, friendlyError, toast } from "../lib/format";
+import { dateLabel, daysUntil, friendlyError, toast, daysChip } from "../lib/format";
 import { IconChart, IconChevron, IconPlus } from "../components/Icons";
 import { FormSheet } from "../components/FormSheet";
 import { ListForm, toRow, type ListInput } from "../components/ListForm";
@@ -181,7 +181,8 @@ export function Dashboard() {
                   <span className="list-title">{l.title}</span>
                   <span className="list-meta">
                     {[l.recipient_name ? `Für ${l.recipient_name}` : "", dateLabel(l.event_date)].filter(Boolean).join(", ")}
-                    {mine?.role === "editor" && <span className="badge" style={{ marginLeft: 6 }}>Mitbearbeitung</span>}
+                    {(() => { const d = daysChip(l.event_date); return d && <span className={`days-chip ${d.soon ? "soon" : ""}`}>{d.text}</span>; })()}
+                    {mine?.role === "editor" && <span className="badge" style={{ marginLeft: 6 }}>Mitbearbeiter</span>}
                   </span>
                   {n === 0 ? (
                     <span className="list-progress-text">Noch keine Wünsche</span>

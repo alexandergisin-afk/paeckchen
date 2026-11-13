@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { canPrompt, isInstalled, isIOS, onInstallChange, promptInstall } from "../lib/install";
 import { appUrl, db } from "../lib/supabase";
 import { clearCache } from "../lib/cache";
@@ -51,22 +51,33 @@ export function Settings() {
   };
   useEffect(() => onInstallChange(() => setInstallable(canPrompt())), []);
 
-  useEffect(() => setNameValue(displayName), [displayName]);
+  // Was zuletzt gespeichert wurde, und ob man selbst gerade etwas geändert hat
+  const lastSaved = useRef(displayName);
+  const dirty = useRef(false);
+  useEffect(() => {
+    // Von außen nur übernehmen, wenn man nicht selbst tippt (oder der Server den eigenen Stand bestätigt)
+    if (!dirty.current || displayName === lastSaved.current) {
+      setNameValue(displayName);
+      lastSaved.current = displayName;
+      dirty.current = false;
+    }
+  }, [displayName]);
 
   // Name speichert sich automatisch kurz nach dem Tippen (kein eigener Knopf)
   const [nameState, setNameState] = useState<"idle" | "saving" | "saved">("idle");
   useEffect(() => {
     const n = name.trim();
-    if (!n || n === displayName) return;
+    if (!n || !dirty.current || n === lastSaved.current) return;
     const t = window.setTimeout(async () => {
       setNameState("saving");
       const { error } = await db().from("profiles").update({ display_name: n.slice(0, 60) }).eq("id", session!.user.id);
       if (error) { setNameState("idle"); return toast(friendlyError(error)); }
-      refreshProfile();
+      lastSaved.current = n;
       setNameState("saved");
+      refreshProfile();
     }, 900);
     return () => window.clearTimeout(t);
-  }, [name, displayName, session, refreshProfile]);
+  }, [name, session, refreshProfile]);
 
 
   return (
@@ -78,7 +89,7 @@ export function Settings() {
         <section className="panel">
           <label className="field">
             <span>Dein Name, so sehen dich andere Mitglieder deiner Listen</span>
-            <input required maxLength={60} value={name} onChange={(e) => { setNameValue(e.target.value); setNameState("idle"); }} />
+            <input required maxLength={60} value={name} onChange={(e) => { dirty.current = true; setNameValue(e.target.value); setNameState("idle"); }} />
             <small className="save-state" aria-live="polite">{nameState === "saving" ? "Wird gespeichert …" : nameState === "saved" ? "Gespeichert ✓" : "\u00a0"}</small>
           </label>
           <p className="hint">Angemeldet als {session?.user.email}</p>

@@ -320,7 +320,9 @@ export function ListPage() {
             {showRes ? (
               <>
                 <span className="progress" aria-hidden="true"><span style={{ width: `${pct}%` }} /></span>
-                <span className="status-text"><b>{takenQty} von {totalQty}</b> vergeben</span>
+                <Link className="status-text status-link" to={`/statistik?liste=${list.id}`} title="Statistik zu dieser Liste">
+                  <b>{takenQty} von {totalQty}</b> vergeben <IconChevron />
+                </Link>
               </>
             ) : (
               <span className="status-text" title="Gilt nur für dich. Praktisch, wenn die Liste für dich selbst ist.">

@@ -900,3 +900,26 @@ html, body { overscroll-behavior-y: contain; }
 #toast { width: max-content; max-width: min(520px, calc(100vw - 32px)); }
 #toast span { min-width: 0; }
 #toast button { flex: none; }
+
+/* ===== Dunkelmodus: Farben der neueren Bausteine an den Modus koppeln ===== */
+:root { --ribbon-btn: #D2306A; --sk-hi: #F7F4FB; --overlay: rgba(255, 255, 255, .94); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --ribbon-btn: #C2185B; --sk-hi: #3A3148; --overlay: rgba(32, 26, 42, .92); }
+}
+:root[data-theme="dark"] { --ribbon-btn: #C2185B; --sk-hi: #3A3148; --overlay: rgba(32, 26, 42, .92); }
+/* Rosa Knöpfe und Zähler: weiße Schrift auch im Dunkeln gut lesbar (5,9:1 statt 3,2:1) */
+.btn.ribbon, .count-badge { background: var(--ribbon-btn); }
+/* Platzhalter: Schimmer passend zum Modus */
+.sk { background: linear-gradient(90deg, var(--surface-2) 0%, var(--sk-hi) 40%, var(--surface-2) 80%); background-size: 200% 100%; }
+/* Runde Shop-Symbole auf Bildern */
+.gshop, .wcard-shop { background: var(--overlay); }
+/* Striche in der Rechte-Tabelle mit ausreichendem Kontrast */
+.perm-no { color: var(--ink-2); }
+
+/* Countdown in der Übersicht */
+.days-chip { display: inline-block; margin-left: 8px; padding: 1px 8px; border-radius: 999px; background: var(--surface-2); color: var(--ink-2); font-size: .8rem; font-weight: 700; white-space: nowrap; vertical-align: 1px; }
+.days-chip.soon { background: var(--ribbon-soft); color: var(--ribbon-text); }
+/* Stand der Reservierungen führt zur Statistik dieser Liste */
+.status-link { text-decoration: none; color: var(--ink-2); }
+.status-link svg { width: 16px; height: 16px; vertical-align: -3px; }
+.status-link:hover b { text-decoration: underline; }

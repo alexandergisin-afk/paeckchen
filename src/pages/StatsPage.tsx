@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { SkeletonPanels } from "../components/Skeleton";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { db } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { computeReview, computeStats, type StatList, type StatRes, type StatWish } from "../lib/stats";
@@ -24,7 +24,8 @@ export function StatsPage() {
   const me = session?.user.id ?? "";
   const [data, setData] = useState<{ lists: StatList[]; wishes: StatWish[]; res: StatRes[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [scope, setScope] = useState("all"); // "all" oder die ID einer Liste
+  const [params] = useSearchParams();
+  const [scope, setScope] = useState(() => params.get("liste") ?? "all"); // "all" oder die ID einer Liste
   const [withArchived, setWithArchived] = useState(false);
 
   useEffect(() => {
@@ -69,7 +70,9 @@ export function StatsPage() {
 
   return (
     <div className="wrap narrow">
-      <Link className="back" to="/"><IconBack /> Listen</Link>
+      {params.get("liste")
+        ? <Link className="back" to={`/liste/${params.get("liste")}`}><IconBack /> Zur Liste</Link>
+        : <Link className="back" to="/"><IconBack /> Listen</Link>}
       <h1>Statistik</h1>
       <div className="stats-picker scroll-x" role="group" aria-label="Liste auswählen">
         <button type="button" className="fchip" aria-pressed={scope === "all"} onClick={() => setScope("all")}>Alle Listen</button>

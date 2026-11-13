@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { detectFromUrl, guessEmoji, parsePrice, priceInput } from "../wishes";
+import { detectFromUrl, formatPrice, guessEmoji, parsePrice, priceInput } from "../wishes";
+import { daysChip } from "../format";
 import { firstUrl } from "../share";
 import { scrub } from "../errorlog";
 
@@ -36,5 +37,25 @@ describe("Fehlerprotokoll schwärzt Geheimnisse", () => {
   it("entfernt Gast-Links, Einladungen, Codes und E-Mails", () => {
     const out = scrub("Fehler auf #/w/AbC123xyz und #/einladung/QwErTy, Code K7PM-Q3XA, von oma@beispiel.de");
     expect(out).not.toMatch(/AbC123xyz|QwErTy|K7PM-Q3XA|oma@beispiel\.de/);
+  });
+});
+
+describe("Preise anzeigen", () => {
+  it("glatte Beträge ohne Nachkommastellen, sonst mit", () => {
+    expect(formatPrice(34900).replace(/\u00a0/g, " ")).toBe("349 €");
+    expect(formatPrice(1699).replace(/\u00a0/g, " ")).toBe("16,99 €");
+    expect(formatPrice(129900).replace(/\u00a0/g, " ")).toBe("1.299 €");
+    expect(formatPrice(null)).toBe("");
+  });
+});
+
+describe("Countdown in der Übersicht", () => {
+  const inTagen = (n: number) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
+  it("heute, morgen, in X Tagen; bald hervorgehoben, Vergangenes ohne", () => {
+    expect(daysChip(inTagen(0))).toEqual({ text: "heute", soon: true });
+    expect(daysChip(inTagen(1))).toEqual({ text: "morgen", soon: true });
+    expect(daysChip(inTagen(31))).toEqual({ text: "in 31 Tagen", soon: false });
+    expect(daysChip(inTagen(-3))).toBeNull();
+    expect(daysChip(null)).toBeNull();
   });
 });
