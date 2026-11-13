@@ -82,7 +82,11 @@ export async function mockSupabase(page: Page, opts: { signedIn?: boolean; allow
         ids.forEach((id, i) => order.set(id, i + 1));
         return route.fulfill({ status: 204 });
       }
-      if (fn === "contribute" || fn === "contribute_for_guest") return json({ ok: true, code: "GIFT-2345", open_cents: 0 });
+      if (fn === "contribute" || fn === "contribute_for_guest") {
+        // Laufrad: 300 € Ziel, 100 € schon zugesagt → offen bleibt 200 € minus Beitrag
+        const amount = Number(JSON.parse(req.postData() ?? "{}").p_amount_cents ?? 0);
+        return json({ ok: true, code: "GIFT-2345", open_cents: Math.max(0, 20000 - amount) });
+      }
       if (fn === "guest_list") {
         const avail: Record<string, number> = { w1: 1, w2: 2, w3: 0, w4: 1 };
         return json({ ...LIST, allow_parents_buy: opts.allowParentsBuy ?? false, wishes: WISHES.map(({ list_id: _l, created_at: _c, ...w }) => ({

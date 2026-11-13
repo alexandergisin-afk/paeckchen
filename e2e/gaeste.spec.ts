@@ -66,11 +66,11 @@ test("Gruppengeschenk: Gäste sehen nur die Summe und steuern einen Betrag bei",
   await expect(card.getByRole("button", { name: "Ich schenke es ganz" })).toHaveCount(0); // es gibt schon einen Beitrag
   await card.getByRole("button", { name: "Mitschenken" }).click();
   const dlg = page.locator("dialog.sheet[open]");
-  await dlg.getByRole("button", { name: /Rest/ }).click();
+  await dlg.getByRole("button", { name: "50 €", exact: true }).click();
   await dlg.getByLabel("Dein Name").fill("Oma Gisela");
-  await dlg.getByRole("button", { name: "200 € beisteuern" }).click();
+  await dlg.getByRole("button", { name: "50 € beisteuern" }).click();
   await expect(page.getByRole("heading", { name: "Danke!" })).toBeVisible();
-  expect(calls.bodies.find((b) => b.fn === "contribute")).toMatchObject({ p_wish: "w4", p_amount_cents: 20000, p_name: "Oma Gisela" });
+  expect(calls.bodies.find((b) => b.fn === "contribute")).toMatchObject({ p_wish: "w4", p_amount_cents: 5000, p_name: "Oma Gisela" });
 });
 
 test("Gruppengeschenk: zu hohe Beträge lassen sich gar nicht erst abschicken", async ({ page }) => {
@@ -115,4 +115,39 @@ test("Erklärkasten: beim ersten Besuch offen, nach einer Reservierung eingeklap
   await page.reload();
   await expect(page.getByText("So funktioniert’s")).toBeVisible();
   await expect(page.locator(".howto-text")).toHaveCount(0);
+});
+
+test("Freudenmoment: nach dem Reservieren kurzer Konfetti-Regen", async ({ page }) => {
+  await mockSupabase(page);
+  await page.goto("/#/w/TOK");
+  await page.locator(".gcard", { hasText: "Kinderfahrrad" }).getByRole("button", { name: "Reservieren" }).click();
+  await page.getByLabel("Dein Name").fill("Oma Gisela");
+  await page.getByRole("button", { name: "Jetzt reservieren" }).click();
+  await expect(page.locator("canvas.confetti")).toHaveCount(1);
+  await expect(page.locator("canvas.confetti")).toHaveCount(0, { timeout: 5000 }); // räumt sich selbst weg
+});
+
+test.describe("Bewegung reduziert", () => {
+  test.use({ reducedMotion: "reduce" });
+  test("kein Konfetti, wenn am Gerät „Bewegung reduzieren“ eingestellt ist", async ({ page }) => {
+    await mockSupabase(page);
+    await page.goto("/#/w/TOK");
+    await page.locator(".gcard", { hasText: "Kinderfahrrad" }).getByRole("button", { name: "Reservieren" }).click();
+    await page.getByLabel("Dein Name").fill("Oma Gisela");
+    await page.getByRole("button", { name: "Jetzt reservieren" }).click();
+    await expect(page.getByRole("heading", { name: "Reserviert!" })).toBeVisible();
+    await expect(page.locator("canvas.confetti")).toHaveCount(0);
+  });
+});
+
+test("Gruppengeschenk komplett: „Geschafft!“ und mehr Konfetti", async ({ page }) => {
+  await mockSupabase(page);
+  await page.goto("/#/w/TOK");
+  await page.locator(".gcard", { hasText: "Laufrad gemeinsam" }).getByRole("button", { name: "Mitschenken" }).click();
+  const dlg = page.locator("dialog.sheet[open]");
+  await dlg.getByRole("button", { name: /Rest/ }).click();
+  await dlg.getByLabel("Dein Name").fill("Oma Gisela");
+  await dlg.getByRole("button", { name: /beisteuern/ }).click();
+  await expect(page.getByRole("heading", { name: "Geschafft! Das Geschenk ist komplett." })).toBeVisible();
+  await expect(page.locator("canvas.confetti")).toHaveCount(1);
 });

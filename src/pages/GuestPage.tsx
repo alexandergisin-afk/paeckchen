@@ -9,6 +9,8 @@ import { OCCASIONS, cover, type GuestList, type GuestWish } from "../lib/types";
 import { dateLabel, friendlyError, toast } from "../lib/format";
 import { formatPrice, parsePrice } from "../lib/wishes";
 import { euroShort } from "../lib/gift";
+import { celebrate } from "../lib/celebrate";
+import { cached, remember } from "../lib/cache";
 import { addCode, getCodes, getName, keepCodes, removeCode, setName } from "../lib/device";
 import { IconCheck, IconExt, IconGift, IconGrid, IconRows } from "../components/Icons";
 import { Sheet } from "../components/Sheet";
@@ -21,7 +23,7 @@ type GSheet =
   | { kind: "details"; wish: GuestWish; mode: "open" | "mine" }
   | { kind: "reserve"; wish: GuestWish }
   | { kind: "contribute"; wish: GuestWish; full: boolean }
-  | { kind: "contributed"; wish: GuestWish; amount: number }
+  | { kind: "contributed"; wish: GuestWish; amount: number; complete: boolean }
   | { kind: "giftInfo"; text: string }
   | { kind: "done"; wish: GuestWish; parentsBuy: boolean }
   | { kind: "taken"; available: number }
@@ -33,9 +35,10 @@ const inPrice = (w: GuestWish, p: Price) =>
 export function GuestPage() {
   const { token = "" } = useParams();
   const { session } = useAuth();
-  const [list, setList] = useState<GuestList | null>(null);
-  const [mine, setMine] = useState<Mine[]>([]);
-  const [state, setState] = useState<"loading" | "ok" | "invalid" | "error">("loading");
+  // Zuletzt geladenen Stand sofort zeigen (auch offline), frisch geladen wird im Hintergrund
+  const [list, setList] = useState<GuestList | null>(() => cached<{ list: GuestList }>(`guest:${token}`)?.list ?? null);
+  const [mine, setMine] = useState<Mine[]>(() => cached<{ mine: Mine[] }>(`guest:${token}`)?.mine ?? []);
+  const [state, setState] = useState<"loading" | "ok" | "invalid" | "error">(() => (cached(`guest:${token}`) ? "ok" : "loading"));
   const [price, setPrice] = useState<Price>("all");
   const [sheet, setSheet] = useState<GSheet>(null);
   const [busy, setBusy] = useState(false);
@@ -51,7 +54,12 @@ export function GuestPage() {
   const load = useCallback(async () => {
     const client = db();
     const g = await client.rpc("guest_list", { p_token: token });
-    if (g.error) return setState("error");
+    if (g.error) {
+      // Ohne Netz: zuletzt geladenen Stand zeigen, wenn es einen gibt
+      const off = cached<{ list: GuestList; mine: Mine[] }>(`guest:${token}`);
+      if (off) { setList(off.list); setMine(off.mine); return setState("ok"); }
+      return setState("error");
+    }
     if (!g.data || !Array.isArray((g.data as GuestList).wishes)) return setState("invalid");
     let rows: Mine[] = [];
     const codes = getCodes();
@@ -65,6 +73,7 @@ export function GuestPage() {
     setList(g.data as GuestList);
     setMine(rows);
     setState("ok");
+    remember(`guest:${token}`, { list: g.data as GuestList, mine: rows });
   }, [token]);
   const ptr = usePullToRefresh(() => load());
   useRefreshOnReturn(() => load());
@@ -113,6 +122,7 @@ export function GuestPage() {
       markHowtoSeen();
       setName(name);
       setSheet({ kind: "done", wish, parentsBuy });
+      celebrate("small");
     } else if (r.error === "already_taken") setSheet({ kind: "taken", available: r.available ?? 0 });
     else if (r.error === "name_required") return toast("Bitte gib deinen Namen an.");
     else if (r.error === "rate_limited") return toast("Gerade wurde auf dieser Liste sehr viel reserviert. Bitte versuch es in einer Minute noch einmal.");
@@ -130,7 +140,9 @@ export function GuestPage() {
       addCode(r.code);
       markHowtoSeen();
       setName(name);
-      setSheet({ kind: "contributed", wish, amount });
+      const complete = (r.open_cents ?? 1) === 0;
+      setSheet({ kind: "contributed", wish, amount, complete });
+      celebrate(complete ? "big" : "small");
     } else if (r.error === "too_much") setSheet({ kind: "giftInfo", text: `Inzwischen fehlen nur noch ${euroShort(r.open_cents ?? 0)}. Du kannst gern diesen Rest übernehmen.` });
     else if (r.error === "fully_funded") setSheet({ kind: "giftInfo", text: "Gerade ist der letzte Betrag zusammengekommen. Das Geschenk ist komplett, danke trotzdem!" });
     else if (r.error === "too_little") return toast(`Bitte mindestens ${euroShort(Math.min(500, r.open_cents ?? 500))}.`);
@@ -334,8 +346,8 @@ export function GuestPage() {
       <Sheet open={sheet?.kind === "contributed"} onClose={close} label="Beitrag bestätigt">
         {sheet?.kind === "contributed" && (
           <>
-            <h2>Danke!</h2>
-            <p>Du steuerst <b>{euroShort(sheet.amount)}</b> zu „{sheet.wish.title}“ bei.</p>
+            <h2>{sheet.complete ? "Geschafft! Das Geschenk ist komplett." : "Danke!"}</h2>
+            <p>Du steuerst <b>{euroShort(sheet.amount)}</b> zu „{sheet.wish.title}“ bei.{sheet.complete ? " Damit ist alles zusammen." : ""}</p>
             <p className="notice" style={{ marginTop: 12 }}>Die Eltern kaufen das Geschenk, sobald alles zusammen ist. Deinen Betrag gibst du ihnen direkt.</p>
             <p className="hint" style={{ marginTop: 12 }}>Dieses Gerät merkt sich deinen Beitrag. Hier kannst du ihn jederzeit zurückziehen.</p>
             <button className="btn block" onClick={close} style={{ marginTop: 14 }}>Fertig</button>

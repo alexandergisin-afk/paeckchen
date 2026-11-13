@@ -8,6 +8,7 @@ import { useAuth } from "../lib/auth";
 import { cover, type Reservation, type Wish, type WishList } from "../lib/types";
 import { countdownLabel, dateLabel, daysUntil, friendlyError, toast, toastAction } from "../lib/format";
 import { deferred } from "../lib/undo";
+import { celebrate, celebrateOnce } from "../lib/celebrate";
 import { parsePrice, removeImage } from "../lib/wishes";
 import { copyWishes, moveWish } from "../lib/listOps";
 import { cachedListPage, loadListPage, type ListPageData } from "../lib/listData";
@@ -88,6 +89,15 @@ export function ListPage() {
 
   useLayoutEffect(() => { apply(cachedListPage(id!)); }, [id, apply]);
   const ptr = usePullToRefresh(() => load());
+
+  // Freudenmoment: Liste zum ersten Mal komplett vergeben (einmal pro Liste und Gerät)
+  useEffect(() => {
+    const visible = list?.list_members?.find((m) => m.user_id === session?.user.id)?.show_reservations ?? true;
+    if (state !== "ok" || !list || !visible || !wishes.length) return;
+    const total = wishes.reduce((a, w) => a + w.quantity, 0);
+    const taken = wishes.reduce((a, w) => a + takenQuantity(w, reservations.filter((r) => r.wish_id === w.id)), 0);
+    if (total > 0 && taken >= total && celebrateOnce(`paeckli-alles-vergeben-${list.id}`)) toast("Alles vergeben! 🎉");
+  }, [state, list, session, wishes, reservations]);
   useRefreshOnReturn(() => load());
 
   useEffect(() => {
@@ -251,7 +261,8 @@ export function ListPage() {
       return toast(r.error === "too_much" ? `Es fehlen nur noch ${euroShort(open)}.` : r.error === "too_little" ? `Mindestens ${euroShort(Math.min(500, open))}.` : r.error === "fully_funded" ? "Es ist schon alles zusammen." : "Das hat nicht geklappt.");
     }
     close();
-    toast(`${euroShort(amount)} von ${name} eingetragen.`);
+    if ((r.open_cents ?? 1) === 0) { celebrate("big"); toast(`${euroShort(amount)} von ${name} eingetragen. Das Geschenk ist komplett!`); }
+    else toast(`${euroShort(amount)} von ${name} eingetragen.`);
     load();
   };
 

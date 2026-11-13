@@ -12,6 +12,8 @@ export default defineConfig({
     ...devices["Pixel 5"],
     // Lokal kann ein vorhandener Chromium verwendet werden (CHROMIUM_PATH), in GitHub der mitinstallierte.
     launchOptions: process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {},
+    // Der Service Worker (Offline-Modus) würde die nachgebildete Datenbank umgehen; nur im Offline-Test erlaubt
+    serviceWorkers: "block",
   },
   webServer: {
     command: "npx vite build --outDir dist-e2e && npx vite preview --outDir dist-e2e --port 4180 --strictPort",

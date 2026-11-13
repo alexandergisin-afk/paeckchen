@@ -31,12 +31,6 @@ Die eBay-Suche lässt sich mit dem Secret `EBAY_MARKETPLACE` = `EBAY_CH` auf eba
 
 ## Technik und Betrieb
 
-### Offline-Modus
-Die installierte App startet sofort, zuletzt geladene Listen sind auch ohne Netz sichtbar. Braucht eine saubere Update-Meldung, damit niemand auf einer alten Version hängen bleibt. Aufwand mittel.
-
-### Datensicherung
-Der Gratis-Tarif von Supabase macht keine Backups. Automatische Sicherung möglich, darf aber keinesfalls im öffentlichen Repository landen. Alternative: Supabase Pro mit täglichen Backups. Aufwand mittel.
-
 ### Testumgebung
 Zweites Repository (z. B. `paeckchen-test`) und zweites Supabase-Projekt. Neue Versionen erst dort prüfen, dann in die echte App. Sinnvoll, sobald Päckli über die Familie hinauswächst. Aufwand gering bis mittel.
 
@@ -54,6 +48,9 @@ Bisher laden Gäste Bilder direkt von den Shop-Servern, die dabei die IP-Adresse
 - Strengerer Schutz der Link-Vorschau gegen Tricks über Domainnamen
 
 ## Erledigt
+- **Datensicherung** (November 2026): nächtlich, verschlüsselt, 30 Tage, inklusive Bilder. Anleitung in `BACKUP.md`.
+- **Offline-Modus** (November 2026): App startet ohne Netz, zeigt den zuletzt geladenen Stand; Updates kommen trotzdem sofort an.
+- **Kleine Freudenmomente** (November 2026): Konfetti beim Reservieren, bei komplettem Gruppengeschenk und bei komplett vergebener Liste.
 - **Gruppengeschenke** (November 2026): Eltern schalten „Gemeinsam schenken“ pro Wunsch ein, Gäste steuern Beträge bei und sehen nur die Summe.
 
 ## Bewusst verworfen

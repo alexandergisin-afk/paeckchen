@@ -13,7 +13,7 @@ export function OfflineBanner() {
   if (!offline) return null;
   return (
     <div className="offline-banner" role="status">
-      Keine Internetverbindung. Änderungen sind erst wieder möglich, wenn du online bist.
+      Offline: Du siehst den zuletzt geladenen Stand. Ändern geht erst wieder mit Internet.
     </div>
   );
 }

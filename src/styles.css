@@ -923,3 +923,6 @@ html, body { overscroll-behavior-y: contain; }
 .status-link { text-decoration: none; color: var(--ink-2); }
 .status-link svg { width: 16px; height: 16px; vertical-align: -3px; }
 .status-link:hover b { text-decoration: underline; }
+
+/* Konfetti über allem, Klicks gehen durch */
+.confetti { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 100; }
