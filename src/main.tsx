@@ -16,6 +16,13 @@ installErrorReporting();
 
 captureShareFromLaunch();
 
+// Start vom Startbildschirm (iPhone) mit „?liste=…“: direkt zu dieser Wunschliste
+try {
+  const liste = new URLSearchParams(window.location.search).get("liste");
+  const asApp = window.matchMedia?.("(display-mode: standalone)").matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
+  if (liste && asApp && (!window.location.hash || window.location.hash === "#/" || window.location.hash === "#")) window.location.hash = `#/w/${liste}`;
+} catch { /* egal */ }
+
 forgetTextSize();
 
 // Abgelaufene oder ungültige Anmeldelinks kommen als #error=… zurück. Das würde den Router verwirren,

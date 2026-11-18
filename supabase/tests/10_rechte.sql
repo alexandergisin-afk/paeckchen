@@ -298,4 +298,78 @@ select pg_temp.pruefe(has_function_privilege('anon', 'public.' || f, 'execute'),
 from unnest(array['guest_list(text)', 'reserve_wish(text, uuid, integer, text, boolean)', 'contribute(text, uuid, integer, text)',
                   'cancel_reservation(text)', 'my_reservations(text[])', 'log_client_error(text, text, text, text)']) f;
 
+
+-- Verlauf
+select pg_temp.als('11111111-1111-1111-1111-111111111111');
+select id as vliste, guest_token as vgast from create_list('Verlaufstest', 'Emma') \gset
+insert into wishes (list_id, title, price_cents, quantity, created_by) values (:'vliste', 'Laufrad', 34900, 2, auth.uid());
+select pg_temp.als(null);
+select id as laufrad from wishes where title = 'Laufrad' and list_id = :'vliste' \gset
+insert into list_members (list_id, user_id, role) values (:'vliste', '22222222-2222-2222-2222-222222222222', 'editor');
+select pg_temp.als('11111111-1111-1111-1111-111111111111');
+update wishes set price_cents = 32900 where id = :'laufrad';
+select pg_temp.pruefe((select data->'changes'->'price_cents' = '{"alt": 34900, "neu": 32900}'::jsonb and lower(actor_name) = 'julia'
+  from audit_log where entity_id = :'laufrad' and action = 'updated' order by id desc limit 1), 'Preisänderung mit altem und neuem Wert und Namen');
+select rotate_guest_link(:'vliste') is not null as x \gset
+select guest_token as vgast from lists where id = :'vliste' \gset
+select pg_temp.pruefe((select count(*) from audit_log where list_id = :'vliste' and action = 'link_renewed' and data::text not like '%' || :'vgast' || '%') = 1, 'Gast-Link-Erneuerung protokolliert, ohne den Link selbst');
+
+-- Reservierungen: Gast reserviert und hebt auf, Eltern geben frei
+select pg_temp.als(null);
+delete from rate_events;
+select pg_temp.als('anon');
+select reserve_wish(:'vgast', :'laufrad', 1, 'Oma Gisela')->>'code' as vcode \gset
+select reserve_wish(:'vgast', :'laufrad', 1, 'Opa Heinz') is not null as x \gset
+select pg_temp.pruefe((cancel_reservation(:'vcode')->>'ok')::boolean, 'Gast hebt eigene Reservierung auf');
+select pg_temp.als('11111111-1111-1111-1111-111111111111');
+delete from reservations where guest_name = 'Opa Heinz' and wish_id = :'laufrad';
+select pg_temp.pruefe((select string_agg(action || ':' || actor_name, ',' order by id) from audit_log where list_id = :'vliste' and kind = 'reservation')
+  = 'reserved:Oma Gisela,reserved:Opa Heinz,cancelled:Oma Gisela,released:julia', 'Reservieren, Aufheben durch Gast und Freigeben durch Eltern mit richtigen Namen');
+select pg_temp.pruefe((select bool_and(forget_after is not null) from audit_log where list_id = :'vliste' and kind = 'reservation'), 'Reservierungs-Einträge verfallen mit der Reservierung');
+
+-- Überraschungsschutz und Sichtbarkeit
+select pg_temp.als('22222222-2222-2222-2222-222222222222');
+select pg_temp.pruefe((select count(*) from audit_log where list_id = :'vliste' and kind = 'reservation') = 4, 'Mitbearbeiter sieht Reservierungen im Verlauf');
+select set_show_reservations(:'vliste', false);
+select pg_temp.pruefe((select count(*) from audit_log where list_id = :'vliste' and kind = 'reservation') = 0
+  and (select count(*) from audit_log where list_id = :'vliste' and kind = 'wish') > 0, 'Ausgeblendete Reservierungen bleiben auch im Verlauf verborgen');
+select set_show_reservations(:'vliste', true);
+select pg_temp.pruefe((select count(*) from audit_log where kind = 'access') = 0, 'Zugangsprotokoll nur für Administratoren');
+select pg_temp.als('33333333-3333-3333-3333-333333333333');
+select pg_temp.pruefe((select count(*) from audit_log where list_id = :'vliste') = 0, 'Fremde sehen keinen Verlauf');
+select pg_temp.als(null);
+select pg_temp.pruefe(not has_table_privilege('anon', 'public.audit_log', 'select'), 'Gäste haben keinen Zugriff auf den Verlauf');
+select pg_temp.als('11111111-1111-1111-1111-111111111111');
+select pg_temp.pruefe((select count(*) from audit_log where kind = 'access') > 0, 'Administratorin sieht das Zugangsprotokoll');
+
+-- Fälschungssicher
+do $$ begin insert into audit_log (list_id, kind, action) values ((select id from lists where title = 'Verlaufstest'), 'wish', 'gefälscht');
+  raise exception 'FEHLGESCHLAGEN: Eintrag gefälscht'; exception when insufficient_privilege then raise notice 'OK: Einträge lassen sich nicht fälschen'; end $$;
+select count(*) as vorher_alle from audit_log \gset
+do $$ begin delete from audit_log; exception when insufficient_privilege then null; end $$;
+do $$ begin update audit_log set actor_name = 'Jemand'; exception when insufficient_privilege then null; end $$;
+select pg_temp.als(null);
+select pg_temp.pruefe((select count(*) from audit_log where actor_name = 'Jemand') = 0, 'Verlauf lässt sich nicht ändern');
+select pg_temp.als('11111111-1111-1111-1111-111111111111');
+select pg_temp.pruefe((select count(*) from audit_log) = :'vorher_alle'::int, 'Verlauf lässt sich nicht löschen');
+
+-- Wunsch mit Reservierung löschen: ein Eintrag, keine Flut von Freigaben
+select pg_temp.als(null);
+delete from rate_events;
+select pg_temp.als('anon');
+select reserve_wish(:'vgast', :'laufrad', 2, 'Tante Sabine') is not null as x \gset
+select pg_temp.als('11111111-1111-1111-1111-111111111111');
+select count(*) as vorher from audit_log where list_id = :'vliste' and kind = 'reservation' \gset
+delete from wishes where id = :'laufrad';
+select pg_temp.pruefe((select count(*) from audit_log where list_id = :'vliste' and kind = 'reservation') = :'vorher'::int
+  and (select count(*) from audit_log where entity_id = :'laufrad' and action = 'deleted') = 1, 'Wunsch löschen: ein Eintrag, keine einzelnen Freigaben');
+
+-- Aufräumen: abgelaufene Gästenamen und Einträge älter als ein Jahr verschwinden
+select pg_temp.als(null);
+update audit_log set forget_after = current_date - 1 where list_id = :'vliste' and kind = 'reservation';
+update audit_log set at = now() - interval '13 months' where list_id = :'vliste' and action = 'created' and kind = 'list';
+select audit_purge();
+select pg_temp.pruefe((select count(*) from audit_log where list_id = :'vliste' and (kind = 'reservation' or (kind = 'list' and action = 'created'))) = 0
+  and (select count(*) from audit_log where list_id = :'vliste') > 0, 'Aufräumen löscht genau das Abgelaufene');
+
 \echo 'Alle Datenbank-Tests bestanden.'

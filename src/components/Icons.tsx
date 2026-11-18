@@ -60,3 +60,4 @@ export const IconGrip = () => (
     <circle cx="15" cy="12" r="1.7" /><circle cx="9" cy="18" r="1.7" /><circle cx="15" cy="18" r="1.7" />
   </svg>
 );
+export const IconHistory = () => <Svg d="M3 12a9 9 0 103-6.7L3 8M3 3v5h5M12 7v5l3 2" />;

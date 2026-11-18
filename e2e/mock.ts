@@ -56,6 +56,19 @@ export async function mockSupabase(page: Page, opts: { signedIn?: boolean; allow
       if (b.action === "invite") return json({ status: opts.invitePending ? "pending" : "allowed" });
       if (b.action === "decide") return json({ ok: true, email: "anna@test.de", mail_sent: true });
     }
+    if (url.includes("/rest/v1/audit_log")) {
+      const now = Date.now();
+      const at = (minAgo: number) => new Date(now - minAgo * 60_000).toISOString();
+      if (url.includes("kind=eq.access")) {
+        return json([{ id: 9, at: at(30), kind: "access", action: "approved", actor_name: "Julia", data: { email: "anna@test.de" } }]);
+      }
+      return json([
+        { id: 4, at: at(5), kind: "reservation", action: "reserved", actor_name: "Oma Gisela", data: { wish: "Kinderfahrrad 24 Zoll", guest: "Oma Gisela", quantity: 1, parents_buy: true } },
+        { id: 3, at: at(20), kind: "wish", action: "updated", actor_name: "Julia", data: { title: "Kinderfahrrad 24 Zoll", changes: { price_cents: { alt: 34900, neu: 32900 } } } },
+        { id: 2, at: at(60 * 26), kind: "member", action: "joined", actor_name: "Markus", data: { member: "Markus" } },
+        { id: 1, at: at(60 * 27), kind: "list", action: "created", actor_name: "Julia", data: { title: "Emmas 9. Geburtstag" } },
+      ]);
+    }
     if (url.includes("/rest/v1/list_members")) return json([{ user_id: UID, role: "owner", profiles: { display_name: "Julia" } }]);
     if (url.includes("/rest/v1/app_admins")) return json(opts.admin ? { user_id: UID } : null);
     if (url.includes("/functions/v1/produkt-suche")) {

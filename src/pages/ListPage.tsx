@@ -13,7 +13,7 @@ import { parsePrice, removeImage } from "../lib/wishes";
 import { copyWishes, moveWish } from "../lib/listOps";
 import { cachedListPage, loadListPage, type ListPageData } from "../lib/listData";
 import { euroShort, giftFunded, giftTarget, isGroupGift, takenQuantity } from "../lib/gift";
-import { IconEyeOff, IconArchive, IconBack, IconChevron, IconCopy, IconGift, IconEdit, IconEye, IconGrid, IconMove, IconPlus, IconRepeat, IconRows, IconShare, IconTrash, IconUndo, IconUsers } from "../components/Icons";
+import { IconEyeOff, IconHistory, IconArchive, IconBack, IconChevron, IconCopy, IconGift, IconEdit, IconEye, IconGrid, IconMove, IconPlus, IconRepeat, IconRows, IconShare, IconTrash, IconUndo, IconUsers } from "../components/Icons";
 import { Sheet } from "../components/Sheet";
 import { FormSheet } from "../components/FormSheet";
 import { ListForm, toRow, type ListInput } from "../components/ListForm";
@@ -389,6 +389,7 @@ export function ListPage() {
           <>
             <ListForm formId="edit-list" list={list} onSubmit={saveList} />
             <div className="menu form-extra">
+              <Link to={`/liste/${list.id}/verlauf`} onClick={close}><IconHistory /> Verlauf ansehen</Link>
               <button type="button" onClick={() => setSheet({ kind: "reuse" })}><IconRepeat /> Fürs nächste Mal wiederverwenden</button>
               {list.archived_at
                 ? <button type="button" onClick={() => setArchived(false)}><IconArchive /> Wieder öffnen</button>
@@ -406,22 +407,19 @@ export function ListPage() {
         {sheet?.kind === "editWish" && (
           <>
             <WishForm formId="edit-wish" listId={list.id} wish={sheet.wish} recipient={list.recipient_name} onSaved={saved} onBusyChange={setWishBusy} />
+            {showRes && isGroupGift(sheet.wish) && (
+              <ContributionsPanel wish={sheet.wish} contributions={resOf(sheet.wish)} busy={busy}
+                onRelease={release}
+                onAdd={() => setSheet({ kind: "contributeFor", wish: sheet.wish })}
+                onTakeRest={(open) => contributeFor(sheet.wish, firstNameOf(displayName) || "Wir", open)} />
+            )}
             <div className="menu form-extra">
               <button type="button" onClick={() => openTransfer(sheet.wish, "move")}><IconMove /> In andere Liste verschieben</button>
               <button type="button" onClick={() => openTransfer(sheet.wish, "copy")}><IconCopy /> In andere Liste kopieren</button>
               {showRes && !isGroupGift(sheet.wish) && sheet.wish.quantity - takenQuantity(sheet.wish, resOf(sheet.wish)) > 0 && (
                 <button type="button" onClick={() => setSheet({ kind: "reserveFor", wish: sheet.wish })}><IconGift /> Für jemanden reservieren</button>
               )}
-              {showRes && isGroupGift(sheet.wish) && (() => {
-                const open = Math.max(0, giftTarget(sheet.wish) - giftFunded(resOf(sheet.wish)));
-                return open > 0 ? (
-                  <>
-                    <button type="button" onClick={() => setSheet({ kind: "contributeFor", wish: sheet.wish })}><IconGift /> Beitrag für jemanden eintragen</button>
-                    <button type="button" disabled={busy} onClick={() => contributeFor(sheet.wish, firstNameOf(displayName) || "Wir", open)}><IconGift /> Rest selbst übernehmen ({euroShort(open)})</button>
-                  </>
-                ) : null;
-              })()}
-              {showRes && resOf(sheet.wish).map((r) => (
+              {showRes && !isGroupGift(sheet.wish) && resOf(sheet.wish).map((r) => (
                 <button type="button" key={r.id} onClick={() => release(r)}>
                   <IconUndo /> {r.amount_cents != null ? `Beitrag von ${r.guest_name} (${euroShort(r.amount_cents)}) freigeben` : `Reservierung von ${r.guest_name} freigeben`}
                 </button>
@@ -607,5 +605,46 @@ function ContributeForForm({ wish, open, busy, onSubmit }: { wish: Wish; open: n
       </label>
       <button type="submit" className="btn block big" disabled={busy || !ok}>{busy ? "Wird eingetragen …" : cents ? `${euroShort(cents)} eintragen` : "Eintragen"}</button>
     </form>
+  );
+}
+
+/** Gruppengeschenk aus Elternsicht: wer sich mit wie viel beteiligt, was noch fehlt. */
+function ContributionsPanel({ wish, contributions, busy, onRelease, onAdd, onTakeRest }: {
+  wish: Wish; contributions: Reservation[]; busy: boolean;
+  onRelease: (r: Reservation) => void; onAdd: () => void; onTakeRest: (open: number) => void;
+}) {
+  const target = giftTarget(wish);
+  const funded = giftFunded(contributions);
+  const open = Math.max(0, target - funded);
+  const pct = target ? Math.min(100, Math.round((funded / target) * 100)) : 0;
+  const sorted = [...contributions].sort((a, b) => (b.amount_cents ?? 0) - (a.amount_cents ?? 0));
+  return (
+    <section className="contrib-panel" aria-label="Beiträge zum Gruppengeschenk">
+      <h3>Gemeinsames Geschenk</h3>
+      <div className="gift-sum">
+        <span><b>{euroShort(funded)}</b> von {euroShort(target)}</span>
+        <small>{open > 0 ? `es fehlen noch ${euroShort(open)}` : "komplett"}</small>
+      </div>
+      <span className="progress big" aria-hidden="true"><span style={{ width: `${pct}%` }} /></span>
+      {sorted.length === 0 ? (
+        <p className="hint" style={{ margin: "10px 0 0" }}>Noch hat niemand etwas beigesteuert.</p>
+      ) : (
+        <ul className="contrib-list">
+          {sorted.map((r) => (
+            <li key={r.id}>
+              <span className="contrib-name">{r.guest_name}{r.entered_by && <small> von euch eingetragen</small>}</span>
+              <b className="contrib-amount">{euroShort(r.amount_cents ?? 0)}</b>
+              <button type="button" className="btn quiet small" onClick={() => onRelease(r)} aria-label={`Beitrag von ${r.guest_name} (${euroShort(r.amount_cents ?? 0)}) freigeben`}>Freigeben</button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {open > 0 && (
+        <div className="contrib-actions">
+          <button type="button" className="btn soft small" onClick={onAdd}><IconGift /> Beitrag eintragen</button>
+          <button type="button" className="btn soft small" disabled={busy} onClick={() => onTakeRest(open)}>Rest übernehmen ({euroShort(open)})</button>
+        </div>
+      )}
+    </section>
   );
 }

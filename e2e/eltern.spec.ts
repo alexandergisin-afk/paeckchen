@@ -122,7 +122,10 @@ test("Gruppengeschenk: Eltern sehen Beiträge mit Namen und tragen einen Beitrag
   await page.locator(".wrow-btn", { hasText: "Laufrad gemeinsam" }).click();
   await expect(page.getByRole("button", { name: "Beitrag von Onkel Tobias (100 €) freigeben" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Für jemanden reservieren" })).toHaveCount(0);
-  await page.getByRole("button", { name: "Beitrag für jemanden eintragen" }).click();
+  const panel = page.getByRole("region", { name: "Beiträge zum Gruppengeschenk" });
+  await expect(panel).toContainText("Onkel Tobias");
+  await expect(panel).toContainText(/es fehlen noch 200\s€/);
+  await panel.getByRole("button", { name: "Beitrag eintragen" }).click();
   const dlg = page.locator("dialog.sheet[open]");
   await dlg.getByLabel("Von wem?").fill("Oma Gisela");
   await dlg.getByLabel("Betrag").fill("50");
@@ -505,4 +508,75 @@ test("Einheitliche Begriffe und kurze Preise", async ({ page }) => {
   await expect(page.getByText("349,00 €")).toHaveCount(0);
   await page.goto(`/#/liste/${LID}/mitglieder`);
   await expect(page.getByText("Mitbearbeitung")).toHaveCount(0);
+});
+
+test("Keine Seite ragt über den Bildschirmrand, auch mit vielen Listen und auf 320 px", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 700 });
+  await mockSupabase(page, { signedIn: true });
+  // Statistik mit sieben langen Listennamen
+  const many = Array.from({ length: 7 }, (_, i) => ({
+    id: i === 0 ? LID : `l${i}`, title: ["Emmas 9. Geburtstag", "Leons Weihnachtswünsche 2026", "Omas 80. Geburtstag im Februar",
+      "Ostern bei den Großeltern", "Emmas Einschulung", "Weihnachten 2025", "Leons 6. Geburtstag"][i],
+    recipient_name: "Emma", event_date: "2026-12-14", archived_at: i > 4 ? "2026-01-05" : null,
+    list_members: [{ user_id: "11111111-1111-1111-1111-111111111111", show_reservations: true }],
+  }));
+  // nur die Abfrage der Statistik ersetzen (die anderen Seiten fragen Listen in anderer Form ab)
+  await page.route((url) => decodeURIComponent(url.href).includes("archived_at,list_members(user_id,show_reservations)"), (r) => r.fulfill({ json: many }));
+  for (const path of ["/#/", `/#/liste/${LID}`, "/#/statistik", `/#/statistik?liste=l4`, "/#/einstellungen", "/#/einstellungen/zugriff", "/#/w/TOK"]) {
+    await page.goto(path);
+    await page.waitForLoadState("networkidle");
+    await page.waitForTimeout(300);
+    const width = await page.evaluate(() => document.documentElement.scrollWidth);
+    expect(width, `Seite ${path} ist ${width}px breit`).toBeLessThanOrEqual(320);
+  }
+  // Die Listen-Auswahl der Statistik lässt sich wischen und zeigt die gewählte Liste
+  await page.goto("/#/statistik?liste=l4");
+  const picker = page.getByRole("group", { name: "Liste auswählen" });
+  await expect(picker.getByRole("button", { name: "Emmas Einschulung" })).toBeInViewport();
+});
+
+test("Nach einem Absturz auf einer Seite funktionieren die anderen Seiten weiter", async ({ page }) => {
+  await mockSupabase(page, { signedIn: true });
+  // Listenseite bekommt kaputte Daten und stürzt ab
+  await page.route((url) => url.href.includes(`id=eq.${LID}`), (r) => r.fulfill({ json: { id: LID, title: "Kaputt", list_members: 5, wishes: [] } }));
+  await page.goto(`/#/liste/${LID}`);
+  await expect(page.getByRole("heading", { name: "Da ist etwas schiefgelaufen." })).toBeVisible();
+  // Wechsel zur Statistik: die Seite erscheint normal, nicht wieder die Fehlermeldung
+  await page.goto("/#/statistik");
+  await expect(page.getByRole("heading", { name: "Statistik" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Da ist etwas schiefgelaufen." })).toHaveCount(0);
+});
+
+test("Verlauf einer Liste: in Sätzen, nach Tagen gruppiert, aus dem Bearbeiten-Menü erreichbar", async ({ page }) => {
+  await mockSupabase(page, { signedIn: true });
+  await page.goto(`/#/liste/${LID}`);
+  await page.getByRole("button", { name: "Bearbeiten", exact: true }).click();
+  await page.getByRole("link", { name: "Verlauf ansehen" }).click();
+  await expect(page.getByRole("heading", { name: "Verlauf", exact: true })).toBeVisible();
+  const heute = page.getByRole("region", { name: "Heute" });
+  await expect(heute).toContainText("Oma Gisela hat „Kinderfahrrad 24 Zoll“ reserviert (ihr besorgt es).");
+  await expect(heute).toContainText(/Julia hat „Kinderfahrrad 24 Zoll“ geändert: Preis von 349\s€ auf 329\s€\./);
+  await expect(page.getByRole("region", { name: "Gestern" })).toContainText("Markus ist der Liste als Mitbearbeiter beigetreten.");
+  await page.getByRole("link", { name: "Zur Liste" }).click();
+  await expect(page).toHaveURL(new RegExp(`#/liste/${LID}$`));
+});
+
+test("Sicherheitsprotokoll nur für Administratoren", async ({ page }) => {
+  await mockSupabase(page, { signedIn: true, admin: true });
+  await page.goto("/#/einstellungen");
+  await page.getByRole("link", { name: /Sicherheitsprotokoll/ }).click();
+  await expect(page.getByText("Julia hat anna@test.de freigegeben.")).toBeVisible();
+});
+
+test("Ohne Administratorrechte kein Sicherheitsprotokoll in den Einstellungen", async ({ page }) => {
+  await mockSupabase(page, { signedIn: true });
+  await page.goto("/#/einstellungen");
+  await expect(page.getByRole("heading", { name: "Einstellungen" })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Sicherheitsprotokoll/ })).toHaveCount(0);
+});
+
+test("Gruppengeschenk: in der Liste steht, wer sich mit wie viel beteiligt", async ({ page }) => {
+  await mockSupabase(page, { signedIn: true });
+  await page.goto(`/#/liste/${LID}`);
+  await expect(page.locator(".wrow-btn", { hasText: "Laufrad gemeinsam" }).locator(".contrib-names")).toHaveText(/Onkel Tobias 100\s€/);
 });

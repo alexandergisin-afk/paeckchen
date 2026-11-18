@@ -4,7 +4,7 @@ import { appUrl, db } from "../lib/supabase";
 import { clearCache } from "../lib/cache";
 import { useAuth } from "../lib/auth";
 import { friendlyError, toast } from "../lib/format";
-import { IconBack, IconChevron, IconLogout, IconMail, IconUsers } from "../components/Icons";
+import { IconBack, IconChevron, IconHistory, IconLogout, IconMail, IconUsers } from "../components/Icons";
 import { Link } from "react-router-dom";
 
 export function Settings() {
@@ -97,6 +97,13 @@ export function Settings() {
         </section>
 
         <h2 className="settings-group">Familie &amp; Zugriff</h2>
+        {pendingCount !== null && (
+          <Link className="panel settings-link" to="/einstellungen/protokoll">
+            <span className="settings-link-icon" aria-hidden="true"><IconHistory /></span>
+            <span><b>Sicherheitsprotokoll</b><span className="hint" style={{ display: "block" }}>Wer wann Zugang bekommen oder verloren hat</span></span>
+            <span className="list-chev" aria-hidden="true"><IconChevron /></span>
+          </Link>
+        )}
         {pendingCount !== null && (
           <Link className="panel settings-link" to="/einstellungen/anfragen">
             <span className="settings-link-icon" aria-hidden="true"><IconMail /></span>

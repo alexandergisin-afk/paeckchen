@@ -929,3 +929,51 @@ html, body { overscroll-behavior-y: contain; }
 /* Konfetti als Popover in der obersten Ebene: ohne Rahmen, Hintergrund und Abstände des Browsers */
 .confetti[popover] { position: fixed; inset: 0; margin: 0; padding: 0; border: 0; background: transparent; width: 100vw; height: 100vh; max-width: none; max-height: none; overflow: visible; pointer-events: none; }
 .confetti[popover]::backdrop { display: none; }
+
+/* Waagerecht wischbare Reihen: immer auf die Bildschirmbreite begrenzt (vorher nur bei den Preisfiltern) */
+.scroll-x { overflow-x: auto; overflow-y: hidden; max-width: 100%; scrollbar-width: none; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
+.scroll-x::-webkit-scrollbar { display: none; }
+.scroll-x > * { flex: none; }
+/* Verlauf am Rand zeigt, dass es weitergeht */
+.scroll-x.more-right { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent); }
+.scroll-x.more-left { -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 40px), transparent); mask-image: linear-gradient(to left, #000 calc(100% - 40px), transparent); }
+.scroll-x.more-left.more-right { -webkit-mask-image: linear-gradient(to right, transparent, #000 40px, #000 calc(100% - 40px), transparent); mask-image: linear-gradient(to right, transparent, #000 40px, #000 calc(100% - 40px), transparent); }
+
+/* Verlauf */
+.history-day { margin-top: 18px; }
+.history { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 2px; background: var(--surface); border-radius: 18px; box-shadow: var(--shadow); overflow: hidden; }
+.history-item { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 12px 14px; border-top: 1px solid var(--line); }
+.history-item:first-child { border-top: 0; }
+.history-icon { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: var(--surface-2); color: var(--plum); }
+.history-icon svg { width: 18px; height: 18px; }
+.k-reservation .history-icon { background: var(--ribbon-soft); color: var(--ribbon-text); }
+.k-member .history-icon, .k-access .history-icon { background: var(--mint-soft); color: var(--mint); }
+.history-text { line-height: 1.4; overflow-wrap: anywhere; }
+.history-time { font-size: .82rem; color: var(--ink-2); padding-top: 2px; white-space: nowrap; }
+
+/* Deine Wunschlisten (Gäste) */
+.guest-home-row { position: relative; }
+.guest-home-row .list-row { padding-right: 84px; }
+.guest-home-row .list-chev { position: absolute; right: 52px; top: 50%; transform: translateY(-50%); }
+.guest-home-x { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); width: 40px; height: 40px; border: 0; border-radius: 50%; background: var(--surface-2); color: var(--ink-2); font-size: 1.2rem; cursor: pointer; }
+
+/* Hinweis „Päckli als App speichern“ für Schenkende */
+.app-hint { position: relative; display: grid; gap: 8px; margin: 26px 0 6px; padding: 16px 18px; border-radius: 20px; background: var(--plum-soft); }
+.app-hint p { margin: 0; color: var(--ink-2); line-height: 1.45; padding-right: 20px; }
+.app-hint .btn { justify-self: start; }
+.app-hint-x { position: absolute; top: 8px; right: 8px; width: 36px; height: 36px; border: 0; border-radius: 50%; background: transparent; color: var(--ink-2); font-size: 1.2rem; cursor: pointer; }
+.steps { margin: 8px 0 0; padding-left: 22px; display: grid; gap: 8px; line-height: 1.45; }
+
+/* Gruppengeschenk aus Elternsicht */
+.contrib-panel { margin: 4px 0 14px; padding: 14px 16px; border-radius: 18px; background: var(--surface-2); display: grid; gap: 8px; }
+.contrib-panel h3 { margin: 0; font-size: 1rem; }
+.contrib-list { list-style: none; margin: 4px 0 0; padding: 0; display: grid; }
+.contrib-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); }
+.contrib-list li:first-child { border-top: 0; }
+.contrib-name { overflow-wrap: anywhere; }
+.contrib-name small { display: block; color: var(--ink-2); font-size: .8rem; }
+.contrib-amount { font-family: var(--font-display); }
+.contrib-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.contrib-actions svg { width: 16px; height: 16px; }
+.contrib-names { font-size: .85rem; color: var(--ink-2); line-height: 1.35; }
+.contrib-actions .btn { background: var(--surface); box-shadow: 0 1px 2px rgba(35, 26, 49, .08); }

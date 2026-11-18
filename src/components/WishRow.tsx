@@ -83,6 +83,11 @@ export function WishRow({ wish, reservations, showReservations, onOpen }: {
         {wish.note && <span className="wrow-note">{wish.note}</span>}
         {showReservations && <span className={`status-line ${status.free ? "is-free" : "is-res"}`}>{status.text}</span>}
         {showReservations && isGroupGift(wish) && <GiftProgress wish={wish} reservations={reservations} />}
+        {showReservations && isGroupGift(wish) && reservations.length > 0 && (
+          <span className="contrib-names">
+            {[...reservations].sort((a, b) => (b.amount_cents ?? 0) - (a.amount_cents ?? 0)).map((r) => `${r.guest_name} ${euroShort(r.amount_cents ?? 0)}`).join(", ")}
+          </span>
+        )}
       </span>
       <span className="wrow-chev" aria-hidden="true"><IconChevron /></span>
     </button>

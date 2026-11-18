@@ -5,6 +5,7 @@ import { db } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { computeReview, computeStats, type StatList, type StatRes, type StatWish } from "../lib/stats";
 import { friendlyError } from "../lib/format";
+import { useScrollHint } from "../lib/useScrollHint";
 import { formatPrice } from "../lib/wishes";
 import { IconBack } from "../components/Icons";
 
@@ -26,7 +27,11 @@ export function StatsPage() {
   const [error, setError] = useState<string | null>(null);
   const [params] = useSearchParams();
   const [scope, setScope] = useState(() => params.get("liste") ?? "all"); // "all" oder die ID einer Liste
+  // Ändert sich die Liste in der Adresse (z. B. Sprung aus einer anderen Liste), Auswahl nachziehen
+  const fromUrl = params.get("liste");
+  useEffect(() => { setScope(fromUrl ?? "all"); }, [fromUrl]);
   const [withArchived, setWithArchived] = useState(false);
+  const pickerRef = useScrollHint<HTMLDivElement>(scope + (data ? ":geladen" : ""));
 
   useEffect(() => {
     (async () => {
@@ -74,7 +79,7 @@ export function StatsPage() {
         ? <Link className="back" to={`/liste/${params.get("liste")}`}><IconBack /> Zur Liste</Link>
         : <Link className="back" to="/"><IconBack /> Listen</Link>}
       <h1>Statistik</h1>
-      <div className="stats-picker scroll-x" role="group" aria-label="Liste auswählen">
+      <div className="stats-picker scroll-x" role="group" aria-label="Liste auswählen" ref={pickerRef}>
         <button type="button" className="fchip" aria-pressed={scope === "all"} onClick={() => setScope("all")}>Alle Listen</button>
         {data.lists.filter((l) => !l.archived_at).map((l) => (
           <button key={l.id} type="button" className="fchip" aria-pressed={scope === l.id} onClick={() => setScope(l.id)}>{l.title}</button>

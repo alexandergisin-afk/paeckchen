@@ -17,6 +17,8 @@ try {
 } catch { /* beschädigt oder nicht verfügbar: ignorieren */ }
 
 let saveTimer = 0;
+// Wird beim Abmelden erhöht: Antworten auf Abfragen von vorher werden dann nicht mehr gespeichert
+let epoch = 0;
 function persistSoon() {
   window.clearTimeout(saveTimer);
   saveTimer = window.setTimeout(() => {
@@ -59,7 +61,8 @@ export function forget(prefix: string) {
 export function load<T>(key: string, fetcher: () => Promise<T>): Promise<T> {
   const running = inflight.get(key) as Promise<T> | undefined;
   if (running) return running;
-  const p = fetcher().then((v) => { remember(key, v); return v; }).finally(() => inflight.delete(key));
+  const startedIn = epoch;
+  const p = fetcher().then((v) => { if (startedIn === epoch) remember(key, v); return v; }).finally(() => inflight.delete(key));
   inflight.set(key, p);
   return p;
 }
@@ -72,6 +75,9 @@ export function isFresh(key: string, ms = 60_000) {
 
 /** Nach dem Abmelden alles vergessen, auch auf dem Gerät. */
 export function clearCache() {
+  epoch++;
+  window.clearTimeout(saveTimer); // ein gerade angestoßenes Speichern nicht mehr nachlaufen lassen
   store.clear();
+  inflight.clear();
   try { localStorage.removeItem(OFFLINE_KEY); } catch { /* egal */ }
 }

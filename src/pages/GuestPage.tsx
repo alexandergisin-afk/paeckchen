@@ -11,6 +11,8 @@ import { formatPrice, parsePrice } from "../lib/wishes";
 import { euroShort } from "../lib/gift";
 import { celebrate } from "../lib/celebrate";
 import { cached, remember } from "../lib/cache";
+import { forgetGuestList, getGuestLists, rememberGuestList } from "../lib/guestLists";
+import { canPrompt, isInstalled, isIOS, onInstallChange, promptInstall } from "../lib/install";
 import { addCode, getCodes, getName, keepCodes, removeCode, setName } from "../lib/device";
 import { IconCheck, IconExt, IconGift, IconGrid, IconRows } from "../components/Icons";
 import { Sheet } from "../components/Sheet";
@@ -25,6 +27,7 @@ type GSheet =
   | { kind: "contribute"; wish: GuestWish; full: boolean }
   | { kind: "contributed"; wish: GuestWish; amount: number; complete: boolean }
   | { kind: "giftInfo"; text: string }
+  | { kind: "appIos" }
   | { kind: "done"; wish: GuestWish; parentsBuy: boolean }
   | { kind: "taken"; available: number }
   | { kind: "cancel"; wish: GuestWish; code: string };
@@ -60,7 +63,7 @@ export function GuestPage() {
       if (off) { setList(off.list); setMine(off.mine); return setState("ok"); }
       return setState("error");
     }
-    if (!g.data || !Array.isArray((g.data as GuestList).wishes)) return setState("invalid");
+    if (!g.data || !Array.isArray((g.data as GuestList).wishes)) { forgetGuestList(token); return setState("invalid"); }
     let rows: Mine[] = [];
     const codes = getCodes();
     if (codes.length) {
@@ -74,8 +77,41 @@ export function GuestPage() {
     setMine(rows);
     setState("ok");
     remember(`guest:${token}`, { list: g.data as GuestList, mine: rows });
+    const gl = g.data as GuestList;
+    rememberGuestList({ token, title: gl.title, recipient_name: gl.recipient_name, event_date: gl.event_date, cover: gl.cover });
   }, [token]);
   const ptr = usePullToRefresh(() => load());
+
+  // „Als App speichern“: Auf dem iPhone übernimmt der Startbildschirm die aktuelle Adresse, wenn kein
+  // Manifest da ist. Darum hier die Liste in die Adresse schreiben und das Manifest kurz entfernen.
+  // (Android nutzt das Manifest und teilt den Speicher mit dem Browser, dort klappt „Deine Wunschlisten“ direkt.)
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.get("liste") !== token) {
+        url.searchParams.set("liste", token);
+        window.history.replaceState(window.history.state, "", url.toString());
+      }
+    } catch { /* egal */ }
+    // Beim Verlassen der Gästeansicht die Merkhilfe wieder aus der Adresse nehmen
+    const cleanUrl = () => {
+      try {
+        const url = new URL(window.location.href);
+        if (url.searchParams.has("liste")) { url.searchParams.delete("liste"); window.history.replaceState(window.history.state, "", url.toString()); }
+      } catch { /* egal */ }
+    };
+    if (!isIOS()) return cleanUrl;
+    const link = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
+    const parent = link?.parentNode;
+    link?.remove();
+    return () => { if (link && parent) parent.appendChild(link); cleanUrl(); };
+  }, [token]);
+
+  const [installable, setInstallable] = useState(canPrompt());
+  useEffect(() => onInstallChange(() => setInstallable(canPrompt())), []);
+  const [appHint, setAppHint] = useState(() => { try { return !localStorage.getItem("paeckli-gast-app-hinweis"); } catch { return true; } });
+  const hideAppHint = () => { setAppHint(false); try { localStorage.setItem("paeckli-gast-app-hinweis", "1"); } catch { /* egal */ } };
+  const otherLists = getGuestLists().filter((l) => l.token !== token).length;
   useRefreshOnReturn(() => load());
 
   useEffect(() => {
@@ -208,19 +244,19 @@ export function GuestPage() {
             <IconExt />
           </a>
         )}
-        <div className="actions">{actionsFor(w, mode, my, funded)}</div>
+        <div className="actions">{actionsFor(w, mode, my, funded, tiles ? "tile" : "row")}</div>
       </article>
     );
   };
 
   /** Knöpfe eines Wunsches, gleich in Karte und Detailansicht */
-  const actionsFor = (w: GuestWish, mode: "open" | "mine", my: Mine[], funded: number) => {
+  const actionsFor = (w: GuestWish, mode: "open" | "mine", my: Mine[], funded: number, where: "tile" | "row" | "detail" = "detail") => {
     const group = !!w.group_gift && w.target_cents != null;
     return (
       <>
         {mode === "open" && !group && <button className="btn ribbon big" onClick={() => setSheet({ kind: "reserve", wish: w })}><IconGift /> Reservieren</button>}
         {mode === "open" && group && <button className="btn ribbon big" onClick={() => setSheet({ kind: "contribute", wish: w, full: false })}><IconGift /> Mitschenken</button>}
-        {mode === "open" && group && funded === 0 && <button className="btn quiet" onClick={() => setSheet({ kind: "contribute", wish: w, full: true })}>Ich schenke es ganz</button>}
+        {mode === "open" && group && funded === 0 && where !== "tile" && <button className="btn quiet" onClick={() => setSheet({ kind: "contribute", wish: w, full: true })}>Ich schenke es ganz</button>}
         {mode === "mine" && my.map((m) => (
           <button key={m.code} className="btn quiet" onClick={() => setSheet({ kind: "cancel", wish: w, code: m.code })}>{m.amount_cents != null ? "Beitrag zurückziehen" : "Reservierung aufheben"}</button>
         ))}
@@ -298,6 +334,42 @@ export function GuestPage() {
       <p className="hint" style={{ marginTop: 34, textAlign: "center" }}>
         Auf einem anderen Gerät reserviert oder umentschieden? Sag einfach der Familie Bescheid, dann wird die Reservierung freigegeben.
       </p>
+
+      {/* Für Schenkende: Päckli als App und alle Wunschlisten an einem Ort */}
+      {!isInstalled() && appHint && (
+        <section className="app-hint" aria-label="Päckli als App">
+          <button type="button" className="app-hint-x" aria-label="Hinweis ausblenden" onClick={hideAppHint}>×</button>
+          <b>Päckli als App speichern</b>
+          <p>Dann öffnest du diese Wunschliste mit einem Tipp vom Startbildschirm, ohne den Link zu suchen. Weitere Wunschlisten, die du öffnest, sammelt Päckli dort für dich.</p>
+          {installable
+            ? <button type="button" className="btn soft" onClick={() => promptInstall()}>Als App speichern</button>
+            : <button type="button" className="btn soft" onClick={() => setSheet({ kind: "appIos" })}>So geht’s</button>}
+        </section>
+      )}
+      {otherLists > 0 && (
+        <p className="hint" style={{ marginTop: 16, textAlign: "center" }}>
+          <Link to="/meine-listen">Alle deine Wunschlisten ({otherLists + 1})</Link>
+        </p>
+      )}
+
+      <Sheet open={sheet?.kind === "appIos"} onClose={close} label="Als App speichern">
+        <h2>Päckli als App speichern</h2>
+        {isIOS() ? (
+          <ol className="steps">
+            <li>Unten in Safari auf das Teilen-Symbol tippen (Quadrat mit Pfeil nach oben).</li>
+            <li>Nach unten scrollen und <b>„Zum Home-Bildschirm“</b> wählen.</li>
+            <li>Mit <b>„Hinzufügen“</b> bestätigen.</li>
+          </ol>
+        ) : (
+          <ol className="steps">
+            <li>Im Browser das Menü öffnen (⋮ oder ≡).</li>
+            <li><b>„App installieren“</b> oder <b>„Zum Startbildschirm hinzufügen“</b> wählen.</li>
+            <li>Bestätigen.</li>
+          </ol>
+        )}
+        <p className="hint" style={{ marginTop: 10 }}>Danach findest du das Päckli-Symbol auf deinem Startbildschirm. Es öffnet direkt diese Wunschliste.</p>
+        <button className="btn block" onClick={close} style={{ marginTop: 14 }}>Verstanden</button>
+      </Sheet>
 
       <Sheet open={sheet?.kind === "reserve"} onClose={close} label="Wunsch reservieren">
         {sheet?.kind === "reserve" && <ReserveForm wish={sheet.wish} allowParentsBuy={!!list?.allow_parents_buy} busy={busy} onSubmit={(q, n, pb) => reserve(sheet.wish, q, n, pb)} />}
@@ -467,7 +539,7 @@ function ContributeForm({ wish, full, busy, onSubmit }: { wish: GuestWish; full:
           {presets.map((c) => (
             <button key={c} type="button" className="amount-chip" aria-pressed={chip === c} onClick={() => { setChip(c); setCustom(""); }}>{euroShort(c)}</button>
           ))}
-          <button type="button" className="amount-chip" aria-pressed={chip === open} onClick={() => { setChip(open); setCustom(""); }}>Rest<br /><small>{euroShort(open)}</small></button>
+          <button type="button" className="amount-chip" aria-pressed={chip === open} onClick={() => { setChip(open); setCustom(""); }}>{(wish.funded_cents ?? 0) === 0 ? "Ganz" : "Rest"}<br /><small>{euroShort(open)}</small></button>
         </div>
       )}
       {!full && (

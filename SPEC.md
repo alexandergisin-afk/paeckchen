@@ -121,10 +121,13 @@ Abrufen fremder Seiten und Mails.
 - **F-33** Gruppengeschenke: Summe und Anzahl der Beitragenden sichtbar, nie Namen oder Einzelbeträge. Beiträge ab 5 €, höchstens der offene Rest; „Ich schenke es ganz“, solange niemand beigetragen hat.
 - **F-34** Das Gerät merkt sich die eigenen Reservierungscodes; Aufheben auf demselben Gerät.
 - **F-35** Erklärung beim ersten Besuch, danach eingeklappt.
+- **F-36** Das Gerät merkt sich geöffnete Wunschlisten. Ohne Link oder als App geöffnet erscheint „Deine Wunschlisten“ (bevorstehende Anlässe zuerst, einzeln entfernbar), mit Link zur Anmeldung für Eltern.
+- **F-37** Hinweis „Päckli als App speichern“ mit Anleitung (ausblendbar). Auf dem iPhone startet die App mit der Wunschliste, von der aus sie gespeichert wurde, weil sie dort einen eigenen Speicher hat.
 
 ### 5.5 Reservierungen aus Elternsicht
 - **F-40** Pro Person schaltbar: Reservierungen anzeigen oder ausblenden (Überraschungsschutz).
 - **F-41** Für jemanden reservieren bzw. einen Beitrag eintragen (z. B. nach einem Anruf); „Rest selbst übernehmen“.
+- **F-43** Gruppengeschenke: Übersicht aller Beiträge mit Namen und Betrag, Summe, offener Rest, jeweils „Freigeben“; in der Liste stehen die Beitragenden direkt beim Wunsch.
 - **F-42** Freigeben mit „Rückgängig“.
 
 ### 5.6 Mitglieder und Zugriff
@@ -145,6 +148,12 @@ Abrufen fremder Seiten und Mails.
 - **F-82** Kleine Freudenmomente (Konfetti) beim Reservieren, bei komplettem Gruppengeschenk und bei komplett vergebener Liste; nicht bei „Bewegung reduzieren“.
 - **F-83** Heller und dunkler Modus nach Geräteeinstellung.
 
+### 5.10 Verlauf
+- **F-90** Jede Änderung an Listen, Wünschen, Reservierungen und Mitgliedern wird in der Datenbank festgehalten (Trigger) und als Satz angezeigt, z. B. „Julia hat ‚Kinderfahrrad‘ geändert: Preis von 349 € auf 329 €“. Erreichbar über „Bearbeiten → Verlauf ansehen“.
+- **F-91** Reservierungs-Einträge sieht nur, wer bei der Liste „Anzeigen“ eingeschaltet hat (Überraschungsschutz, in der Datenbank durchgesetzt).
+- **F-92** Sicherheitsprotokoll für Administratoren: Zugangsanfragen, Freigaben, Ablehnungen, Freischaltungen, Administrator-Rechte.
+- **F-93** Einträge lassen sich von niemandem ändern oder löschen. Aufbewahrung: Einträge mit Gästenamen wie die Reservierung (60 Tage nach dem Anlass), alle anderen ein Jahr.
+
 ## 6. Datenmodell
 
 ```mermaid
@@ -160,6 +169,7 @@ erDiagram
   profiles ||--o| recent_searches : "letzte Suchen"
   profiles ||--o{ access_requests : "lädt ein"
   lists ||--o{ access_requests : "Einladung zu"
+  lists ||--o{ audit_log : "Verlauf"
 
   profiles {
     uuid id PK
@@ -230,6 +240,16 @@ erDiagram
   recent_searches {
     uuid user_id PK
     text_array terms "höchstens 3"
+  }
+  audit_log {
+    bigint id PK
+    timestamptz at
+    uuid list_id FK "leer bei Zugangs-Einträgen"
+    text kind "list, wish, reservation, member, access"
+    text action
+    text actor_name "Name zum Zeitpunkt der Änderung"
+    jsonb data "z. B. alte und neue Werte"
+    date forget_after "bei Reservierungs-Einträgen"
   }
   list_reminders {
     uuid list_id PK
@@ -412,6 +432,7 @@ Alle übrigen Lese- und Schreibzugriffe laufen direkt über die Tabellen, gesch�
 | **Sicherheit** | Rechte serverseitig durchsetzen | Row Level Security auf allen Tabellen; Gäste nur über Funktionen; Funktionsrechte zusätzlich eingeschränkt |
 | | Geheimnisse schützen | Codes und Einladungen als SHA-256; Schlüssel nur in Edge-Function-Secrets |
 | | Missbrauch bremsen | 10 Reservierungen pro Liste und Minute, 20 falsche Codes in 10 Minuten, 30 Abfragen pro Minute, 5 Anfragen in 10 Minuten |
+| | Nachvollziehbarkeit | Verlauf per Trigger, für niemanden änder- oder löschbar; Überraschungsschutz auch im Verlauf |
 | | Fremden Code verhindern | Content-Security-Policy: Skripte nur von Päckli, Verbindungen nur zu Supabase |
 | **Datenschutz** | Minimale Daten | Gäste: nur Name; Reservierungen 60 Tage nach dem Anlass gelöscht; Fehlerprotokoll anonym, 30 Tage |
 | | Keine Dritten beim Öffnen | Schriften lokal; keine Analyse- oder Werbedienste |
@@ -439,7 +460,7 @@ flowchart TD
   MONTAG["jeden Montag"] --> WACH["wachhalten.yml"]
 ```
 
-Datenbank-Änderungen werden als nummerierte SQL-Dateien geliefert (`supabase/02_…` bis `18_…`) und einmalig im
+Datenbank-Änderungen werden als nummerierte SQL-Dateien geliefert (`supabase/02_…` bis `19_…`) und einmalig im
 SQL Editor ausgeführt; `schema.sql` enthält immer den vollständigen Stand für neue Projekte.
 
 ## 12. Teststrategie

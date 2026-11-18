@@ -166,3 +166,55 @@ test("Gruppengeschenk komplett: „Geschafft!“ und mehr Konfetti", async ({ pa
   await expect(page.getByRole("heading", { name: "Geschafft! Das Geschenk ist komplett." })).toBeVisible();
   await expect(page.locator("canvas.confetti")).toHaveCount(1);
 });
+
+test("Kacheln: „Mitschenken“ steht auf derselben Höhe wie „Reservieren“", async ({ page }) => {
+  await mockSupabase(page);
+  await page.route(/rpc\/guest_list/, (r) => r.fulfill({ json: {
+    id: "x", title: "Emmas 9. Geburtstag", recipient_name: "Emma", occasion: "birthday", event_date: "2026-12-14", description: null, cover: 0,
+    wishes: [
+      { id: "a", title: "Laufrad gemeinsam", url: null, shop: null, image_path: null, price_cents: 30000, quantity: 1, priority: "heart", note: null, group_gift: true, target_cents: 30000, funded_cents: 0, contributors: 0, available: 1 },
+      { id: "b", title: "Kinderfahrrad 24 Zoll", url: null, shop: null, image_path: null, price_cents: 34900, quantity: 1, priority: "heart", note: "Mintgrün", available: 1 },
+    ] } }));
+  await page.goto("/#/w/TOK");
+  const tops = await page.locator(".ggrid.tiles .gcard .actions .btn.big").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
+  expect(tops[0]).toBe(tops[1]);
+  await expect(page.locator(".ggrid.tiles").getByRole("button", { name: "Ich schenke es ganz" })).toHaveCount(0);
+  // In der Detailansicht gibt es „Ich schenke es ganz“ weiterhin
+  await page.getByRole("button", { name: "Laufrad gemeinsam: alle Details" }).click();
+  await expect(page.locator("dialog.sheet[open]").getByRole("button", { name: "Ich schenke es ganz" })).toBeVisible();
+});
+
+test("Schenkende: „Deine Wunschlisten“ zeigt die auf dem Gerät geöffneten Listen", async ({ page }) => {
+  await mockSupabase(page);
+  await page.goto("/#/w/TOK");
+  await expect(page.getByRole("heading", { name: "Emmas 9. Geburtstag" })).toBeVisible();
+  await expect(page).toHaveURL(/[?&]liste=TOK/); // Merkhilfe für den Start als App
+  // Päckli ohne Link öffnen: statt der Anmeldung erscheinen die Wunschlisten
+  await page.goto("/#/");
+  await expect(page.getByRole("heading", { name: "Deine Wunschlisten" })).toBeVisible();
+  await expect(page).not.toHaveURL(/liste=/); // Merkhilfe beim Verlassen entfernt
+  await page.getByRole("link", { name: /Emmas 9. Geburtstag/ }).click();
+  await expect(page).toHaveURL(/#\/w\/TOK/);
+  // Eltern können sich weiterhin anmelden
+  await page.goto("/#/");
+  await page.getByRole("link", { name: "Hier anmelden" }).click();
+  await expect(page.getByRole("button", { name: /Anmelde-Mail/ })).toBeVisible();
+  // Liste aus der Übersicht entfernen
+  await page.goto("/#/");
+  await page.getByRole("button", { name: "„Emmas 9. Geburtstag“ aus dieser Übersicht entfernen" }).click();
+  await expect(page.getByText("Noch keine Wunschliste")).toBeVisible();
+});
+
+test("Schenkende: Hinweis „Päckli als App speichern“ mit Anleitung, ausblendbar", async ({ page }) => {
+  await mockSupabase(page);
+  await page.goto("/#/w/TOK");
+  const hint = page.getByRole("region", { name: "Päckli als App" });
+  await expect(hint).toBeVisible();
+  await hint.getByRole("button", { name: "So geht’s" }).click();
+  await expect(page.locator("dialog.sheet[open]")).toContainText("Startbildschirm");
+  await page.getByRole("button", { name: "Verstanden" }).click();
+  await hint.getByRole("button", { name: "Hinweis ausblenden" }).click();
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Emmas 9. Geburtstag" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Päckli als App" })).toHaveCount(0);
+});

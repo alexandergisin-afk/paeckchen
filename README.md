@@ -34,6 +34,7 @@ Die genaue Beschreibung aller Funktionen, Rollen und Abläufe steht in der **[Sp
 - Wunsch antippen für alle Details, reservieren mit Namen, auf Wunsch „Bitte besorgt ihr es“
 - Bei Gruppengeschenken einen Betrag beisteuern oder das Geschenk ganz übernehmen
 - Eigene Reservierungen auf dem Gerät sehen und wieder aufheben
+- Als App speichern: „Deine Wunschlisten“ sammelt alle geöffneten Listen
 
 **Eltern (mit Konto)**
 - Mehrere Listen, sortieren und durch Gedrückthalten verschieben, abschließen, wiederverwenden
@@ -41,9 +42,11 @@ Die genaue Beschreibung aller Funktionen, Rollen und Abläufe steht in der **[Sp
 - Priorität, Menge, Notiz, eigenes Foto, Gruppengeschenk, Verschieben und Kopieren zwischen Listen
 - Reservierungen sehen oder für sich ausblenden, für jemanden reservieren, freigeben (mit „Rückgängig“)
 - Mitbearbeiter einladen, Rechte verwalten, Statistik pro Liste, tägliche Mail und Erinnerungen
+- Verlauf pro Liste: wer wann was geändert oder reserviert hat
 
 **Administratoren**
 - Neue Bearbeiter erst nach Freigabe: Anfragen per Mail, Freigeben oder Ablehnen in den Einstellungen
+- Sicherheitsprotokoll: wer wann Zugang angefragt, bekommen oder verloren hat
 
 ---
 
@@ -70,7 +73,7 @@ src/
   lib/              Logik (Supabase, Zwischenspeicher, Gruppengeschenke, Sortieren, Ziehen, Rückgängig, …)
 supabase/
   schema.sql        komplette Datenbank in einer Datei (für neue Projekte)
-  02_…18_*.sql      einzelne Ergänzungen in der Reihenfolge ihrer Entstehung (für bestehende Projekte)
+  02_…19_*.sql      einzelne Ergänzungen in der Reihenfolge ihrer Entstehung (für bestehende Projekte)
   functions/        Edge Functions: link-vorschau, produkt-suche, erinnerungen, zugang
   emails/           Mail-Vorlagen für die Anmeldung
   tests/            Datenbank-Tests (run.sh)
@@ -160,6 +163,7 @@ Sicherheitsregeln (CSP), Geschwindigkeit, Offline-Start und Touch-Bedienung.
 |---|---|
 | **Datensicherung** | jede Nacht, verschlüsselt, 30 Tage; Einrichtung und Wiederherstellung in [BACKUP.md](BACKUP.md) |
 | **Wachhalten** | jeden Montag ein kurzer Aufruf, damit Supabase das Gratis-Projekt nicht pausiert |
+| **Verlauf** | jede Änderung wird festgehalten (Tabelle `audit_log`); Gästenamen 60 Tage nach dem Anlass, sonst ein Jahr |
 | **Fehlerprotokoll** | Fehler bei Nutzern landen anonym in der Tabelle `client_errors` (Table Editor), 30 Tage |
 | **Mails** | täglicher Lauf um 7:00 UTC: Erinnerungen (14 und 3 Tage vorher) und Reservierungs-Zusammenfassung |
 | **Zugangsanfragen** | Administratoren bekommen eine Mail und geben in den Einstellungen frei |
