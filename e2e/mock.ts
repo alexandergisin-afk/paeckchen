@@ -30,7 +30,7 @@ const LIST2 = {
 export interface Calls { lists: string[]; rpc: string[]; writes: string[]; bodies: Record<string, unknown>[] }
 
 /** Beantwortet alle Supabase-Anfragen mit Testdaten und protokolliert sie. */
-export async function mockSupabase(page: Page, opts: { signedIn?: boolean; allowParentsBuy?: boolean; slowListMs?: number; recent?: string[]; admin?: boolean; loginBlocked?: boolean; invitePending?: boolean; emptyList?: boolean } = {}): Promise<Calls> {
+export async function mockSupabase(page: Page, opts: { signedIn?: boolean; allowParentsBuy?: boolean; slowListMs?: number; recent?: string[]; admin?: boolean; loginBlocked?: boolean; invitePending?: boolean; emptyList?: boolean; guestAccount?: boolean } = {}): Promise<Calls> {
   const calls: Calls = { lists: [], rpc: [], writes: [], bodies: [] };
   const order = new Map<string, number>(); // gespeicherte Reihenfolge wie in der echten Datenbank
   const withOrder = <T extends { id: string; list_members: object[] }>(l: T): T =>
@@ -88,7 +88,15 @@ export async function mockSupabase(page: Page, opts: { signedIn?: boolean; allow
       try { calls.bodies.push({ fn, ...JSON.parse(req.postData() ?? "{}") }); } catch { /* egal */ }
       if (fn === "reserve_for_guest") return json({ ok: true, code: "WXYZ-2345" });
       if (fn === "create_list") return json({ ...LIST, id: LID });
-      if (fn === "pending_access_requests") return json([{ id: "req1", email: "anna@test.de", created_at: "2026-11-09T10:00:00Z", invited_by_name: "Markus", list_title: "Emmas 9. Geburtstag" }]);
+      if (fn === "pending_access_requests") return json([
+        { id: "req1", email: "anna@test.de", created_at: "2026-11-09T10:00:00Z", invited_by_name: "Markus", list_title: "Emmas 9. Geburtstag" },
+        { id: "req2", email: "oma@test.de", created_at: "2026-11-10T10:00:00Z", invited_by_name: null, list_title: null },
+      ]);
+      if (fn === "list_accounts") return json([
+        { id: UID, display_name: "Julia", email: "julia@test.de", account_type: "family", is_admin: true, lists_owned: 2 },
+        { id: "u-gast", display_name: "Tobias", email: "tobias@test.de", account_type: "family", is_admin: false, lists_owned: 0 },
+      ]);
+      if (fn === "set_account_type") return route.fulfill({ status: 204 });
       if (fn === "create_invite") return json("EINLADUNG123");
       if (fn === "set_list_order") {
         const ids = (JSON.parse(req.postData() ?? "{}").p_ids ?? []) as string[];
@@ -116,7 +124,7 @@ export async function mockSupabase(page: Page, opts: { signedIn?: boolean; allow
       const row = { user_id: UID, terms: opts.recent ?? [] };
       return json(req.headers()["accept"]?.includes("object") ? row : [row]);
     }
-    if (url.includes("/rest/v1/profiles")) return json({ display_name: "Julia", reminder_emails: true, notify_reservations: "daily", list_sort: "custom" });
+    if (url.includes("/rest/v1/profiles")) return json({ display_name: "Julia", reminder_emails: true, notify_reservations: "daily", list_sort: "custom", account_type: opts.guestAccount ? "guest" : "family" });
     if (url.includes("/rest/v1/lists")) {
       calls.lists.push(url);
       const nested = { ...LIST, wishes: opts.emptyList ? [] : WISHES.map((w) => ({ ...w, reservations: RES.filter((r) => r.wish_id === w.id) })) };

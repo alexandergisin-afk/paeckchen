@@ -977,3 +977,17 @@ html, body { overscroll-behavior-y: contain; }
 .contrib-actions svg { width: 16px; height: 16px; }
 .contrib-names { font-size: .85rem; color: var(--ink-2); line-height: 1.35; }
 .contrib-actions .btn { background: var(--surface); box-shadow: 0 1px 2px rgba(35, 26, 49, .08); }
+
+/* Kontoart bei der Freigabe */
+.type-choice { border: 0; margin: 0 0 12px; padding: 0; display: grid; gap: 8px; }
+.type-choice legend { font-weight: 700; font-size: .9rem; margin-bottom: 6px; padding: 0; }
+.type-choice label { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 10px; align-items: start; padding: 10px 12px; border-radius: 14px; background: var(--surface-2); cursor: pointer; }
+.type-choice label:has(input:checked) { outline: 2px solid var(--plum); background: var(--plum-soft); }
+.type-choice input { width: 20px; height: 20px; margin: 2px 0 0; accent-color: var(--plum); }
+.type-choice small { display: block; color: var(--ink-2); font-size: .85rem; margin-top: 2px; }
+
+/* Konten-Übersicht */
+.account { display: grid; gap: 10px; }
+.account-who { display: grid; gap: 2px; min-width: 0; }
+.account-who .hint { overflow-wrap: anywhere; }
+.account-toggle { justify-self: start; }

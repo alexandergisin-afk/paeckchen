@@ -374,10 +374,11 @@ test("Einladen ohne Administratorrechte: Hinweis, dass die Freigabe noch aussteh
 test("Administratoren sehen Zugangsanfragen und geben frei", async ({ page }) => {
   const calls = await mockSupabase(page, { signedIn: true, admin: true });
   await page.goto("/#/einstellungen");
-  await expect(page.getByRole("link", { name: /Zugangsanfragen/ })).toContainText("1");
+  await expect(page.getByRole("link", { name: /Zugangsanfragen/ })).toContainText("2");
+  await expect(page.getByRole("link", { name: /Zugangsanfragen/ })).toContainText("Neue Konten warten auf deine Freigabe");
   await page.getByRole("link", { name: /Zugangsanfragen/ }).click();
   await expect(page.getByText("Eingeladen von Markus zu „Emmas 9. Geburtstag“")).toBeVisible();
-  await page.getByRole("button", { name: "Freigeben" }).click();
+  await page.locator(".request", { hasText: "anna@test.de" }).getByRole("button", { name: "Freigeben" }).click();
   await expect(page.locator("#toast")).toContainText("bekommt jetzt die Mail mit dem Code");
   expect(calls.bodies.find((b) => b.fn === "zugang")).toMatchObject({ action: "decide", id: "req1", approve: true });
 });
@@ -579,4 +580,43 @@ test("Gruppengeschenk: in der Liste steht, wer sich mit wie viel beteiligt", asy
   await mockSupabase(page, { signedIn: true });
   await page.goto(`/#/liste/${LID}`);
   await expect(page.locator(".wrow-btn", { hasText: "Laufrad gemeinsam" }).locator(".contrib-names")).toHaveText(/Onkel Tobias 100\s€/);
+});
+
+test("Konto zum Schenken: keine eigenen Listen, keine Statistik, schlanke Einstellungen", async ({ page }) => {
+  await mockSupabase(page, { signedIn: true, guestAccount: true });
+  await page.goto("/#/");
+  await expect(page.getByRole("region", { name: "Wunschlisten zum Schenken" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Neue Liste" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Statistik" })).toHaveCount(0);
+  await page.goto("/#/einstellungen");
+  await expect(page.getByRole("heading", { name: "Konto", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Zugriff verwalten/ })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Benachrichtigungen" })).toHaveCount(0);
+});
+
+test("Familienkonto: „Neue Liste“ wie gewohnt", async ({ page }) => {
+  await mockSupabase(page, { signedIn: true });
+  await page.goto("/#/");
+  await expect(page.getByRole("button", { name: "Neue Liste" })).toBeVisible();
+});
+
+test("Freigeben mit Kontoart: ohne Einladung „Zum Schenken“, eingeladen „Familie“ vorausgewählt", async ({ page }) => {
+  const calls = await mockSupabase(page, { signedIn: true, admin: true });
+  await page.goto("/#/einstellungen/anfragen");
+  const anna = page.locator(".request", { hasText: "anna@test.de" });
+  const oma = page.locator(".request", { hasText: "oma@test.de" });
+  await expect(anna.getByRole("radio", { name: /Familie/ })).toBeChecked();
+  await expect(oma.getByRole("radio", { name: /Zum Schenken/ })).toBeChecked();
+  await oma.getByRole("button", { name: "Freigeben" }).click();
+  await expect.poll(() => calls.bodies.find((b) => b.action === "decide")).toMatchObject({ id: "req2", approve: true, type: "guest" });
+});
+
+test("Konten: Administratorin stellt ein Konto auf „Zum Schenken“ um", async ({ page }) => {
+  const calls = await mockSupabase(page, { signedIn: true, admin: true });
+  await page.goto("/#/einstellungen");
+  await page.getByRole("link", { name: /^Konten/ }).click();
+  const tobias = page.locator(".account", { hasText: "Tobias" });
+  await tobias.getByRole("button", { name: "Zum Schenken" }).click();
+  await expect.poll(() => calls.bodies.find((b) => b.fn === "set_account_type")).toMatchObject({ p_user: "u-gast", p_type: "guest" });
+  await expect(page.locator("#toast")).toContainText("Tobias hat jetzt ein Konto zum Schenken");
 });

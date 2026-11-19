@@ -8,7 +8,8 @@ import { IconBack, IconChevron, IconHistory, IconLogout, IconMail, IconUsers } f
 import { Link } from "react-router-dom";
 
 export function Settings() {
-  const { session, displayName, refreshProfile } = useAuth();
+  const { session, displayName, accountType, refreshProfile } = useAuth();
+  const isGuest = accountType === "guest"; // Konto zum Schenken: keine eigenen Listen, keine Verwaltung
   const [name, setNameValue] = useState(displayName);
   const [installable, setInstallable] = useState(canPrompt());
   const [reminders, setReminders] = useState<boolean | null>(null);
@@ -96,7 +97,14 @@ export function Settings() {
           <button className="btn soft small" style={{ marginTop: 12 }} onClick={() => { clearCache(); db().auth.signOut(); }}><IconLogout /> Abmelden</button>
         </section>
 
-        <h2 className="settings-group">Familie &amp; Zugriff</h2>
+        {(!isGuest || pendingCount !== null) && <h2 className="settings-group">Familie &amp; Zugriff</h2>}
+        {pendingCount !== null && (
+          <Link className="panel settings-link" to="/einstellungen/konten">
+            <span className="settings-link-icon" aria-hidden="true"><IconUsers /></span>
+            <span><b>Konten</b><span className="hint" style={{ display: "block" }}>Wer eigene Listen anlegen darf und wer nur schenkt</span></span>
+            <span className="list-chev" aria-hidden="true"><IconChevron /></span>
+          </Link>
+        )}
         {pendingCount !== null && (
           <Link className="panel settings-link" to="/einstellungen/protokoll">
             <span className="settings-link-icon" aria-hidden="true"><IconHistory /></span>
@@ -107,16 +115,19 @@ export function Settings() {
         {pendingCount !== null && (
           <Link className="panel settings-link" to="/einstellungen/anfragen">
             <span className="settings-link-icon" aria-hidden="true"><IconMail /></span>
-            <span><b>Zugangsanfragen</b>{pendingCount > 0 && <span className="count-badge">{pendingCount}</span>}<span className="hint" style={{ display: "block" }}>{pendingCount > 0 ? "Neue Bearbeiter warten auf deine Freigabe" : "Keine offenen Anfragen"}</span></span>
+            <span><b>Zugangsanfragen</b>{pendingCount > 0 && <span className="count-badge">{pendingCount}</span>}<span className="hint" style={{ display: "block" }}>{pendingCount > 0 ? "Neue Konten warten auf deine Freigabe" : "Keine offenen Anfragen"}</span></span>
             <span className="list-chev" aria-hidden="true"><IconChevron /></span>
           </Link>
         )}
+        {!isGuest && (
         <Link className="panel settings-link" to="/einstellungen/zugriff">
-          <span className="settings-link-icon" aria-hidden="true"><IconUsers /></span>
-          <span><b>Zugriff verwalten</b><span className="hint" style={{ display: "block" }}>Wer welche Listen mitbearbeiten darf und was jede Rolle darf</span></span>
-          <span className="list-chev" aria-hidden="true"><IconChevron /></span>
-        </Link>
+            <span className="settings-link-icon" aria-hidden="true"><IconUsers /></span>
+            <span><b>Zugriff verwalten</b><span className="hint" style={{ display: "block" }}>Wer welche Listen mitbearbeiten darf und was jede Rolle darf</span></span>
+            <span className="list-chev" aria-hidden="true"><IconChevron /></span>
+          </Link>
+        )}
 
+        {!isGuest && (<>
         <h2 className="settings-group">Benachrichtigungen</h2>
         <section className="panel settings-switches">
           <label className="switch">
@@ -128,8 +139,10 @@ export function Settings() {
             <span><b>Erinnerungs-Mails</b><br /><span className="hint">Zwei Wochen und drei Tage vor jedem Anlass eine kurze Mail mit dem aktuellen Stand.</span></span>
           </label>
         </section>
+        </>)}
 
         <h2 className="settings-group">App</h2>
+        {!isGuest && (
         <details className="panel settings-more">
           <summary><b>Wünsche aus anderen Apps teilen</b><span className="hint">So landet ein Produkt aus einer Shop-App direkt in Päckli</span></summary>
           <p className="hint" style={{ marginTop: 6 }}>
@@ -144,6 +157,7 @@ export function Settings() {
           </div>
           <p className="hint">Den Kurzbefehl z. B. „Zu Päckli“ nennen. Er öffnet Päckli in Safari, dort musst du angemeldet sein.</p>
         </details>
+        )}
         <details className="panel settings-more">
           <summary><b>Als App auf dem Startbildschirm</b><span className="hint">Päckli wie eine App mit eigenem Symbol öffnen</span></summary>
           {isInstalled() ? (

@@ -63,6 +63,11 @@ Päckli hilft Familien, Geschenkwünsche zu sammeln und doppelte Geschenke zu ve
 | Liste verlassen | – | ✓ | – | – |
 | Neue Bearbeiter freigeben oder ablehnen | – | – | – | ✓ |
 
+**Kontoarten:** Jedes Konto ist entweder ein **Familienkonto** (darf eigene Listen anlegen) oder ein **Konto zum Schenken**
+(sieht Wunschlisten und reserviert wie ein Gast, legt keine Listen an). Neue Konten sind Konten zum Schenken, außer bei einer
+Einladung zum Mitbearbeiten oder wenn der Administrator bei der Freigabe „Familie“ wählt. Die Datenbank setzt das durch
+(`create_list` lehnt Konten zum Schenken ab). Administratoren stellen die Kontoart unter „Konten“ um.
+
 Administrator ist eine zusätzliche Rolle eines Kontos (Tabelle `app_admins`), unabhängig von einzelnen Listen.
 Lädt ein Administrator jemanden ein, ist die Person sofort freigeschaltet; bei allen anderen entsteht eine Anfrage.
 
@@ -97,6 +102,8 @@ Abrufen fremder Seiten und Mails.
 - **F-2** Konten nur für freigeschaltete Adressen (`allowed_emails`).
 - **F-3** Unbekannte Adressen erhalten statt einer Fehlermeldung eine **Zugangsanfrage**; Administratoren werden per Mail benachrichtigt.
 - **F-4** Erst nach Freigabe durch einen Administrator wird die Mail mit dem Anmeldecode verschickt. Abgelehnte Adressen lösen 30 Tage keine neue Benachrichtigung aus.
+- **F-5** Bei der Freigabe wählt der Administrator die Kontoart: „Zum Schenken“ (vorausgewählt bei Anmeldung ohne Einladung) oder „Familie“ (vorausgewählt bei Einladung zum Mitbearbeiten).
+- **F-6** Übersicht „Konten“ für Administratoren: alle Konten nach Kontoart, umstellbar; jede Umstellung steht im Sicherheitsprotokoll.
 
 ### 5.2 Listen
 - **F-10** Mehrere Listen pro Konto mit Titel, beschenkter Person, Anlass, Datum, Beschreibung und Symbol.
@@ -177,6 +184,7 @@ erDiagram
     bool reminder_emails
     text notify_reservations "daily oder off"
     text list_sort "custom, date, new, name"
+    text account_type "family oder guest"
   }
   lists {
     uuid id PK
@@ -460,7 +468,7 @@ flowchart TD
   MONTAG["jeden Montag"] --> WACH["wachhalten.yml"]
 ```
 
-Datenbank-Änderungen werden als nummerierte SQL-Dateien geliefert (`supabase/02_…` bis `19_…`) und einmalig im
+Datenbank-Änderungen werden als nummerierte SQL-Dateien geliefert (`supabase/02_…` bis `20_…`) und einmalig im
 SQL Editor ausgeführt; `schema.sql` enthält immer den vollständigen Stand für neue Projekte.
 
 ## 12. Teststrategie

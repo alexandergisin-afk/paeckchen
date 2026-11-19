@@ -7,13 +7,24 @@ import { IconChevron } from "../components/Icons";
 
 /** Startseite für Schenkende ohne Konto: alle Wunschlisten, die auf diesem Gerät geöffnet wurden. */
 export function GuestHome() {
-  const [lists, setLists] = useState(getGuestLists);
-  const remove = (token: string) => { forgetGuestList(token); setLists(getGuestLists()); };
-
   return (
     <div className="wrap narrow">
       <h1>Deine Wunschlisten</h1>
       <p className="lead">Alle Wunschlisten, die du auf diesem Gerät geöffnet hast. Tippe eine an, um zu schauen oder etwas zu reservieren.</p>
+      <VisitedLists />
+      <p className="hint" style={{ marginTop: 26 }}>
+        Du verwaltest selbst Wunschlisten? <Link to="/anmelden">Hier anmelden</Link>
+      </p>
+    </div>
+  );
+}
+
+/** Die auf diesem Gerät geöffneten Wunschlisten, einzeln entfernbar (auch in der Übersicht von Schenkendenkonten). */
+export function VisitedLists() {
+  const [lists, setLists] = useState(getGuestLists);
+  const remove = (token: string) => { forgetGuestList(token); setLists(getGuestLists()); };
+  return (
+    <>
       {lists.length === 0 ? (
         <div className="empty" style={{ marginTop: 18 }}>
           <p>Noch keine Wunschliste. Öffne einmal den Link, den du bekommen hast, dann erscheint sie hier.</p>
@@ -42,9 +53,6 @@ export function GuestHome() {
           })}
         </div>
       )}
-      <p className="hint" style={{ marginTop: 26 }}>
-        Du verwaltest selbst Wunschlisten? <Link to="/anmelden">Hier anmelden</Link>
-      </p>
-    </div>
+    </>
   );
 }

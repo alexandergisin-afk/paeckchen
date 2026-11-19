@@ -4,7 +4,8 @@
 // Aktionen (POST, JSON):
 //   { action: "request", email }             unbekannte Adresse meldet sich an → Anfrage + Mail an die Verwaltung
 //   { action: "invite", email, list_id }     Einladen (mit Anmeldung): Admin schaltet frei, sonst Anfrage + Mail
-//   { action: "decide", id, approve }        Admin gibt frei oder lehnt ab; bei Freigabe geht die Code-Mail raus
+//   { action: "decide", id, approve, type }  Admin gibt frei (type: "guest" = Schenkender, "family" = Familie) oder lehnt ab;
+//                                            bei Freigabe geht die Code-Mail raus
 //
 // Secrets wie bei „erinnerungen“: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM, APP_URL.
 // SUPABASE_URL, SUPABASE_ANON_KEY und SUPABASE_SERVICE_ROLE_KEY stellt Supabase bereit.
@@ -45,7 +46,7 @@ if (typeof Deno !== "undefined") {
     const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
     const appUrl = Deno.env.get("APP_URL") ?? "";
-    let body: { action?: string; email?: string; list_id?: string; id?: string; approve?: boolean } = {};
+    let body: { action?: string; email?: string; list_id?: string; id?: string; approve?: boolean; type?: string } = {};
     try { body = await req.json(); } catch { return json({ error: "bad_request" }, 400); }
 
     const rpc = (fn: string, args: unknown, jwt?: string) =>
@@ -100,7 +101,8 @@ if (typeof Deno !== "undefined") {
 
     // 3) Freigeben oder ablehnen
     if (body.action === "decide") {
-      const r = await rpc("decide_access", { p_id: body.id, p_approve: !!body.approve }, userJwt);
+      const type = body.type === "family" ? "family" : "guest"; // ohne Angabe: Schenkender
+      const r = await rpc("decide_access", { p_id: body.id, p_approve: !!body.approve, p_type: type }, userJwt);
       const text = await r.text();
       if (!r.ok) return json({ error: /forbidden|42501/.test(text) ? "forbidden" : /not_found/.test(text) ? "not_found" : "decide_failed" }, r.status === 401 ? 401 : 400);
       const email = JSON.parse(text) as string;

@@ -32,6 +32,7 @@ export function friendlyError(e: unknown): string {
   const msg = (e as { message?: string })?.message ?? "";
   if (/database error saving new user|signups? not allowed|signup_not_allowed/i.test(msg))
     return "Päckli ist gerade nur für eingeladene Familien. Bitte frag die Person, die dich eingeladen hat, ob deine E-Mail-Adresse freigeschaltet ist.";
+  if (/family_only/i.test(msg)) return "Mit einem Konto zum Schenken kannst du keine eigenen Listen anlegen.";
   if (/row-level security|permission|42501|forbidden/i.test(msg)) return "Dafür fehlt dir die Berechtigung.";
   if (/rate limit|too many/i.test(msg)) return "Zu viele Versuche. Bitte warte ein paar Minuten.";
   if (/failed to fetch|network|load failed/i.test(msg)) return "Keine Verbindung. Prüf bitte dein Internet und versuch es noch einmal.";

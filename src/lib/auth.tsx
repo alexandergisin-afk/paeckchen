@@ -6,15 +6,18 @@ interface AuthState {
   session: Session | null;
   loading: boolean;
   displayName: string;
+  /** "family" darf Listen anlegen, "guest" (Schenkende) nicht; null solange unbekannt */
+  accountType: "family" | "guest" | null;
   refreshProfile: () => void;
 }
 
-const AuthContext = createContext<AuthState>({ session: null, loading: true, displayName: "", refreshProfile: () => {} });
+const AuthContext = createContext<AuthState>({ session: null, loading: true, displayName: "", accountType: null, refreshProfile: () => {} });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [displayName, setDisplayName] = useState("");
+  const [accountType, setAccountType] = useState<"family" | "guest" | null>(null);
   const [profileVersion, setProfileVersion] = useState(0);
 
   useEffect(() => {
@@ -35,16 +38,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!session) return setDisplayName("");
+    if (!session) { setAccountType(null); return setDisplayName(""); }
     db()
       .from("profiles")
-      .select("display_name")
+      .select("display_name,account_type")
       .eq("id", session.user.id)
       .maybeSingle()
-      .then(({ data }) => setDisplayName(data?.display_name ?? session.user.email?.split("@")[0] ?? ""));
+      .then(({ data }) => {
+        setDisplayName(data?.display_name ?? session.user.email?.split("@")[0] ?? "");
+        // Ältere Datenbank ohne Kontoarten: wie bisher Familie
+        setAccountType(data?.account_type === "guest" ? "guest" : "family");
+      });
   }, [session, profileVersion]);
 
-  return <AuthContext.Provider value={{ session, loading, displayName, refreshProfile: () => setProfileVersion((v) => v + 1) }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ session, loading, displayName, accountType, refreshProfile: () => setProfileVersion((v) => v + 1) }}>{children}</AuthContext.Provider>;
 }
 
 export const useAuth = () => useContext(AuthContext);

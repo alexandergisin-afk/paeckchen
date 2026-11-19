@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { SkeletonRows } from "../components/Skeleton";
+import { VisitedLists } from "./GuestHome";
 import { usePullToRefresh, useRefreshOnReturn } from "../lib/useRefresh";
 import { PullIndicator } from "../components/PullIndicator";
 import { Link, useNavigate } from "react-router-dom";
@@ -39,7 +40,8 @@ const firstName = (n: string) => {
 };
 
 export function Dashboard() {
-  const { session, displayName } = useAuth();
+  const { session, displayName, accountType } = useAuth();
+  const isGuest = accountType === "guest"; // Schenkendenkonto: keine eigenen Listen
   const navigate = useNavigate();
   const [lists, setLists] = useState<DashList[] | null>(() => cached<DashList[]>("dashboard") ?? null);
   const [error, setError] = useState<string | null>(null);
@@ -129,7 +131,7 @@ export function Dashboard() {
       <div className="page-head">
         <div className="page-head-top">
           <h1>Hallo {firstName(displayName)}</h1>
-          {lists && lists.length > 0 && <Link className="btn soft small" to="/statistik"><IconChart /> Statistik</Link>}
+          {lists && lists.length > 0 && !isGuest && <Link className="btn soft small" to="/statistik"><IconChart /> Statistik</Link>}
         </div>
         <p className="lead">
           {upcoming
@@ -141,10 +143,17 @@ export function Dashboard() {
       {error && <p className="notice error" role="alert">{error} <button className="btn small soft" onClick={load}>Erneut laden</button></p>}
       {!lists && !error && <SkeletonRows count={3} label="Listen werden geladen" />}
 
-      {lists && active.length === 0 && (
+      {lists && active.length === 0 && !isGuest && (
         <div className="empty">
           <p>Noch keine Wunschliste. Leg die erste an, das dauert eine Minute.</p>
         </div>
+      )}
+      {isGuest && (
+        <section className="guest-account" aria-label="Wunschlisten zum Schenken">
+          <h2 className="section-title">Wunschlisten zum Schenken</h2>
+          <p className="hint">Dein Konto ist zum Schenken da. Öffne den Link zu einer Wunschliste, dann erscheint sie hier.</p>
+          <VisitedLists />
+        </section>
       )}
 
       {lists && active.length > 1 && (
@@ -223,9 +232,11 @@ export function Dashboard() {
         </details>
       )}
 
-      <div className="bottom-bar">
-        <button className="btn block big" onClick={() => setCreating(true)}><IconPlus /> Neue Liste</button>
-      </div>
+      {accountType === "family" && (
+        <div className="bottom-bar">
+          <button className="btn block big" onClick={() => setCreating(true)}><IconPlus /> Neue Liste</button>
+        </div>
+      )}
 
       <FormSheet open={creating} onClose={() => setCreating(false)} title="Neue Liste" formId="new-list" submitLabel="Anlegen" busy={busy}>
         <ListForm formId="new-list" onSubmit={create} />

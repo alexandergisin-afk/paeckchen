@@ -44,8 +44,11 @@ Die genaue Beschreibung aller Funktionen, Rollen und Abläufe steht in der **[Sp
 - Mitbearbeiter einladen, Rechte verwalten, Statistik pro Liste, tägliche Mail und Erinnerungen
 - Verlauf pro Liste: wer wann was geändert oder reserviert hat
 
+**Konten zum Schenken**
+- Für Schenkende, die ein Konto möchten: sehen Wunschlisten und reservieren, legen aber keine eigenen Listen an
+
 **Administratoren**
-- Neue Bearbeiter erst nach Freigabe: Anfragen per Mail, Freigeben oder Ablehnen in den Einstellungen
+- Neue Konten erst nach Freigabe, dabei Wahl der Kontoart (Familie oder zum Schenken); Übersicht „Konten“ zum Umstellen
 - Sicherheitsprotokoll: wer wann Zugang angefragt, bekommen oder verloren hat
 
 ---
@@ -73,7 +76,7 @@ src/
   lib/              Logik (Supabase, Zwischenspeicher, Gruppengeschenke, Sortieren, Ziehen, Rückgängig, …)
 supabase/
   schema.sql        komplette Datenbank in einer Datei (für neue Projekte)
-  02_…19_*.sql      einzelne Ergänzungen in der Reihenfolge ihrer Entstehung (für bestehende Projekte)
+  02_…20_*.sql      einzelne Ergänzungen in der Reihenfolge ihrer Entstehung (für bestehende Projekte)
   functions/        Edge Functions: link-vorschau, produkt-suche, erinnerungen, zugang
   emails/           Mail-Vorlagen für die Anmeldung
   tests/            Datenbank-Tests (run.sh)

@@ -19,9 +19,13 @@ export function RequestsPage() {
   }, []);
   useEffect(() => { load(); }, [load]);
 
+  // Kontoart pro Anfrage: ohne Einladung zum Schenken, eingeladen zum Mitbearbeiten als Familie
+  const [types, setTypes] = useState<Record<string, "guest" | "family">>({});
+  const typeOf = (r: Request) => types[r.id] ?? (r.invited_by_name ? "family" : "guest");
+
   const decide = async (r: Request, approve: boolean) => {
     setBusyId(r.id);
-    const { data, error } = await db().functions.invoke("zugang", { body: { action: "decide", id: r.id, approve } });
+    const { data, error } = await db().functions.invoke("zugang", { body: { action: "decide", id: r.id, approve, type: typeOf(r) } });
     setBusyId(null);
     const res = data as { ok?: boolean; mail_sent?: boolean } | null;
     if (error || !res?.ok) return toast("Das hat gerade nicht geklappt. Bitte versuch es noch einmal.");
@@ -35,7 +39,7 @@ export function RequestsPage() {
     <div className="wrap narrow">
       <Link className="back" to="/einstellungen"><IconBack /> Einstellungen</Link>
       <h1>Zugangsanfragen</h1>
-      <p className="lead">Neue Bearbeiter bekommen ihre Mail mit dem Anmeldecode erst, wenn du sie hier freigibst.</p>
+      <p className="lead">Neue Konten bekommen ihre Mail mit dem Anmeldecode erst, wenn du sie hier freigibst. Zum Reservieren braucht niemand ein Konto, der Link zur Wunschliste genügt.</p>
       {error && <p className="notice error" style={{ marginTop: 16 }}>{error}</p>}
       {!items && !error && <p className="loading">Wird geladen …</p>}
       {items && items.length === 0 && <div className="empty" style={{ marginTop: 18 }}><p>Keine offenen Anfragen.</p></div>}
@@ -48,6 +52,13 @@ export function RequestsPage() {
                 {r.invited_by_name ? `Eingeladen von ${r.invited_by_name}${r.list_title ? ` zu „${r.list_title}“` : ""}` : "Hat sich ohne Einladung angemeldet"}
                 {", "}{new Date(r.created_at).toLocaleDateString("de-DE", { day: "numeric", month: "long" })}
               </p>
+              <fieldset className="type-choice">
+                <legend>Freigeben als</legend>
+                <label><input type="radio" name={`typ-${r.id}`} checked={typeOf(r) === "guest"} onChange={() => setTypes({ ...types, [r.id]: "guest" })} />
+                  <span><b>Zum Schenken</b><small>sieht freigegebene Wunschlisten, legt keine eigenen an</small></span></label>
+                <label><input type="radio" name={`typ-${r.id}`} checked={typeOf(r) === "family"} onChange={() => setTypes({ ...types, [r.id]: "family" })} />
+                  <span><b>Familie</b><small>darf eigene Listen anlegen und mitbearbeiten</small></span></label>
+              </fieldset>
               <div className="toolbar">
                 <button className="btn" disabled={busyId === r.id} onClick={() => decide(r, true)}>Freigeben</button>
                 <button className="btn soft" disabled={busyId === r.id} onClick={() => decide(r, false)}>Ablehnen</button>

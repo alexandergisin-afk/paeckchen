@@ -16,6 +16,7 @@ const ListPage = lazy(() => import("./pages/ListPage").then((m) => ({ default: m
 const GuestPage = lazy(() => import("./pages/GuestPage").then((m) => ({ default: m.GuestPage })));
 const TeamPage = lazy(() => import("./pages/TeamPage").then((m) => ({ default: m.TeamPage })));
 const InvitePage = lazy(() => import("./pages/InvitePage").then((m) => ({ default: m.InvitePage })));
+const AccountsPage = lazy(() => import("./pages/AccountsPage").then((m) => ({ default: m.AccountsPage })));
 const HistoryPage = lazy(() => import("./pages/HistoryPage").then((m) => ({ default: m.HistoryPage })));
 const RequestsPage = lazy(() => import("./pages/RequestsPage").then((m) => ({ default: m.RequestsPage })));
 const Settings = lazy(() => import("./pages/Settings").then((m) => ({ default: m.Settings })));
@@ -95,6 +96,7 @@ export function App({ linkError }: { linkError: string | null }) {
             <Route path="/einstellungen/zugriff" element={parent(<AccessPage />)} />
             <Route path="/einstellungen/anfragen" element={parent(<RequestsPage />)} />
             <Route path="/einstellungen/protokoll" element={parent(<HistoryPage mode="access" />)} />
+            <Route path="/einstellungen/konten" element={parent(<AccountsPage />)} />
             <Route path="/liste/:id/verlauf" element={parent(<HistoryPage mode="list" />)} />
             <Route path="/teilen" element={parent(<SharePage />)} />
             <Route path="/statistik" element={parent(<StatsPage />)} />

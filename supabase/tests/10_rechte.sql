@@ -11,7 +11,7 @@ begin
   else execute 'set role authenticated'; perform set_config('request.jwt.claim.sub', uid, false); end if;
 end $$;
 
-insert into allowed_emails values ('julia@test.de'), ('markus@test.de'), ('fremd@test.de');
+insert into allowed_emails (email, account_type) values ('julia@test.de', 'family'), ('markus@test.de', 'family'), ('fremd@test.de', 'guest');
 insert into auth.users values ('11111111-1111-1111-1111-111111111111', 'julia@test.de'),
   ('22222222-2222-2222-2222-222222222222', 'markus@test.de'), ('33333333-3333-3333-3333-333333333333', 'fremd@test.de');
 do $$ begin insert into auth.users values ('44444444-4444-4444-4444-444444444444', 'nicht@freigeschaltet.de');
@@ -293,7 +293,7 @@ reset role;
 -- Zweite Sicherungsschicht: nur für Angemeldete gedachte Funktionen sind für Gäste gar nicht aufrufbar
 select pg_temp.pruefe(not has_function_privilege('anon', 'public.' || f, 'execute'), 'Gäste können ' || split_part(f, '(', 1) || ' nicht aufrufen')
 from unnest(array['allow_email(text, uuid)', 'reserve_for_guest(uuid, integer, text, boolean)', 'contribute_for_guest(uuid, integer, text)',
-                  'pending_access_requests()', 'decide_access(uuid, boolean)', 'is_admin()']) f;
+                  'pending_access_requests()', 'decide_access(uuid, boolean, text)', 'is_admin()']) f;
 select pg_temp.pruefe(has_function_privilege('anon', 'public.' || f, 'execute'), 'Gäste dürfen ' || split_part(f, '(', 1) || ' weiterhin nutzen')
 from unnest(array['guest_list(text)', 'reserve_wish(text, uuid, integer, text, boolean)', 'contribute(text, uuid, integer, text)',
                   'cancel_reservation(text)', 'my_reservations(text[])', 'log_client_error(text, text, text, text)']) f;
@@ -371,5 +371,47 @@ update audit_log set at = now() - interval '13 months' where list_id = :'vliste'
 select audit_purge();
 select pg_temp.pruefe((select count(*) from audit_log where list_id = :'vliste' and (kind = 'reservation' or (kind = 'list' and action = 'created'))) = 0
   and (select count(*) from audit_log where list_id = :'vliste') > 0, 'Aufräumen löscht genau das Abgelaufene');
+
+
+-- Kontoarten: Familie darf Listen anlegen, Schenkende nicht
+select pg_temp.als(null);
+select pg_temp.pruefe((select account_type from profiles where id = '11111111-1111-1111-1111-111111111111') = 'family'
+  and (select account_type from profiles where id = '33333333-3333-3333-3333-333333333333') = 'guest', 'Kontoart kommt aus der Freischaltung');
+select pg_temp.als('33333333-3333-3333-3333-333333333333');
+do $$ begin perform create_list('Darf nicht'); raise exception 'FEHLGESCHLAGEN: Schenkendenkonto hat eine Liste angelegt';
+  exception when insufficient_privilege then raise notice 'OK: Schenkendenkonten können keine Listen anlegen'; end $$;
+-- Selbst registriert und freigegeben: standardmäßig Schenkender
+select pg_temp.als(null);
+set role service_role;
+delete from rate_events where bucket like 'access:%';
+select request_access('selbst@test.de', '9.9.9.9') is not null as x \gset
+select request_access('familie@test.de', '9.9.9.8') is not null as x \gset
+reset role;
+select pg_temp.als('11111111-1111-1111-1111-111111111111');
+select decide_access((select id from pending_access_requests() where email = 'selbst@test.de'), true) is not null as x \gset
+select decide_access((select id from pending_access_requests() where email = 'familie@test.de'), true, 'family') is not null as x \gset
+select pg_temp.als(null);
+insert into auth.users values ('66666666-6666-6666-6666-666666666666', 'selbst@test.de'), ('77777777-7777-7777-7777-777777777777', 'familie@test.de');
+select pg_temp.pruefe((select account_type from profiles where id = '66666666-6666-6666-6666-666666666666') = 'guest', 'Freigabe ohne Auswahl ergibt ein Schenkendenkonto');
+select pg_temp.pruefe((select account_type from profiles where id = '77777777-7777-7777-7777-777777777777') = 'family', 'Freigabe als Familie ergibt ein Familienkonto');
+-- Einladung zum Mitbearbeiten durch einen Administrator: Familienkonto
+select pg_temp.als('11111111-1111-1111-1111-111111111111');
+select allow_email('partner@test.de') is not null as x \gset
+select pg_temp.als(null);
+insert into auth.users values ('88888888-8888-8888-8888-888888888888', 'partner@test.de');
+select pg_temp.pruefe((select account_type from profiles where id = '88888888-8888-8888-8888-888888888888') = 'family', 'Eingeladene Mitbearbeiter bekommen ein Familienkonto');
+-- Umstellen nur durch Administratoren, mit Eintrag im Sicherheitsprotokoll
+select pg_temp.als('22222222-2222-2222-2222-222222222222');
+do $$ begin perform set_account_type('66666666-6666-6666-6666-666666666666', 'family'); raise exception 'FEHLGESCHLAGEN: Nicht-Admin stellt um';
+  exception when insufficient_privilege then raise notice 'OK: Nur Administratoren stellen Kontoarten um'; end $$;
+do $$ begin perform list_accounts(); raise exception 'FEHLGESCHLAGEN: Nicht-Admin sieht Konten';
+  exception when insufficient_privilege then raise notice 'OK: Nur Administratoren sehen alle Konten'; end $$;
+select pg_temp.als('11111111-1111-1111-1111-111111111111');
+select set_account_type('66666666-6666-6666-6666-666666666666', 'family');
+select pg_temp.pruefe((select account_type from list_accounts() where email = 'selbst@test.de') = 'family', 'Administratorin stellt ein Konto auf Familie um');
+select pg_temp.pruefe((select count(*) from audit_log where kind = 'access' and action = 'type_changed' and data->>'type' = 'family') >= 1, 'Umstellung steht im Sicherheitsprotokoll');
+select pg_temp.als('66666666-6666-6666-6666-666666666666');
+select pg_temp.pruefe((create_list('Jetzt erlaubt')).id is not null, 'Nach der Umstellung darf das Konto Listen anlegen');
+select pg_temp.als(null);
 
 \echo 'Alle Datenbank-Tests bestanden.'
