@@ -620,3 +620,56 @@ test("Konten: Administratorin stellt ein Konto auf „Zum Schenken“ um", async
   await expect.poll(() => calls.bodies.find((b) => b.fn === "set_account_type")).toMatchObject({ p_user: "u-gast", p_type: "guest" });
   await expect(page.locator("#toast")).toContainText("Tobias hat jetzt ein Konto zum Schenken");
 });
+
+test("Konto zum Schenken: Wunschlisten kommen aus dem Konto und lassen sich entfernen", async ({ page }) => {
+  const calls = await mockSupabase(page, { signedIn: true, guestAccount: true, followed: true });
+  await page.goto("/#/");
+  const section = page.getByRole("region", { name: "Wunschlisten zum Schenken" });
+  await expect(section.getByRole("link", { name: /Mias Einschulung/ })).toHaveAttribute("href", "#/w/MIA");
+  await section.getByRole("button", { name: "„Mias Einschulung“ aus deiner Übersicht entfernen" }).click();
+  await expect.poll(() => calls.writes.find((w) => w.startsWith("DELETE list_followers"))).toContain("list_id=eq.fl1");
+  await expect(section.getByRole("link", { name: /Mias Einschulung/ })).toHaveCount(0);
+});
+
+test("Familienkonto mit gespeicherter fremder Liste: Bereich unter den eigenen Listen", async ({ page }) => {
+  await mockSupabase(page, { signedIn: true, followed: true });
+  await page.goto("/#/");
+  await expect(page.getByRole("region", { name: "Wunschlisten zum Schenken" })).toContainText("Mias Einschulung");
+  await expect(page.getByRole("button", { name: "Neue Liste" })).toBeVisible();
+});
+
+test("Familienkonto ohne gespeicherte fremde Listen: kein leerer Bereich", async ({ page }) => {
+  await mockSupabase(page, { signedIn: true });
+  await page.goto("/#/");
+  await expect(page.getByRole("heading", { name: /Hallo/ })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Wunschlisten zum Schenken" })).toHaveCount(0);
+});
+
+test("Angemeldet als Gast: Liste wird gespeichert, eigene Reservierung kommt vom Konto, Aufheben ohne Code", async ({ page }) => {
+  const calls = await mockSupabase(page, { signedIn: true, guestAccount: true, accountReservation: true });
+  await page.goto("/#/w/TOK");
+  await expect(page.getByRole("heading", { name: "Emmas 9. Geburtstag" })).toBeVisible();
+  await expect.poll(() => calls.bodies.find((b) => b.fn === "follow_list")).toMatchObject({ p_token: "TOK" });
+  const mine = page.getByRole("region", { name: /Deine Geschenke/ });
+  await expect(mine).toContainText("Kinderfahrrad");
+  await mine.getByRole("button", { name: "Reservierung aufheben" }).click();
+  await page.getByRole("button", { name: "Ja, aufheben" }).click();
+  await expect.poll(() => calls.bodies.find((b) => b.fn === "cancel_my_reservation")).toMatchObject({ p_id: "acc1" });
+  expect(calls.bodies.find((b) => b.fn === "cancel_reservation")).toBeUndefined();
+});
+
+test("Mitglieder: Schenkende mit Konto sehen, hinzufügen und Hinweis ohne Konto", async ({ page }) => {
+  const calls = await mockSupabase(page, { signedIn: true });
+  await page.goto(`/#/liste/${LID}/mitglieder`);
+  const panel = page.getByRole("region", { name: "Schenkende mit Konto" });
+  await expect(panel).toContainText("Tobias");
+  await expect(panel).toContainText("über den Link gespeichert");
+  await panel.getByLabel("Konto per E-Mail hinzufügen").fill("oma@test.de");
+  await panel.getByRole("button", { name: "Hinzufügen" }).click();
+  await expect(page.locator("#toast")).toContainText("Oma Gisela sieht die Liste jetzt im eigenen Konto.");
+  await panel.getByLabel("Konto per E-Mail hinzufügen").fill("neu@test.de");
+  await panel.getByRole("button", { name: "Hinzufügen" }).click();
+  await expect(panel).toContainText("Zu dieser Adresse gibt es noch kein Konto");
+  await panel.getByRole("button", { name: "Tobias entfernen" }).click();
+  await expect.poll(() => calls.writes.find((w) => w.startsWith("DELETE list_followers"))).toContain("user_id=eq.u-tobias");
+});

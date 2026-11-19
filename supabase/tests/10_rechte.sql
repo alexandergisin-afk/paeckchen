@@ -414,4 +414,59 @@ select pg_temp.als('66666666-6666-6666-6666-666666666666');
 select pg_temp.pruefe((create_list('Jetzt erlaubt')).id is not null, 'Nach der Umstellung darf das Konto Listen anlegen');
 select pg_temp.als(null);
 
+
+-- Konten zum Schenken: Listen am Konto, Reservierungen am Konto
+select pg_temp.als('11111111-1111-1111-1111-111111111111');
+select id as sliste, guest_token as sgast from create_list('Schenktest', 'Emma') \gset
+insert into wishes (list_id, title, quantity, created_by) values (:'sliste', 'Puzzle', 3, auth.uid());
+select id as puzzle from wishes where title = 'Puzzle' and list_id = :'sliste' \gset
+-- Tobias (Konto zum Schenken) öffnet den Link angemeldet
+select pg_temp.als('66666666-6666-6666-6666-666666666666');
+select pg_temp.als(null);
+update profiles set account_type = 'guest', display_name = 'Tobias' where id = '66666666-6666-6666-6666-666666666666';
+select pg_temp.als('66666666-6666-6666-6666-666666666666');
+select pg_temp.pruefe(follow_list(:'sgast') = :'sliste'::uuid, 'Link öffnen speichert die Liste am Konto');
+select pg_temp.pruefe((select count(*) from my_followed_lists() where list_id = :'sliste') = 1, 'Gespeicherte Liste erscheint in der Übersicht');
+select pg_temp.pruefe((select count(*) from lists where id = :'sliste') = 0 and (select count(*) from wishes where list_id = :'sliste') = 0
+  and (select count(*) from reservations) = 0, 'Gespeichert heißt nicht Mitglied: keine Tabellen-Einsicht');
+-- Reservieren angemeldet über die Gästefunktion: gehört dem Konto, Aufheben ohne Code
+select pg_temp.als(null);
+delete from rate_events;
+select pg_temp.als('66666666-6666-6666-6666-666666666666');
+select reserve_wish(:'sgast', :'puzzle', 1, 'Tobias')->>'code' as tcode \gset
+select pg_temp.pruefe((select count(*) from my_account_reservations(:'sgast')) = 1, 'Angemeldete Reservierung gehört dem Konto');
+select id as tres from my_account_reservations(:'sgast') limit 1 \gset
+select pg_temp.als('22222222-2222-2222-2222-222222222222');
+select pg_temp.pruefe(not cancel_my_reservation(:'tres'), 'Fremde können eine Konto-Reservierung nicht aufheben');
+select pg_temp.als('66666666-6666-6666-6666-666666666666');
+select pg_temp.pruefe(cancel_my_reservation(:'tres'), 'Konto hebt eigene Reservierung ohne Code auf');
+-- Code von früher (ohne Anmeldung reserviert) dem Konto zuordnen, auch in anderer Schreibweise
+select pg_temp.als('anon');
+select reserve_wish(:'sgast', :'puzzle', 1, 'Tobias')->>'code' as altcode \gset
+select pg_temp.als('66666666-6666-6666-6666-666666666666');
+select pg_temp.pruefe(claim_reservations(array[lower(replace(:'altcode', '-', ''))]) = 1, 'Reservierung vom Gerät wird dem Konto zugeordnet');
+select pg_temp.pruefe(claim_reservations(array[:'altcode']) = 0, 'Zuordnung nur einmal');
+select pg_temp.als('22222222-2222-2222-2222-222222222222');
+select pg_temp.pruefe(claim_reservations(array[:'altcode']) = 0, 'Fremde können eine zugeordnete Reservierung nicht übernehmen');
+-- Eltern sehen, wer gespeichert hat, und können hinzufügen und entfernen
+select pg_temp.als('11111111-1111-1111-1111-111111111111');
+select pg_temp.pruefe((select display_name from list_followers_of(:'sliste')) = 'Tobias', 'Eltern sehen Schenkende mit Konto');
+select pg_temp.pruefe(add_follower(:'sliste', 'niemand@test.de')->>'status' = 'no_account', 'Ohne Konto: Hinweis statt Fehler');
+select pg_temp.pruefe(add_follower(:'sliste', 'JULIA@test.de')->>'status' = 'member', 'Mitglieder werden nicht zusätzlich gespeichert');
+delete from list_followers where list_id = :'sliste' and user_id = '66666666-6666-6666-6666-666666666666';
+select pg_temp.pruefe(add_follower(:'sliste', 'selbst@test.de')->>'status' = 'added', 'Eltern fügen ein Konto hinzu');
+select pg_temp.pruefe((select string_agg(action, ',' order by id) from audit_log where list_id = :'sliste' and kind = 'member')
+  = 'follower_saved,follower_removed,follower_added', 'Speichern, Entfernen und Hinzufügen stehen im Verlauf');
+-- Fremde dürfen nichts davon
+select pg_temp.als('33333333-3333-3333-3333-333333333333');
+do $$ begin perform add_follower((select list_id from list_followers limit 1), 'x@test.de'); raise exception 'FEHLGESCHLAGEN: Fremder fügt hinzu';
+  exception when insufficient_privilege then raise notice 'OK: Fremde können keine Konten zu Listen hinzufügen'; end $$;
+select pg_temp.pruefe((select count(*) from list_followers) = 0, 'Fremde sehen nicht, wer welche Liste gespeichert hat');
+-- Archivierte Listen verschwinden aus der Übersicht
+select pg_temp.als('11111111-1111-1111-1111-111111111111');
+update lists set archived_at = now() where id = :'sliste';
+select pg_temp.als('66666666-6666-6666-6666-666666666666');
+select pg_temp.pruefe((select count(*) from my_followed_lists() where list_id = :'sliste') = 0, 'Abgeschlossene Listen erscheinen nicht in der Übersicht');
+select pg_temp.als(null);
+
 \echo 'Alle Datenbank-Tests bestanden.'

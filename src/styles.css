@@ -991,3 +991,20 @@ html, body { overscroll-behavior-y: contain; }
 .account-who { display: grid; gap: 2px; min-width: 0; }
 .account-who .hint { overflow-wrap: anywhere; }
 .account-toggle { justify-self: start; }
+.guest-account { margin-top: 22px; }
+.guest-account .list-rows { margin-top: 10px; }
+
+/* Schenkende mit Konto */
+.follower-list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; }
+.follower-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+.follower-list li:first-child { border-top: 0; }
+.follower-list small { display: block; color: var(--ink-2); font-size: .82rem; }
+.follower-add { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: end; margin-top: 14px; }
+@media (max-width: 380px) { .follower-add { grid-template-columns: 1fr; } }
+
+/* Hinweise aufs Konto für Schenkende */
+.account-hint { display: grid; gap: 10px; margin: 18px 0 6px; padding: 16px 18px; border-radius: 20px; background: var(--surface); box-shadow: var(--shadow); }
+.account-hint p { margin: 0; line-height: 1.45; color: var(--ink-2); }
+.account-hint .btn { justify-self: start; }
+.login-explain { display: grid; gap: 8px; margin-top: 22px; padding: 14px 16px; border-radius: 18px; background: var(--surface-2); }
+.login-explain p { margin: 0; color: var(--ink-2); line-height: 1.45; font-size: .95rem; }

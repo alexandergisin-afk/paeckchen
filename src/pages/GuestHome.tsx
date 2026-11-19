@@ -12,9 +12,10 @@ export function GuestHome() {
       <h1>Deine Wunschlisten</h1>
       <p className="lead">Alle Wunschlisten, die du auf diesem Gerät geöffnet hast. Tippe eine an, um zu schauen oder etwas zu reservieren.</p>
       <VisitedLists />
-      <p className="hint" style={{ marginTop: 26 }}>
-        Du verwaltest selbst Wunschlisten? <Link to="/anmelden">Hier anmelden</Link>
-      </p>
+      <section className="account-hint" aria-label="Mit Konto schenken">
+        <p><b>Mit einem Konto</b> hast du diese Wunschlisten und deine Geschenke auf allen Geräten.</p>
+        <Link className="btn soft" to="/anmelden">Anmelden oder Konto anlegen</Link>
+      </section>
     </div>
   );
 }

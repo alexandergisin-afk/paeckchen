@@ -46,6 +46,7 @@ Die genaue Beschreibung aller Funktionen, Rollen und Abläufe steht in der **[Sp
 
 **Konten zum Schenken**
 - Für Schenkende, die ein Konto möchten: sehen Wunschlisten und reservieren, legen aber keine eigenen Listen an
+- „Wunschlisten zum Schenken“ auf jedem Gerät; Reservierungen am Konto, Aufheben ohne Code
 
 **Administratoren**
 - Neue Konten erst nach Freigabe, dabei Wahl der Kontoart (Familie oder zum Schenken); Übersicht „Konten“ zum Umstellen
@@ -76,7 +77,7 @@ src/
   lib/              Logik (Supabase, Zwischenspeicher, Gruppengeschenke, Sortieren, Ziehen, Rückgängig, …)
 supabase/
   schema.sql        komplette Datenbank in einer Datei (für neue Projekte)
-  02_…20_*.sql      einzelne Ergänzungen in der Reihenfolge ihrer Entstehung (für bestehende Projekte)
+  02_…21_*.sql      einzelne Ergänzungen in der Reihenfolge ihrer Entstehung (für bestehende Projekte)
   functions/        Edge Functions: link-vorschau, produkt-suche, erinnerungen, zugang
   emails/           Mail-Vorlagen für die Anmeldung
   tests/            Datenbank-Tests (run.sh)

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { SkeletonRows } from "../components/Skeleton";
-import { VisitedLists } from "./GuestHome";
+import { FollowedLists } from "../components/FollowedLists";
 import { usePullToRefresh, useRefreshOnReturn } from "../lib/useRefresh";
 import { PullIndicator } from "../components/PullIndicator";
 import { Link, useNavigate } from "react-router-dom";
@@ -148,13 +148,6 @@ export function Dashboard() {
           <p>Noch keine Wunschliste. Leg die erste an, das dauert eine Minute.</p>
         </div>
       )}
-      {isGuest && (
-        <section className="guest-account" aria-label="Wunschlisten zum Schenken">
-          <h2 className="section-title">Wunschlisten zum Schenken</h2>
-          <p className="hint">Dein Konto ist zum Schenken da. Öffne den Link zu einer Wunschliste, dann erscheint sie hier.</p>
-          <VisitedLists />
-        </section>
-      )}
 
       {lists && active.length > 1 && (
         <div className="sort-bar">
@@ -231,6 +224,8 @@ export function Dashboard() {
           </div>
         </details>
       )}
+
+      {accountType && <FollowedLists always={isGuest} />}
 
       {accountType === "family" && (
         <div className="bottom-bar">

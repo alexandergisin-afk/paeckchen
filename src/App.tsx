@@ -1,5 +1,5 @@
-import { HashRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
-import { lazy, Suspense, type ReactNode } from "react";
+import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { lazy, Suspense, useEffect, type ReactNode } from "react";
 import { isConfigured } from "./lib/supabase";
 import { AuthProvider, useAuth } from "./lib/auth";
 import { TopBar } from "./components/TopBar";
@@ -40,6 +40,37 @@ function prefetchPages() {
 }
 if (typeof window !== "undefined") window.addEventListener("load", prefetchPages, { once: true });
 
+/**
+ * Wer aus einer Wunschliste heraus „Konto anlegen“ gewählt hat, landet nach der Anmeldung wieder dort,
+ * egal ob per Code oder per Link aus der Mail.
+ */
+function ReturnAfterLogin() {
+  const { session } = useAuth();
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (!session) return;
+    try {
+      const back = localStorage.getItem(RETURN_AFTER_LOGIN);
+      if (!back) return;
+      localStorage.removeItem(RETURN_AFTER_LOGIN);
+      if (back.startsWith("/w/")) navigate(back, { replace: true });
+    } catch { /* egal */ }
+  }, [session, navigate]);
+  return null;
+}
+
+/** Nach der Anmeldung: zurück zur Seite, von der man kam (z. B. eine Wunschliste), sonst zur Übersicht. */
+function AfterLogin() {
+  let to = "/";
+  try {
+    const back = localStorage.getItem(RETURN_AFTER_LOGIN);
+    if (back && back.startsWith("/w/")) to = back;
+    localStorage.removeItem(RETURN_AFTER_LOGIN);
+  } catch { /* egal */ }
+  return <Navigate to={to} replace />;
+}
+export const RETURN_AFTER_LOGIN = "paeckli-nach-anmeldung";
+
 /** Absturz-Schutz pro Seite: Wechselt man die Seite, bekommt die neue eine frische Chance. */
 function RouteErrorBoundary({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
@@ -78,6 +109,7 @@ export function App({ linkError }: { linkError: string | null }) {
   return (
     <HashRouter>
       <AuthProvider>
+        <ReturnAfterLogin />
         <TopBar />
         <OfflineBanner />
         <main id="app">
@@ -87,7 +119,7 @@ export function App({ linkError }: { linkError: string | null }) {
             {/* Gästeansicht: ohne Anmeldung */}
             <Route path="/w/:token" element={<GuestPage />} />
             <Route path="/" element={parent(<Dashboard />)} />
-            <Route path="/anmelden" element={parent(<Navigate to="/" replace />)} />
+            <Route path="/anmelden" element={parent(<AfterLogin />)} />
             <Route path="/meine-listen" element={<GuestHome />} />
             <Route path="/liste/:id" element={parent(<ListPage />)} />
             <Route path="/liste/:id/mitglieder" element={parent(<TeamPage />)} />

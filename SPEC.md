@@ -129,6 +129,9 @@ Abrufen fremder Seiten und Mails.
 - **F-34** Das Gerät merkt sich die eigenen Reservierungscodes; Aufheben auf demselben Gerät.
 - **F-35** Erklärung beim ersten Besuch, danach eingeklappt.
 - **F-36** Das Gerät merkt sich geöffnete Wunschlisten. Ohne Link oder als App geöffnet erscheint „Deine Wunschlisten“ (bevorstehende Anlässe zuerst, einzeln entfernbar), mit Link zur Anmeldung für Eltern.
+- **F-38** Angemeldet (Konto zum Schenken oder Familie): Wer einen Gast-Link öffnet, speichert die Liste am Konto („Wunschlisten zum Schenken“, auf jedem Gerät gleich). Eltern können ein Konto auch per E-Mail hinzufügen. Das ist keine Mitgliedschaft: weiterhin nur die Gästeansicht.
+- **F-39** Angemeldet reservierte Geschenke gehören dem Konto und lassen sich von jedem Gerät ohne Code aufheben. Beim ersten Anmelden werden Reservierungen und geöffnete Listen dieses Geräts ins Konto übernommen.
+- **F-40** Ohne Anmeldung zeigen Gästeansicht und „Deine Wunschlisten“ einen Hinweis aufs Konto („Anmelden oder Konto anlegen“). Nach der Anmeldung, per Code oder per Link aus der Mail, geht es zurück zur Wunschliste, von der man kam.
 - **F-37** Hinweis „Päckli als App speichern“ mit Anleitung (ausblendbar). Auf dem iPhone startet die App mit der Wunschliste, von der aus sie gespeichert wurde, weil sie dort einen eigenen Speicher hat.
 
 ### 5.5 Reservierungen aus Elternsicht
@@ -139,6 +142,7 @@ Abrufen fremder Seiten und Mails.
 
 ### 5.6 Mitglieder und Zugriff
 - **F-50** Einladen per Link (einmalig, 7 Tage gültig) und Freischalten der Adresse.
+- **F-52** Bereich „Schenkende mit Konto“ pro Liste: wer die Liste gespeichert hat (über den Link oder von euch freigegeben), hinzufügen per E-Mail, entfernen. Entfernen nimmt die Liste nur aus der Übersicht; für echten Entzug den Gast-Link erneuern.
 - **F-51** Zugriffsverwaltung: pro Person die eigenen Listen ein- und ausschalten; Übersicht „Wer darf was?“.
 
 ### 5.7 Benachrichtigungen
@@ -177,6 +181,8 @@ erDiagram
   profiles ||--o{ access_requests : "lädt ein"
   lists ||--o{ access_requests : "Einladung zu"
   lists ||--o{ audit_log : "Verlauf"
+  lists ||--o{ list_followers : "zum Schenken gespeichert"
+  profiles ||--o{ list_followers : "speichert"
 
   profiles {
     uuid id PK
@@ -258,6 +264,12 @@ erDiagram
     text actor_name "Name zum Zeitpunkt der Änderung"
     jsonb data "z. B. alte und neue Werte"
     date forget_after "bei Reservierungs-Einträgen"
+  }
+  list_followers {
+    uuid list_id PK
+    uuid user_id PK
+    text source "link oder family"
+    uuid added_by FK
   }
   list_reminders {
     uuid list_id PK
@@ -468,7 +480,7 @@ flowchart TD
   MONTAG["jeden Montag"] --> WACH["wachhalten.yml"]
 ```
 
-Datenbank-Änderungen werden als nummerierte SQL-Dateien geliefert (`supabase/02_…` bis `20_…`) und einmalig im
+Datenbank-Änderungen werden als nummerierte SQL-Dateien geliefert (`supabase/02_…` bis `21_…`) und einmalig im
 SQL Editor ausgeführt; `schema.sql` enthält immer den vollständigen Stand für neue Projekte.
 
 ## 12. Teststrategie

@@ -12,13 +12,15 @@ import { euroShort } from "../lib/gift";
 import { celebrate } from "../lib/celebrate";
 import { cached, remember } from "../lib/cache";
 import { forgetGuestList, getGuestLists, rememberGuestList } from "../lib/guestLists";
+import { syncDeviceToAccount } from "../lib/followed";
 import { canPrompt, isInstalled, isIOS, onInstallChange, promptInstall } from "../lib/install";
 import { addCode, getCodes, getName, keepCodes, removeCode, setName } from "../lib/device";
 import { IconCheck, IconExt, IconGift, IconGrid, IconRows } from "../components/Icons";
 import { Sheet } from "../components/Sheet";
 import { PriorityBadge, WishTile } from "../components/WishRow";
 
-interface Mine { code: string; wish_id: string; quantity: number; amount_cents?: number | null }
+/** Eigene Reservierung: per Code (Gerät) oder am Konto (id, angemeldet) */
+interface Mine { code: string; id?: string; wish_id: string; quantity: number; amount_cents?: number | null }
 type Price = "all" | "20" | "50" | "more";
 type GSheet =
   | null
@@ -30,14 +32,14 @@ type GSheet =
   | { kind: "appIos" }
   | { kind: "done"; wish: GuestWish; parentsBuy: boolean }
   | { kind: "taken"; available: number }
-  | { kind: "cancel"; wish: GuestWish; code: string };
+  | { kind: "cancel"; wish: GuestWish; code: string; id?: string };
 
 const inPrice = (w: GuestWish, p: Price) =>
   p === "all" || (w.price_cents != null && (p === "20" ? w.price_cents <= 2000 : p === "50" ? w.price_cents <= 5000 : w.price_cents > 5000));
 
 export function GuestPage() {
   const { token = "" } = useParams();
-  const { session } = useAuth();
+  const { session, displayName } = useAuth();
   // Zuletzt geladenen Stand sofort zeigen (auch offline), frisch geladen wird im Hintergrund
   const [list, setList] = useState<GuestList | null>(() => cached<{ list: GuestList }>(`guest:${token}`)?.list ?? null);
   const [mine, setMine] = useState<Mine[]>(() => cached<{ mine: Mine[] }>(`guest:${token}`)?.mine ?? []);
@@ -66,7 +68,15 @@ export function GuestPage() {
     if (!g.data || !Array.isArray((g.data as GuestList).wishes)) { forgetGuestList(token); return setState("invalid"); }
     let rows: Mine[] = [];
     const codes = getCodes();
-    if (codes.length) {
+    if (session) {
+      // Angemeldet: Liste im Konto speichern, Reservierungen vom Gerät übernehmen, eigene Reservierungen vom Konto
+      await syncDeviceToAccount(session.user.id);
+      await client.rpc("follow_list", { p_token: token });
+      if (codes.length) await client.rpc("claim_reservations", { p_codes: codes });
+      const a = await client.rpc("my_account_reservations", { p_token: token });
+      if (!a.error) rows = ((a.data ?? []) as { id: string; wish_id: string; quantity: number; amount_cents: number | null }[])
+        .map((r) => ({ code: "", id: r.id, wish_id: r.wish_id, quantity: r.quantity, amount_cents: r.amount_cents }));
+    } else if (codes.length) {
       const m = await client.rpc("my_reservations", { p_codes: codes });
       if (!m.error) {
         rows = m.data as Mine[];
@@ -79,8 +89,11 @@ export function GuestPage() {
     remember(`guest:${token}`, { list: g.data as GuestList, mine: rows });
     const gl = g.data as GuestList;
     rememberGuestList({ token, title: gl.title, recipient_name: gl.recipient_name, event_date: gl.event_date, cover: gl.cover });
-  }, [token]);
+  }, [token, session]);
   const ptr = usePullToRefresh(() => load());
+
+  // Angemeldet: Name fürs Reservieren aus dem Konto vorschlagen
+  useEffect(() => { if (session && displayName && !getName()) setName(displayName); }, [session, displayName]);
 
   // „Als App speichern“: Auf dem iPhone übernimmt der Startbildschirm die aktuelle Adresse, wenn kein
   // Manifest da ist. Darum hier die Liste in die Adresse schreiben und das Manifest kurz entfernen.
@@ -188,13 +201,16 @@ export function GuestPage() {
     load();
   };
 
-  const cancel = async (code: string) => {
+  const cancel = async (m: { code: string; id?: string }) => {
     setBusy(true);
-    const { data, error } = await db().rpc("cancel_reservation", { p_code: code });
+    // Am Konto: ohne Code aufheben; sonst mit dem Code dieses Geräts
+    const { data, error } = m.id && !m.code
+      ? await db().rpc("cancel_my_reservation", { p_id: m.id })
+      : await db().rpc("cancel_reservation", { p_code: m.code });
     setBusy(false);
     if (error) return toast(friendlyError(error));
     if ((data as { error?: string } | null)?.error === "rate_limited") return toast("Zu viele Versuche. Bitte warte ein paar Minuten.");
-    removeCode(code);
+    if (m.code) removeCode(m.code);
     close();
     toast("Reservierung aufgehoben.");
     load();
@@ -258,7 +274,7 @@ export function GuestPage() {
         {mode === "open" && group && <button className="btn ribbon big" onClick={() => setSheet({ kind: "contribute", wish: w, full: false })}><IconGift /> Mitschenken</button>}
         {mode === "open" && group && funded === 0 && where !== "tile" && <button className="btn quiet" onClick={() => setSheet({ kind: "contribute", wish: w, full: true })}>Ich schenke es ganz</button>}
         {mode === "mine" && my.map((m) => (
-          <button key={m.code} className="btn quiet" onClick={() => setSheet({ kind: "cancel", wish: w, code: m.code })}>{m.amount_cents != null ? "Beitrag zurückziehen" : "Reservierung aufheben"}</button>
+          <button key={m.code || m.id} className="btn quiet" onClick={() => setSheet({ kind: "cancel", wish: w, code: m.code, id: m.id })}>{m.amount_cents != null ? "Beitrag zurückziehen" : "Reservierung aufheben"}</button>
         ))}
       </>
     );
@@ -306,7 +322,7 @@ export function GuestPage() {
 
       {myWishes.length > 0 && (
         <>
-          <div className={`ggrid ${view === "grid" ? "tiles" : "rows"}`}>{myWishes.map((w) => card(w, "mine"))}</div>
+          <div className={`ggrid ${view === "grid" ? "tiles" : "rows"}`} role="region" aria-label="Deine Geschenke">{myWishes.map((w) => card(w, "mine"))}</div>
           <h2 className="section-title" style={{ margin: "26px 2px 12px" }}>Noch zu vergeben</h2>
         </>
       )}
@@ -346,7 +362,17 @@ export function GuestPage() {
             : <button type="button" className="btn soft" onClick={() => setSheet({ kind: "appIos" })}>So geht’s</button>}
         </section>
       )}
-      {otherLists > 0 && (
+      {!session && (
+        <section className="account-hint" aria-label="Mit Konto schenken">
+          <p><b>Du schenkst öfter?</b> Mit einem Konto siehst du deine Wunschlisten und Geschenke auf allen Geräten.</p>
+          <Link className="btn soft" to="/anmelden" onClick={() => { try { localStorage.setItem("paeckli-nach-anmeldung", `/w/${token}`); } catch { /* egal */ } }}>
+            Anmelden oder Konto anlegen
+          </Link>
+        </section>
+      )}
+      {session ? (
+        <p className="hint" style={{ marginTop: 16, textAlign: "center" }}><Link to="/">Zu deinen Wunschlisten</Link></p>
+      ) : otherLists > 0 && (
         <p className="hint" style={{ marginTop: 16, textAlign: "center" }}>
           <Link to="/meine-listen">Alle deine Wunschlisten ({otherLists + 1})</Link>
         </p>
@@ -473,7 +499,7 @@ export function GuestPage() {
             <h2>{sheet.wish.group_gift ? "Beitrag zurückziehen?" : "Reservierung aufheben?"}</h2>
             <p>{sheet.wish.group_gift ? `Dein Beitrag zu „${sheet.wish.title}“ wird entfernt.` : `„${sheet.wish.title}“ ist danach wieder für alle frei.`}</p>
             <div className="toolbar" style={{ marginTop: 18 }}>
-              <button className="btn danger" disabled={busy} onClick={() => cancel(sheet.code)}>Ja, aufheben</button>
+              <button className="btn danger" disabled={busy} onClick={() => cancel(sheet)}>Ja, aufheben</button>
               <button className="btn soft" onClick={close}>Behalten</button>
             </div>
           </>

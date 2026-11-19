@@ -197,7 +197,7 @@ test("Schenkende: „Deine Wunschlisten“ zeigt die auf dem Gerät geöffneten 
   await expect(page).toHaveURL(/#\/w\/TOK/);
   // Eltern können sich weiterhin anmelden
   await page.goto("/#/");
-  await page.getByRole("link", { name: "Hier anmelden" }).click();
+  await page.getByRole("region", { name: "Mit Konto schenken" }).getByRole("link", { name: "Anmelden oder Konto anlegen" }).click();
   await expect(page.getByRole("button", { name: /Anmelde-Mail/ })).toBeVisible();
   // Liste aus der Übersicht entfernen
   await page.goto("/#/");
@@ -217,4 +217,28 @@ test("Schenkende: Hinweis „Päckli als App speichern“ mit Anleitung, ausblen
   await page.reload();
   await expect(page.getByRole("heading", { name: "Emmas 9. Geburtstag" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Päckli als App" })).toHaveCount(0);
+});
+
+test("Gästeansicht: Hinweis aufs Konto, nach der Anmeldung zurück zur Wunschliste", async ({ page }) => {
+  await mockSupabase(page);
+  await page.goto("/#/w/TOK");
+  const hint = page.getByRole("region", { name: "Mit Konto schenken" });
+  await expect(hint).toContainText("Du schenkst öfter?");
+  await hint.getByRole("link", { name: "Anmelden oder Konto anlegen" }).click();
+  await expect(page.getByText("Zum Reservieren brauchst du kein Konto.")).toBeVisible();
+  await expect(page.getByText("Neue Konten gibt die Familie frei.")).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem("paeckli-nach-anmeldung"))).toBe("/w/TOK");
+  // Anmeldung abgeschlossen (z. B. per Link aus der Mail): zurück zur Wunschliste, nicht zur Übersicht
+  await mockSupabase(page, { signedIn: true, guestAccount: true });
+  await page.goto("/#/");
+  await page.reload(); // wie beim Öffnen des Links aus der Mail: Seite startet neu, jetzt angemeldet
+  await expect(page).toHaveURL(/#\/w\/TOK/);
+  expect(await page.evaluate(() => localStorage.getItem("paeckli-nach-anmeldung"))).toBeNull();
+});
+
+test("Angemeldet: kein Hinweis aufs Konto in der Gästeansicht", async ({ page }) => {
+  await mockSupabase(page, { signedIn: true, guestAccount: true });
+  await page.goto("/#/w/TOK");
+  await expect(page.getByRole("heading", { name: "Emmas 9. Geburtstag" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Mit Konto schenken" })).toHaveCount(0);
 });

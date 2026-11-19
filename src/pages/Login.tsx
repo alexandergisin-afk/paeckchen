@@ -49,7 +49,7 @@ export function Login({ linkError, invite = false }: { linkError: string | null;
         <>
           <h1>Deine Anfrage ist unterwegs</h1>
           <p className="lead">
-            Päckli ist nur für eingeladene Familien. Wir haben die Verwaltung gebeten, <b>{email}</b> freizugeben.
+            Neue Konten gibt die Familie frei. Wir haben Bescheid gegeben, dass <b>{email}</b> ein Konto möchte.
           </p>
           <p className="notice" style={{ marginTop: 16 }}>
             Sobald das passiert ist, bekommst du eine Mail mit deinem Anmeldecode. Du kannst ihn dann hier eingeben oder in der Mail auf den Knopf tippen.
@@ -87,7 +87,7 @@ export function Login({ linkError, invite = false }: { linkError: string | null;
           <p className="lead">
             {invite
               ? "Melde dich mit der E-Mail-Adresse an, an die die Einladung ging. Wir schicken dir eine Mail zum Anmelden, ganz ohne Passwort. Danach geht es direkt zur Liste."
-              : "Gib deine E-Mail-Adresse ein. Wir schicken dir eine Mail zum Anmelden, ganz ohne Passwort. Beim ersten Mal wird dein Konto automatisch angelegt."}
+              : "Gib deine E-Mail-Adresse ein. Wir schicken dir einen Code zum Anmelden, ganz ohne Passwort."}
           </p>
           {error && <p className="notice error" role="alert">{error}</p>}
           <form onSubmit={send} style={{ marginTop: 20 }}>
@@ -97,7 +97,13 @@ export function Login({ linkError, invite = false }: { linkError: string | null;
             </label>
             <button className="btn block" type="submit" disabled={state === "sending"}>{state === "sending" ? "Wird gesendet …" : "Anmelde-Mail schicken"}</button>
           </form>
-          <p className="hint" style={{ marginTop: 18 }}>Gäste brauchen kein Konto. Sie öffnen einfach den Link zu eurer Wunschliste.</p>
+          {!invite && (
+            <div className="login-explain">
+              <p><b>Zum Reservieren brauchst du kein Konto.</b> Der Link zur Wunschliste genügt.</p>
+              <p><b>Ein Konto lohnt sich,</b> wenn du öfter schenkst: Dann siehst du deine Wunschlisten und Geschenke auf allen Geräten. Oder wenn du selbst Wunschlisten pflegst.</p>
+              <p>Neue Konten gibt die Familie frei. Den Code bekommst du, sobald das passiert ist.</p>
+            </div>
+          )}
         </>
       )}
     </div>

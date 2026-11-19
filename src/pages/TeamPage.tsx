@@ -3,6 +3,7 @@ import { SkeletonRows } from "../components/Skeleton";
 import { Link, useParams } from "react-router-dom";
 import { db, guestLink, inviteLink } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
+import { FollowersPanel } from "../components/FollowersPanel";
 import { LIST_SELECT, type Role, type WishList } from "../lib/types";
 import { friendlyError, toast } from "../lib/format";
 import { IconBack, IconChat, IconMail, IconRefresh, IconUsers } from "../components/Icons";
@@ -135,6 +136,8 @@ export function TeamPage() {
             {isOwner && <button className="btn line small" onClick={() => setSheet({ kind: "renew" })}><IconRefresh /> Link erneuern</button>}
           </div>
         </section>
+
+        <FollowersPanel listId={list.id} />
 
         <section className="panel roles">
           <h2>Wer darf was?</h2>

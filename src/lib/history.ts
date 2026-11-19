@@ -97,6 +97,10 @@ export function describe(e: AuditEntry): string {
     case "member:added": return e.actor_name ? `${who} hat ${member} als Mitbearbeiter hinzugefügt.` : `${member} wurde als Mitbearbeiter hinzugefügt.`;
     case "member:left": return `${member} hat die Liste verlassen.`;
     case "member:removed": return `${who} hat ${member} aus der Liste entfernt.`;
+    case "member:follower_saved": return `${member} hat die Liste zum Schenken im eigenen Konto gespeichert.`;
+    case "member:follower_added": return `${who} hat die Liste für ${member} zum Schenken freigegeben.`;
+    case "member:follower_removed": return `${who} hat die Liste aus dem Konto von ${member} entfernt.`;
+    case "member:follower_left": return `${member} hat die Liste aus dem eigenen Konto entfernt.`;
     // Zugang (nur Administratoren)
     case "access:requested": return `${s(d.email)} hat ohne Einladung Zugang angefragt.`;
     case "access:invite_pending": return `${who} möchte ${s(d.email)} einladen${d.list ? ` (Liste ${q(d.list)})` : ""}. Wartet auf Freigabe.`;
@@ -105,6 +109,10 @@ export function describe(e: AuditEntry): string {
     case "access:allowed": return e.actor_name ? `${who} hat ${s(d.email)} freigeschaltet.` : `${s(d.email)} wurde freigeschaltet.`;
     case "access:admin_added": return `${member} ist jetzt Administrator.`;
     case "access:admin_removed": return `${member} ist kein Administrator mehr.`;
+    case "access:type_changed":
+      return d.type === "family"
+        ? `${who} hat ${member} auf „Familie“ umgestellt. ${member} darf jetzt eigene Listen anlegen.`
+        : `${who} hat ${member} auf „Zum Schenken“ umgestellt. ${member} kann keine eigenen Listen mehr anlegen.`;
     default: return `${who}: ${e.action}`;
   }
 }

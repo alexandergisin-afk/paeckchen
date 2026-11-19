@@ -59,3 +59,25 @@ group("Tagesüberschriften", () => {
     expect(dayLabel("2025-12-24T08:00:00", now)).toBe("Mittwoch, 24. Dezember 2025");
   });
 });
+
+group("Jede Art von Eintrag hat einen Satz", () => {
+  // Alle Aktionen, die die Datenbank-Trigger schreiben (supabase/19_verlauf.sql und folgende)
+  const ALL: [AuditEntry["kind"], string][] = [
+    ["list", "created"], ["list", "updated"], ["list", "archived"], ["list", "restored"], ["list", "link_renewed"],
+    ["wish", "created"], ["wish", "updated"], ["wish", "deleted"], ["wish", "moved_out"], ["wish", "moved_in"],
+    ["reservation", "reserved"], ["reservation", "contributed"], ["reservation", "cancelled"], ["reservation", "released"],
+    ["member", "joined"], ["member", "added"], ["member", "left"], ["member", "removed"],
+    ["member", "follower_saved"], ["member", "follower_added"], ["member", "follower_removed"], ["member", "follower_left"],
+    ["access", "requested"], ["access", "invite_pending"], ["access", "approved"], ["access", "denied"], ["access", "allowed"],
+    ["access", "admin_added"], ["access", "admin_removed"], ["access", "type_changed"],
+  ];
+  it.each(ALL)("%s / %s", (kind, action) => {
+    const text = describe(E(kind, action, { title: "X", wish: "X", guest: "Oma", member: "Tobias", email: "a@b.de", type: "guest", changes: {} }));
+    expect(text).not.toContain(action);   // kein technischer Name
+    expect(text).toMatch(/[.!]$/);       // ein ganzer Satz
+  });
+  it("Kontoart umgestellt", () => {
+    expect(describe(E("access", "type_changed", { member: "Tobias", type: "guest" })))
+      .toBe("Julia hat Tobias auf „Zum Schenken“ umgestellt. Tobias kann keine eigenen Listen mehr anlegen.");
+  });
+});

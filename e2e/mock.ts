@@ -30,7 +30,7 @@ const LIST2 = {
 export interface Calls { lists: string[]; rpc: string[]; writes: string[]; bodies: Record<string, unknown>[] }
 
 /** Beantwortet alle Supabase-Anfragen mit Testdaten und protokolliert sie. */
-export async function mockSupabase(page: Page, opts: { signedIn?: boolean; allowParentsBuy?: boolean; slowListMs?: number; recent?: string[]; admin?: boolean; loginBlocked?: boolean; invitePending?: boolean; emptyList?: boolean; guestAccount?: boolean } = {}): Promise<Calls> {
+export async function mockSupabase(page: Page, opts: { signedIn?: boolean; allowParentsBuy?: boolean; slowListMs?: number; recent?: string[]; admin?: boolean; loginBlocked?: boolean; invitePending?: boolean; emptyList?: boolean; guestAccount?: boolean; followed?: boolean; accountReservation?: boolean } = {}): Promise<Calls> {
   const calls: Calls = { lists: [], rpc: [], writes: [], bodies: [] };
   const order = new Map<string, number>(); // gespeicherte Reihenfolge wie in der echten Datenbank
   const withOrder = <T extends { id: string; list_members: object[] }>(l: T): T =>
@@ -69,6 +69,7 @@ export async function mockSupabase(page: Page, opts: { signedIn?: boolean; allow
         { id: 1, at: at(60 * 27), kind: "list", action: "created", actor_name: "Julia", data: { title: "Emmas 9. Geburtstag" } },
       ]);
     }
+    if (url.includes("/rest/v1/list_followers")) { calls.writes.push(`${req.method()} list_followers ${url.split("?")[1] ?? ""}`); return route.fulfill({ status: 204 }); }
     if (url.includes("/rest/v1/list_members")) return json([{ user_id: UID, role: "owner", profiles: { display_name: "Julia" } }]);
     if (url.includes("/rest/v1/app_admins")) return json(opts.admin ? { user_id: UID } : null);
     if (url.includes("/functions/v1/produkt-suche")) {
@@ -97,6 +98,17 @@ export async function mockSupabase(page: Page, opts: { signedIn?: boolean; allow
         { id: "u-gast", display_name: "Tobias", email: "tobias@test.de", account_type: "family", is_admin: false, lists_owned: 0 },
       ]);
       if (fn === "set_account_type") return route.fulfill({ status: 204 });
+      if (fn === "follow_list") return json(LID);
+      if (fn === "claim_reservations") return json(0);
+      if (fn === "my_followed_lists") return json(opts.followed
+        ? [{ list_id: "fl1", title: "Mias Einschulung", recipient_name: "Mia", event_date: "2027-08-20", cover: 3, guest_token: "MIA" }] : []);
+      if (fn === "my_account_reservations") return json(opts.accountReservation ? [{ id: "acc1", wish_id: "w1", quantity: 1, amount_cents: null }] : []);
+      if (fn === "cancel_my_reservation") return json(true);
+      if (fn === "list_followers_of") return json([{ user_id: "u-tobias", display_name: "Tobias", source: "link", created_at: "2026-11-20T10:00:00Z" }]);
+      if (fn === "add_follower") {
+        const email = String(JSON.parse(req.postData() ?? "{}").p_email ?? "");
+        return json(email.startsWith("oma") ? { status: "added", name: "Oma Gisela" } : { status: "no_account" });
+      }
       if (fn === "create_invite") return json("EINLADUNG123");
       if (fn === "set_list_order") {
         const ids = (JSON.parse(req.postData() ?? "{}").p_ids ?? []) as string[];
