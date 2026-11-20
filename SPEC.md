@@ -103,6 +103,7 @@ Abrufen fremder Seiten und Mails.
 - **F-3** Unbekannte Adressen erhalten statt einer Fehlermeldung eine **Zugangsanfrage**; Administratoren werden per Mail benachrichtigt.
 - **F-4** Erst nach Freigabe durch einen Administrator wird die Mail mit dem Anmeldecode verschickt. Abgelehnte Adressen lösen 30 Tage keine neue Benachrichtigung aus.
 - **F-5** Bei der Freigabe wählt der Administrator die Kontoart: „Zum Schenken“ (vorausgewählt bei Anmeldung ohne Einladung) oder „Familie“ (vorausgewählt bei Einladung zum Mitbearbeiten).
+- **F-7** Beim Freigeben lassen sich eigene Listen zuweisen (nur Listen, bei denen der Administrator Mitglied ist). Sobald das Konto entsteht: bei „Zum Schenken“ in „Wunschlisten zum Schenken“, bei „Familie“ als Mitbearbeiter. Bei Einladungen ist die Liste der Einladung vorausgewählt.
 - **F-6** Übersicht „Konten“ für Administratoren: alle Konten nach Kontoart, umstellbar; jede Umstellung steht im Sicherheitsprotokoll.
 
 ### 5.2 Listen
@@ -160,9 +161,10 @@ Abrufen fremder Seiten und Mails.
 - **F-83** Heller und dunkler Modus nach Geräteeinstellung.
 
 ### 5.10 Verlauf
-- **F-90** Jede Änderung an Listen, Wünschen, Reservierungen und Mitgliedern wird in der Datenbank festgehalten (Trigger) und als Satz angezeigt, z. B. „Julia hat ‚Kinderfahrrad‘ geändert: Preis von 349 € auf 329 €“. Erreichbar über „Bearbeiten → Verlauf ansehen“.
+- **F-90** Jede Änderung an Listen, Wünschen, Reservierungen und Mitgliedern wird in der Datenbank festgehalten (Trigger) und als Satz angezeigt, z. B. „Julia hat ‚Kinderfahrrad‘ geändert: Preis von 349 € auf 329 €“. Dazu Einladungslinks (erstellt, zurückgezogen) und Namensänderungen.
+- **F-94** Auf der Listenseite zeigt die Zeile „Zuletzt“ den neuesten Eintrag mit kurzer Zeitangabe; ein Tipp öffnet den ganzen Verlauf (zusätzlich unter „Bearbeiten → Verlauf ansehen“).
 - **F-91** Reservierungs-Einträge sieht nur, wer bei der Liste „Anzeigen“ eingeschaltet hat (Überraschungsschutz, in der Datenbank durchgesetzt).
-- **F-92** Sicherheitsprotokoll für Administratoren: Zugangsanfragen, Freigaben, Ablehnungen, Freischaltungen, Administrator-Rechte.
+- **F-92** Sicherheitsprotokoll für Administratoren: Zugangsanfragen, Freigaben, Ablehnungen, Freischaltungen, Administrator-Rechte, Kontoarten und gelöschte Listen (deren eigener Verlauf mit der Liste verschwindet).
 - **F-93** Einträge lassen sich von niemandem ändern oder löschen. Aufbewahrung: Einträge mit Gästenamen wie die Reservierung (60 Tage nach dem Anlass), alle anderen ein Jahr.
 
 ## 6. Datenmodell
@@ -480,7 +482,7 @@ flowchart TD
   MONTAG["jeden Montag"] --> WACH["wachhalten.yml"]
 ```
 
-Datenbank-Änderungen werden als nummerierte SQL-Dateien geliefert (`supabase/02_…` bis `21_…`) und einmalig im
+Datenbank-Änderungen werden als nummerierte SQL-Dateien geliefert (`supabase/02_…` bis `22_…`) und einmalig im
 SQL Editor ausgeführt; `schema.sql` enthält immer den vollständigen Stand für neue Projekte.
 
 ## 12. Teststrategie

@@ -90,7 +90,7 @@ export async function mockSupabase(page: Page, opts: { signedIn?: boolean; allow
       if (fn === "reserve_for_guest") return json({ ok: true, code: "WXYZ-2345" });
       if (fn === "create_list") return json({ ...LIST, id: LID });
       if (fn === "pending_access_requests") return json([
-        { id: "req1", email: "anna@test.de", created_at: "2026-11-09T10:00:00Z", invited_by_name: "Markus", list_title: "Emmas 9. Geburtstag" },
+        { id: "req1", email: "anna@test.de", created_at: "2026-11-09T10:00:00Z", invited_by_name: "Markus", list_title: "Emmas 9. Geburtstag", list_id: LID },
         { id: "req2", email: "oma@test.de", created_at: "2026-11-10T10:00:00Z", invited_by_name: null, list_title: null },
       ]);
       if (fn === "list_accounts") return json([

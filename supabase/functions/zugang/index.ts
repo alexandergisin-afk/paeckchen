@@ -4,7 +4,8 @@
 // Aktionen (POST, JSON):
 //   { action: "request", email }             unbekannte Adresse meldet sich an → Anfrage + Mail an die Verwaltung
 //   { action: "invite", email, list_id }     Einladen (mit Anmeldung): Admin schaltet frei, sonst Anfrage + Mail
-//   { action: "decide", id, approve, type }  Admin gibt frei (type: "guest" = Schenkender, "family" = Familie) oder lehnt ab;
+//   { action: "decide", id, approve, type, lists }  Admin gibt frei (type: "guest" = Schenkender, "family" = Familie;
+//                                            lists: IDs eigener Listen, die zugewiesen werden) oder lehnt ab;
 //                                            bei Freigabe geht die Code-Mail raus
 //
 // Secrets wie bei „erinnerungen“: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM, APP_URL.
@@ -46,7 +47,7 @@ if (typeof Deno !== "undefined") {
     const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
     const appUrl = Deno.env.get("APP_URL") ?? "";
-    let body: { action?: string; email?: string; list_id?: string; id?: string; approve?: boolean; type?: string } = {};
+    let body: { action?: string; email?: string; list_id?: string; id?: string; approve?: boolean; type?: string; lists?: unknown } = {};
     try { body = await req.json(); } catch { return json({ error: "bad_request" }, 400); }
 
     const rpc = (fn: string, args: unknown, jwt?: string) =>
@@ -102,7 +103,10 @@ if (typeof Deno !== "undefined") {
     // 3) Freigeben oder ablehnen
     if (body.action === "decide") {
       const type = body.type === "family" ? "family" : "guest"; // ohne Angabe: Schenkender
-      const r = await rpc("decide_access", { p_id: body.id, p_approve: !!body.approve, p_type: type }, userJwt);
+      // nur gültige IDs; welche Listen erlaubt sind, prüft die Datenbank (nur eigene)
+      const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const lists = Array.isArray(body.lists) ? body.lists.filter((x): x is string => typeof x === "string" && uuid.test(x)).slice(0, 50) : [];
+      const r = await rpc("decide_access", { p_id: body.id, p_approve: !!body.approve, p_type: type, p_lists: lists }, userJwt);
       const text = await r.text();
       if (!r.ok) return json({ error: /forbidden|42501/.test(text) ? "forbidden" : /not_found/.test(text) ? "not_found" : "decide_failed" }, r.status === 401 ? 401 : 400);
       const email = JSON.parse(text) as string;

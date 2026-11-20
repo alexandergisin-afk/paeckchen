@@ -101,6 +101,9 @@ export function describe(e: AuditEntry): string {
     case "member:follower_added": return `${who} hat die Liste für ${member} zum Schenken freigegeben.`;
     case "member:follower_removed": return `${who} hat die Liste aus dem Konto von ${member} entfernt.`;
     case "member:follower_left": return `${member} hat die Liste aus dem eigenen Konto entfernt.`;
+    case "member:invite_created": return `${who} hat einen Einladungslink zum Mitbearbeiten erstellt.`;
+    case "member:invite_revoked": return `${who} hat einen Einladungslink zurückgezogen.`;
+    case "member:renamed": return `${q(d.alt)} heißt jetzt ${q(d.neu)}.`;
     // Zugang (nur Administratoren)
     case "access:requested": return `${s(d.email)} hat ohne Einladung Zugang angefragt.`;
     case "access:invite_pending": return `${who} möchte ${s(d.email)} einladen${d.list ? ` (Liste ${q(d.list)})` : ""}. Wartet auf Freigabe.`;
@@ -109,6 +112,7 @@ export function describe(e: AuditEntry): string {
     case "access:allowed": return e.actor_name ? `${who} hat ${s(d.email)} freigeschaltet.` : `${s(d.email)} wurde freigeschaltet.`;
     case "access:admin_added": return `${member} ist jetzt Administrator.`;
     case "access:admin_removed": return `${member} ist kein Administrator mehr.`;
+    case "access:list_deleted": return `${who} hat die Liste ${title} gelöscht${d.recipient ? ` (für ${s(d.recipient)})` : ""}.`;
     case "access:type_changed":
       return d.type === "family"
         ? `${who} hat ${member} auf „Familie“ umgestellt. ${member} darf jetzt eigene Listen anlegen.`
@@ -125,4 +129,15 @@ export function dayLabel(iso: string, now = new Date()): string {
   if (diff === 0) return "Heute";
   if (diff === 1) return "Gestern";
   return d.toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long", ...(d.getFullYear() !== now.getFullYear() ? { year: "numeric" } : {}) });
+}
+
+/** Kurze Zeitangabe: „gerade eben“, „vor 5 Min.“, „vor 3 Std.“, „gestern“, „am 12. Nov.“ */
+export function relTime(iso: string, now = new Date()): string {
+  const d = new Date(iso);
+  const min = Math.floor((now.getTime() - d.getTime()) / 60_000);
+  if (min < 1) return "gerade eben";
+  if (min < 60) return `vor ${min} Min.`;
+  if (min < 24 * 60 && d.getDate() === now.getDate()) return `vor ${Math.floor(min / 60)} Std.`;
+  if (dayLabel(iso, now) === "Gestern") return "gestern";
+  return "am " + d.toLocaleDateString("de-DE", { day: "numeric", month: "short", ...(d.getFullYear() !== now.getFullYear() ? { year: "numeric" } : {}) });
 }

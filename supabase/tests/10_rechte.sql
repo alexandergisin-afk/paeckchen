@@ -293,7 +293,7 @@ reset role;
 -- Zweite Sicherungsschicht: nur für Angemeldete gedachte Funktionen sind für Gäste gar nicht aufrufbar
 select pg_temp.pruefe(not has_function_privilege('anon', 'public.' || f, 'execute'), 'Gäste können ' || split_part(f, '(', 1) || ' nicht aufrufen')
 from unnest(array['allow_email(text, uuid)', 'reserve_for_guest(uuid, integer, text, boolean)', 'contribute_for_guest(uuid, integer, text)',
-                  'pending_access_requests()', 'decide_access(uuid, boolean, text)', 'is_admin()']) f;
+                  'pending_access_requests()', 'decide_access(uuid, boolean, text, uuid[])', 'is_admin()']) f;
 select pg_temp.pruefe(has_function_privilege('anon', 'public.' || f, 'execute'), 'Gäste dürfen ' || split_part(f, '(', 1) || ' weiterhin nutzen')
 from unnest(array['guest_list(text)', 'reserve_wish(text, uuid, integer, text, boolean)', 'contribute(text, uuid, integer, text)',
                   'cancel_reservation(text)', 'my_reservations(text[])', 'log_client_error(text, text, text, text)']) f;
@@ -467,6 +467,55 @@ select pg_temp.als('11111111-1111-1111-1111-111111111111');
 update lists set archived_at = now() where id = :'sliste';
 select pg_temp.als('66666666-6666-6666-6666-666666666666');
 select pg_temp.pruefe((select count(*) from my_followed_lists() where list_id = :'sliste') = 0, 'Abgeschlossene Listen erscheinen nicht in der Übersicht');
+select pg_temp.als(null);
+
+
+-- Listen beim Freigeben zuweisen
+select pg_temp.als('11111111-1111-1111-1111-111111111111');
+select id as zliste from create_list('Zuweisungstest', 'Emma') \gset
+select pg_temp.als('22222222-2222-2222-2222-222222222222');
+select id as fremdliste from create_list('Markus privat', 'Leon') \gset
+select pg_temp.als(null);
+set role service_role;
+delete from rate_events where bucket like 'access:%';
+select request_access('zugewiesen@test.de', '7.7.7.1') is not null as x \gset
+select request_access('zugewiesen-familie@test.de', '7.7.7.2') is not null as x \gset
+reset role;
+select pg_temp.als('11111111-1111-1111-1111-111111111111');
+-- Julia ist nicht Mitglied in „Markus privat“: diese Liste darf sie nicht zuweisen
+select decide_access((select id from pending_access_requests() where email = 'zugewiesen@test.de'), true, 'guest', array[:'zliste'::uuid, :'fremdliste'::uuid]) is not null as x \gset
+select decide_access((select id from pending_access_requests() where email = 'zugewiesen-familie@test.de'), true, 'family', array[:'zliste'::uuid]) is not null as x \gset
+select pg_temp.als(null);
+insert into auth.users values ('aaaaaaaa-0000-0000-0000-000000000001', 'zugewiesen@test.de'), ('aaaaaaaa-0000-0000-0000-000000000002', 'zugewiesen-familie@test.de');
+select pg_temp.pruefe((select count(*) from list_followers where user_id = 'aaaaaaaa-0000-0000-0000-000000000001' and list_id = :'zliste') = 1,
+  'Konto zum Schenken: zugewiesene Liste steht nach der ersten Anmeldung in der Übersicht');
+select pg_temp.pruefe((select count(*) from list_followers where user_id = 'aaaaaaaa-0000-0000-0000-000000000001' and list_id = :'fremdliste') = 0
+  and (select count(*) from list_members where user_id = 'aaaaaaaa-0000-0000-0000-000000000001') = 0,
+  'Fremde Listen lassen sich nicht zuweisen, und Schenkende werden keine Mitglieder');
+select pg_temp.pruefe((select role from list_members where user_id = 'aaaaaaaa-0000-0000-0000-000000000002' and list_id = :'zliste') = 'editor',
+  'Familienkonto: zugewiesene Liste als Mitbearbeiter');
+select pg_temp.pruefe((select lower(actor_name) from audit_log where list_id = :'zliste' and action = 'follower_added') = 'julia',
+  'Verlauf nennt, wer die Liste freigegeben hat');
+select pg_temp.pruefe((select count(*) from access_requests where email like 'zugewiesen%' and cardinality(assign_lists) > 0) = 0,
+  'Zuweisungen werden nur einmal angewendet');
+
+-- Protokoll-Lücken
+select pg_temp.als('11111111-1111-1111-1111-111111111111');
+select create_invite(:'zliste') is not null as x \gset
+update invites set revoked_at = now() where list_id = :'zliste' and used_at is null;
+select pg_temp.pruefe((select string_agg(action, ',' order by id) from audit_log where list_id = :'zliste' and action like 'invite_%') = 'invite_created,invite_revoked',
+  'Einladungslinks: erstellt und zurückgezogen im Verlauf');
+select pg_temp.als(null);
+update profiles set display_name = 'Onkel Tobi' where id = 'aaaaaaaa-0000-0000-0000-000000000001';
+select pg_temp.pruefe((select data->>'neu' from audit_log where list_id = :'zliste' and action = 'renamed') = 'Onkel Tobi',
+  'Namensänderung steht im Verlauf der Listen, in denen die Person vorkommt');
+select pg_temp.als('11111111-1111-1111-1111-111111111111');
+delete from lists where id = :'zliste';
+select pg_temp.pruefe((select data->>'title' from audit_log where kind = 'access' and action = 'list_deleted' and entity_id = :'zliste') = 'Zuweisungstest'
+  and (select lower(actor_name) from audit_log where kind = 'access' and action = 'list_deleted' and entity_id = :'zliste') = 'julia',
+  'Gelöschte Liste bleibt im Sicherheitsprotokoll, mit Namen');
+select pg_temp.als('22222222-2222-2222-2222-222222222222');
+select pg_temp.pruefe((select count(*) from audit_log where action = 'list_deleted') = 0, 'Gelöschte Listen sehen nur Administratoren');
 select pg_temp.als(null);
 
 \echo 'Alle Datenbank-Tests bestanden.'

@@ -77,7 +77,7 @@ src/
   lib/              Logik (Supabase, Zwischenspeicher, Gruppengeschenke, Sortieren, Ziehen, Rückgängig, …)
 supabase/
   schema.sql        komplette Datenbank in einer Datei (für neue Projekte)
-  02_…21_*.sql      einzelne Ergänzungen in der Reihenfolge ihrer Entstehung (für bestehende Projekte)
+  02_…22_*.sql      einzelne Ergänzungen in der Reihenfolge ihrer Entstehung (für bestehende Projekte)
   functions/        Edge Functions: link-vorschau, produkt-suche, erinnerungen, zugang
   emails/           Mail-Vorlagen für die Anmeldung
   tests/            Datenbank-Tests (run.sh)

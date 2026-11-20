@@ -1,5 +1,5 @@
 import { describe as group, expect, it } from "vitest";
-import { dayLabel, describe, type AuditEntry } from "../history";
+import { dayLabel, describe, relTime, type AuditEntry } from "../history";
 
 const E = (kind: AuditEntry["kind"], action: string, data: Record<string, unknown>, actor: string | null = "Julia"): AuditEntry =>
   ({ id: 1, at: "2026-11-12T10:00:00Z", kind, action, actor_name: actor, data });
@@ -68,6 +68,7 @@ group("Jede Art von Eintrag hat einen Satz", () => {
     ["reservation", "reserved"], ["reservation", "contributed"], ["reservation", "cancelled"], ["reservation", "released"],
     ["member", "joined"], ["member", "added"], ["member", "left"], ["member", "removed"],
     ["member", "follower_saved"], ["member", "follower_added"], ["member", "follower_removed"], ["member", "follower_left"],
+    ["member", "invite_created"], ["member", "invite_revoked"], ["member", "renamed"], ["access", "list_deleted"],
     ["access", "requested"], ["access", "invite_pending"], ["access", "approved"], ["access", "denied"], ["access", "allowed"],
     ["access", "admin_added"], ["access", "admin_removed"], ["access", "type_changed"],
   ];
@@ -79,5 +80,16 @@ group("Jede Art von Eintrag hat einen Satz", () => {
   it("Kontoart umgestellt", () => {
     expect(describe(E("access", "type_changed", { member: "Tobias", type: "guest" })))
       .toBe("Julia hat Tobias auf „Zum Schenken“ umgestellt. Tobias kann keine eigenen Listen mehr anlegen.");
+  });
+});
+
+group("Kurze Zeitangaben für „Zuletzt“", () => {
+  const now = new Date("2026-11-13T15:00:00");
+  it("gerade eben, Minuten, Stunden, gestern, Datum", () => {
+    expect(relTime("2026-11-13T14:59:40", now)).toBe("gerade eben");
+    expect(relTime("2026-11-13T14:55:00", now)).toBe("vor 5 Min.");
+    expect(relTime("2026-11-13T12:00:00", now)).toBe("vor 3 Std.");
+    expect(relTime("2026-11-12T20:00:00", now)).toBe("gestern");
+    expect(relTime("2026-11-02T20:00:00", now)).toBe("am 2. Nov.");
   });
 });

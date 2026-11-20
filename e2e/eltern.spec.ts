@@ -673,3 +673,30 @@ test("Mitglieder: Schenkende mit Konto sehen, hinzufügen und Hinweis ohne Konto
   await panel.getByRole("button", { name: "Tobias entfernen" }).click();
   await expect.poll(() => calls.writes.find((w) => w.startsWith("DELETE list_followers"))).toContain("user_id=eq.u-tobias");
 });
+
+test("Freigeben mit Listen: eigene Listen anhaken, bei Einladungen schon vorausgewählt", async ({ page }) => {
+  const calls = await mockSupabase(page, { signedIn: true, admin: true });
+  await page.goto("/#/einstellungen/anfragen");
+  const anna = page.locator(".request", { hasText: "anna@test.de" });
+  const oma = page.locator(".request", { hasText: "oma@test.de" });
+  // Eingeladen zum Mitbearbeiten: Familie, Liste der Einladung angehakt
+  await expect(anna.getByText("Als Mitbearbeiter hinzufügen zu")).toBeVisible();
+  await expect(anna.getByRole("checkbox", { name: "Emmas 9. Geburtstag" })).toBeChecked();
+  // Ohne Einladung: zum Schenken, nichts vorausgewählt
+  await expect(oma.getByText("Diese Wunschlisten zum Schenken freigeben")).toBeVisible();
+  const box = oma.getByRole("checkbox", { name: "Emmas 9. Geburtstag" });
+  await expect(box).not.toBeChecked();
+  await box.check();
+  await oma.getByRole("button", { name: "Freigeben" }).click();
+  await expect.poll(() => calls.bodies.find((b) => b.action === "decide")).toMatchObject({ id: "req2", type: "guest", lists: [LID] });
+});
+
+test("Liste zeigt „Zuletzt“ mit dem neuesten Eintrag und führt zum Verlauf", async ({ page }) => {
+  await mockSupabase(page, { signedIn: true });
+  await page.goto(`/#/liste/${LID}`);
+  const last = page.getByRole("link", { name: /^Zuletzt:/ });
+  await expect(last).toContainText("Oma Gisela hat „Kinderfahrrad 24 Zoll“ reserviert");
+  await expect(last).toContainText(/vor \d+ Min\.|gerade eben/);
+  await last.click();
+  await expect(page.getByRole("heading", { name: "Verlauf", exact: true })).toBeVisible();
+});

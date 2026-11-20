@@ -4,13 +4,26 @@ import { db } from "../lib/supabase";
 import { friendlyError, toast } from "../lib/format";
 import { IconBack } from "../components/Icons";
 
-interface Request { id: string; email: string; created_at: string; invited_by_name: string | null; list_title: string | null }
+interface Request { id: string; email: string; created_at: string; invited_by_name: string | null; list_title: string | null; list_id?: string | null }
+interface MyList { id: string; title: string }
 
 /** Für Administratoren: neue Bearbeiter freigeben oder ablehnen. Erst die Freigabe verschickt die Code-Mail. */
 export function RequestsPage() {
   const [items, setItems] = useState<Request[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+
+  // Eigene aktive Listen zum Zuweisen (nur Listen, bei denen man selbst Mitglied ist)
+  const [myLists, setMyLists] = useState<MyList[]>([]);
+  useEffect(() => {
+    db().from("lists").select("id,title").is("archived_at", null).order("title").then(({ data }) => setMyLists((data ?? []) as MyList[]));
+  }, []);
+  const [assign, setAssign] = useState<Record<string, string[]>>({});
+  const assignedOf = (r: Request) => assign[r.id] ?? (r.list_id ? [r.list_id] : []);
+  const toggle = (r: Request, listId: string) => {
+    const cur = assignedOf(r);
+    setAssign({ ...assign, [r.id]: cur.includes(listId) ? cur.filter((x) => x !== listId) : [...cur, listId] });
+  };
 
   const load = useCallback(async () => {
     const { data, error } = await db().rpc("pending_access_requests");
@@ -25,7 +38,7 @@ export function RequestsPage() {
 
   const decide = async (r: Request, approve: boolean) => {
     setBusyId(r.id);
-    const { data, error } = await db().functions.invoke("zugang", { body: { action: "decide", id: r.id, approve, type: typeOf(r) } });
+    const { data, error } = await db().functions.invoke("zugang", { body: { action: "decide", id: r.id, approve, type: typeOf(r), lists: approve ? assignedOf(r) : [] } });
     setBusyId(null);
     const res = data as { ok?: boolean; mail_sent?: boolean } | null;
     if (error || !res?.ok) return toast("Das hat gerade nicht geklappt. Bitte versuch es noch einmal.");
@@ -59,6 +72,22 @@ export function RequestsPage() {
                 <label><input type="radio" name={`typ-${r.id}`} checked={typeOf(r) === "family"} onChange={() => setTypes({ ...types, [r.id]: "family" })} />
                   <span><b>Familie</b><small>darf eigene Listen anlegen und mitbearbeiten</small></span></label>
               </fieldset>
+              {myLists.length > 0 && (
+                <fieldset className="assign-lists">
+                  <legend>{typeOf(r) === "family" ? "Als Mitbearbeiter hinzufügen zu" : "Diese Wunschlisten zum Schenken freigeben"}</legend>
+                  {myLists.map((l) => (
+                    <label key={l.id}>
+                      <input type="checkbox" checked={assignedOf(r).includes(l.id)} onChange={() => toggle(r, l.id)} />
+                      <span>{l.title}</span>
+                    </label>
+                  ))}
+                  <small className="hint">
+                    {typeOf(r) === "family"
+                      ? "Mitbearbeiter können Wünsche ändern und Reservierungen sehen."
+                      : "Die Listen erscheinen nach der ersten Anmeldung in der Übersicht. Freigeben kannst du später auch in der Liste unter „Mitglieder“."}
+                  </small>
+                </fieldset>
+              )}
               <div className="toolbar">
                 <button className="btn" disabled={busyId === r.id} onClick={() => decide(r, true)}>Freigeben</button>
                 <button className="btn soft" disabled={busyId === r.id} onClick={() => decide(r, false)}>Ablehnen</button>

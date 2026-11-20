@@ -8,6 +8,7 @@ import { useAuth } from "../lib/auth";
 import { cover, type Reservation, type Wish, type WishList } from "../lib/types";
 import { countdownLabel, dateLabel, daysUntil, friendlyError, toast, toastAction } from "../lib/format";
 import { deferred } from "../lib/undo";
+import { describe, relTime, type AuditEntry } from "../lib/history";
 import { celebrate, celebrateOnce } from "../lib/celebrate";
 import { parsePrice, removeImage } from "../lib/wishes";
 import { copyWishes, moveWish } from "../lib/listOps";
@@ -89,6 +90,18 @@ export function ListPage() {
 
   useLayoutEffect(() => { apply(cachedListPage(id!)); }, [id, apply]);
   const ptr = usePullToRefresh(() => load());
+
+  // „Zuletzt“: neuester Eintrag im Verlauf (die Datenbank blendet Reservierungen bei „Ausblenden“ aus)
+  const [lastEntry, setLastEntry] = useState<AuditEntry | null>(null);
+  useEffect(() => {
+    if (!id || state !== "ok") return;
+    const t = window.setTimeout(() => {
+      db().from("audit_log").select("id,at,kind,action,actor_name,data").eq("list_id", id)
+        .order("at", { ascending: false }).order("id", { ascending: false }).limit(1)
+        .then(({ data }) => setLastEntry(((data ?? []) as AuditEntry[])[0] ?? null));
+    }, 400);
+    return () => window.clearTimeout(t);
+  }, [id, state, wishes, reservations, list]);
 
   // Freudenmoment: Liste zum ersten Mal komplett vergeben (einmal pro Liste und Gerät)
   useEffect(() => {
@@ -345,6 +358,15 @@ export function ListPage() {
               {showRes ? <><IconEyeOff /> Ausblenden</> : <><IconEye /> Anzeigen</>}
             </button>
           </section>
+        )}
+
+        {wishes.length > 0 && lastEntry && (
+          <Link className="last-change" to={`/liste/${list.id}/verlauf`} aria-label={`Zuletzt: ${describe(lastEntry)} ${relTime(lastEntry.at)}. Ganzen Verlauf ansehen`}>
+            <span className="last-change-icon" aria-hidden="true"><IconHistory /></span>
+            <span className="last-change-text"><b>Zuletzt:</b> {describe(lastEntry)}</span>
+            <span className="last-change-time">{relTime(lastEntry.at)}</span>
+            <span className="last-change-chev" aria-hidden="true"><IconChevron /></span>
+          </Link>
         )}
 
         {wishes.length > 0 && <div className="wl-bar">
