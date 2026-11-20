@@ -69,6 +69,9 @@ function swSource(version: string, assets: string[]) {
 const CACHE = "paeckli-${version}";
 const ASSETS = ${JSON.stringify(assets)};
 const START = new URL("./", self.registration.scope).href;
+// Kopfzeilen wie „Vary: Origin“ beim Nachschlagen ignorieren: Die Dateien ändern ihren Namen bei jeder
+// Version, eine Verwechslung ist ausgeschlossen, und Server-Einstellungen können sonst den Offline-Start verhindern.
+const MATCH = { ignoreVary: true };
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS.map((a) => new Request(a, { cache: "reload" })))).then(() => self.skipWaiting()));
@@ -101,12 +104,12 @@ async function startPage(req) {
     if (res.ok) (await caches.open(CACHE)).put(START, res.clone());
     return res;
   } catch {
-    return (await caches.match(START)) || (await caches.match(req)) || Response.error();
+    return (await caches.match(START, MATCH)) || (await caches.match(req, MATCH)) || Response.error();
   }
 }
 
 async function fromCache(req) {
-  const hit = await caches.match(req);
+  const hit = await caches.match(req, MATCH);
   if (hit) return hit;
   const res = await fetch(req);
   if (res.ok && res.type === "basic") (await caches.open(CACHE)).put(req, res.clone());

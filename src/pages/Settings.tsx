@@ -9,7 +9,8 @@ import { Link } from "react-router-dom";
 
 export function Settings() {
   const { session, displayName, accountType, refreshProfile } = useAuth();
-  const isGuest = accountType === "guest"; // Konto zum Schenken: keine eigenen Listen, keine Verwaltung
+  const isGuest = accountType === "guest";
+  const [confirmGlobal, setConfirmGlobal] = useState(false); // Konto zum Schenken: keine eigenen Listen, keine Verwaltung
   const [name, setNameValue] = useState(displayName);
   const [installable, setInstallable] = useState(canPrompt());
   const [reminders, setReminders] = useState<boolean | null>(null);
@@ -95,6 +96,17 @@ export function Settings() {
           </label>
           <p className="hint">Angemeldet als {session?.user.email}</p>
           <button className="btn soft small" style={{ marginTop: 12 }} onClick={() => { clearCache(); db().auth.signOut(); }}><IconLogout /> Abmelden</button>
+          {!confirmGlobal ? (
+            <button type="button" className="link-btn" style={{ marginTop: 10, display: "block" }} onClick={() => setConfirmGlobal(true)}>Auf allen Geräten abmelden</button>
+          ) : (
+            <div className="notice" style={{ marginTop: 12 }} role="group" aria-label="Auf allen Geräten abmelden">
+              <p style={{ margin: "0 0 10px" }}>Du wirst überall abgemeldet, auch auf anderen Handys und Computern, etwa wenn ein Gerät verloren gegangen ist. Auf anderen Geräten wirkt das spätestens nach einer Stunde.</p>
+              <div className="toolbar">
+                <button type="button" className="btn small" onClick={async () => { clearCache(); await db().auth.signOut({ scope: "global" }); }}>Ja, überall abmelden</button>
+                <button type="button" className="btn quiet small" onClick={() => setConfirmGlobal(false)}>Abbrechen</button>
+              </div>
+            </div>
+          )}
         </section>
 
         {(!isGuest || pendingCount !== null) && <h2 className="settings-group">Familie &amp; Zugriff</h2>}

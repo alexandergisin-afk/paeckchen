@@ -46,6 +46,10 @@ export async function mockSupabase(page: Page, opts: { signedIn?: boolean; allow
     const req = route.request();
     const url = decodeURIComponent(req.url());
     const json = (body: unknown, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
+    if (url.includes("/auth/v1/logout")) {
+      calls.bodies.push({ fn: "logout", scope: new URL(req.url()).searchParams.get("scope") ?? "local" });
+      return route.fulfill({ status: 204 });
+    }
     if (url.includes("/auth/v1/otp") && opts.loginBlocked) {
       return json({ code: 500, error_code: "unexpected_failure", msg: "Database error saving new user" }, 500);
     }

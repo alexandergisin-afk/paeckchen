@@ -38,10 +38,24 @@ if (params.get("error")) {
   window.history.replaceState(null, "", window.location.pathname + "#/");
 }
 
+// Schutz vor „Clickjacking“: Päckli nie in fremden Seiten anzeigen (GitHub Pages erlaubt dafür keine
+// Server-Einstellung). Eingebettet erscheint nur ein Hinweis mit Link, der Päckli direkt öffnet.
+function isFramed(): boolean {
+  try { return window.self !== window.top; } catch { return true; } // Zugriff verweigert: ganz sicher eingebettet
+}
+
 createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <App linkError={linkError} />
-  </StrictMode>,
+  isFramed() ? (
+    <main className="wrap narrow framed">
+      <h1>Päckli</h1>
+      <p className="lead">Aus Sicherheitsgründen lässt sich Päckli nicht in anderen Seiten anzeigen.</p>
+      <a className="btn" href={window.location.href} target="_blank" rel="noopener noreferrer">Päckli direkt öffnen</a>
+    </main>
+  ) : (
+    <StrictMode>
+      <App linkError={linkError} />
+    </StrictMode>
+  ),
 );
 
 // Offline-Modus: Service Worker nur in der veröffentlichten Version (nicht beim Entwickeln)

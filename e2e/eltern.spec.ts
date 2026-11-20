@@ -700,3 +700,23 @@ test("Liste zeigt „Zuletzt“ mit dem neuesten Eintrag und führt zum Verlauf"
   await last.click();
   await expect(page.getByRole("heading", { name: "Verlauf", exact: true })).toBeVisible();
 });
+
+test("Auf allen Geräten abmelden: mit Rückfrage, beendet alle Anmeldungen", async ({ page }) => {
+  const calls = await mockSupabase(page, { signedIn: true });
+  await page.goto("/#/einstellungen");
+  await page.getByRole("button", { name: "Auf allen Geräten abmelden" }).click();
+  const box = page.getByRole("group", { name: "Auf allen Geräten abmelden" });
+  await expect(box).toContainText("spätestens nach einer Stunde");
+  await box.getByRole("button", { name: "Ja, überall abmelden" }).click();
+  await expect.poll(() => calls.bodies.find((b) => b.fn === "logout")).toMatchObject({ scope: "global" });
+  await expect(page.getByRole("button", { name: /Anmelde-Mail/ })).toBeVisible();
+});
+
+test("Schutz vor Clickjacking: eingebettet zeigt Päckli nur einen Hinweis", async ({ page, baseURL }) => {
+  await mockSupabase(page, { signedIn: true });
+  await page.setContent(`<h1>Fremde Seite</h1><iframe src="${baseURL}/#/" style="width:400px;height:500px"></iframe>`);
+  const frame = page.frameLocator("iframe");
+  await expect(frame.getByText("Aus Sicherheitsgründen lässt sich Päckli nicht in anderen Seiten anzeigen.")).toBeVisible();
+  await expect(frame.getByRole("link", { name: "Päckli direkt öffnen" })).toHaveAttribute("target", "_blank");
+  await expect(frame.getByRole("button", { name: "Neue Liste" })).toHaveCount(0);
+});

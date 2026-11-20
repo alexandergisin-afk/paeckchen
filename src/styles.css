@@ -1025,3 +1025,4 @@ html, body { overscroll-behavior-y: contain; }
 .last-change-time { font-size: .8rem; color: var(--ink-2); white-space: nowrap; }
 .last-change-chev { color: var(--ink-2); display: grid; }
 .last-change-chev svg { width: 16px; height: 16px; }
+.framed { padding-top: 40px; display: grid; gap: 14px; justify-items: start; }

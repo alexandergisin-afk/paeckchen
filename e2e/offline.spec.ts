@@ -36,7 +36,7 @@ test.describe("Offline-Modus", () => {
     // Abmelden löscht den gespeicherten Stand
     await mockSupabase(page, { signedIn: true });
     await page.goto("/#/einstellungen");
-    await page.getByRole("button", { name: "Abmelden" }).click();
+    await page.getByRole("button", { name: "Abmelden", exact: true }).click();
     expect(await page.evaluate(() => localStorage.getItem("paeckli-offline"))).toBeNull();
   });
 });
