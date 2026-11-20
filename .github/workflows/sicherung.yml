@@ -32,7 +32,7 @@ jobs:
           BACKUP_PASSWORD: ${{ secrets.BACKUP_PASSWORD }}
         run: bash scripts/sicherung.sh sicherung
       - name: Sicherung ablegen (30 Tage)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: paeckli-sicherung-${{ env.STAMP }}
           path: sicherung/*.enc
