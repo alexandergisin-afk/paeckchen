@@ -1,0 +1,26 @@
+# Dependabot prüft regelmäßig, ob es neue Versionen der verwendeten Bibliotheken gibt,
+# und macht dafür Änderungsvorschläge (Pull Requests). Die Tests laufen dort automatisch;
+# übernommen wird erst, wenn du im Vorschlag „Merge pull request“ klickst.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    # Neue Versionen erst nach 14 Tagen vorschlagen (Schutz vor manipulierten Neuveröffentlichungen).
+    # Sicherheitsupdates kommen unabhängig davon sofort.
+    cooldown:
+      default-days: 14
+    open-pull-requests-limit: 5
+    groups:
+      # Kleine Updates gesammelt in einem Vorschlag statt vieler einzelner
+      kleine-updates:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 14
