@@ -15,7 +15,7 @@ jobs:
   sichern:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Datenbank-Werkzeuge (PostgreSQL 17) installieren
         run: |
           sudo install -d /usr/share/postgresql-common/pgdg
