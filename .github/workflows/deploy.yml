@@ -42,6 +42,8 @@ jobs:
         # Bricht ab, wenn eine Bibliothek der App eine bekannte schwere Lücke hat.
         # Werkzeuge für Tests und Bauen zählen nicht mit (--omit=dev).
         run: npm audit --omit=dev --audit-level=high
+      - name: Linter (typische Fehler im Code)
+        run: npm run lint
       - name: Unit-Tests
         run: npm test
       - name: Datenbank-Tests
