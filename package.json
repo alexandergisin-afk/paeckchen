@@ -32,5 +32,8 @@
   },
   "overrides": {
     "tinypool": "2.2.0"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

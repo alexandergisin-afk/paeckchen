@@ -1,6 +1,11 @@
 -- =====================================================================
--- Päckli – Datenbankschema Version 1 (Supabase / PostgreSQL)
--- Einmal komplett im Supabase SQL Editor ausführen.
+-- Päckli – Datenbankschema (Supabase / PostgreSQL), vollständiger aktueller Stand
+-- Für ein NEUES Projekt einmal komplett im Supabase SQL Editor ausführen.
+--
+-- Diese Datei enthält jede Funktion, jeden Trigger und jede Zugriffsregel genau einmal in der
+-- aktuellen Fassung. Bestehende Projekte werden stattdessen mit den nummerierten Dateien
+-- 02_… bis 22_… schrittweise aktualisiert; das Ergebnis ist in beiden Fällen identisch
+-- (automatisch geprüft: gleicher Aufbau laut pg_dump).
 --
 -- Prinzipien
 --   * Rechte prüft die Datenbank (Row Level Security), nicht die App.
@@ -9,6 +14,10 @@
 --   * Doppelreservierungen verhindert eine Zeilensperre (SELECT … FOR UPDATE).
 -- =====================================================================
 create extension if not exists pgcrypto with schema extensions;
+
+-- Funktionsinhalte erst beim Aufruf prüfen (wie bei pg_dump), damit jede Funktion an ihrer
+-- thematischen Stelle stehen kann, auch wenn sie Objekte von weiter unten verwendet.
+set check_function_bodies = off;
 
 create type list_role     as enum ('owner', 'editor');
 create type list_occasion as enum ('birthday', 'christmas', 'other');
@@ -20,7 +29,10 @@ create type wish_priority as enum ('heart', 'nice', 'small');
 create table public.profiles (
   id           uuid primary key references auth.users on delete cascade,
   display_name text not null check (char_length(display_name) between 1 and 60),
-  created_at   timestamptz not null default now()
+  created_at   timestamptz not null default now(),
+  reminder_emails boolean not null default true,
+  notify_reservations text not null default 'daily' check (notify_reservations in ('instant', 'daily', 'off')),
+  list_sort text not null default 'custom' check (list_sort in ('custom', 'date', 'new', 'name'))
 );
 
 create table public.lists (
@@ -37,7 +49,9 @@ create table public.lists (
                  default translate(encode(extensions.gen_random_bytes(18), 'base64'), '+/=', '-_'),
   created_by     uuid not null references public.profiles(id),
   created_at     timestamptz not null default now(),
-  updated_at     timestamptz not null default now()
+  updated_at     timestamptz not null default now(),
+  archived_at timestamptz,
+  allow_parents_buy boolean not null default false
 );
 
 create table public.list_members (
@@ -46,7 +60,8 @@ create table public.list_members (
   role              list_role not null,
   show_reservations boolean not null default true,   -- persönliche Einstellung „Reservierungen anzeigen“
   added_at          timestamptz not null default now(),
-  primary key (list_id, user_id)
+  primary key (list_id, user_id),
+  sort_order int
 );
 create unique index one_owner_per_list on public.list_members (list_id) where role = 'owner';
 create index list_members_user on public.list_members (user_id);
@@ -75,7 +90,8 @@ create table public.wishes (
   note        text check (char_length(note) <= 300),
   created_by  uuid references public.profiles(id) on delete set null,
   created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null default now()
+  updated_at  timestamptz not null default now(),
+  group_gift boolean not null default false
 );
 create index wishes_list on public.wishes (list_id);
 
@@ -86,7 +102,11 @@ create table public.reservations (
   guest_name   text not null check (char_length(guest_name) between 1 and 60),
   code_hash    bytea not null unique,
   created_at   timestamptz not null default now(),
-  forget_after date not null                         -- Datensparsamkeit, siehe unten
+  forget_after date not null,  -- Datensparsamkeit, siehe unten
+  parents_buy boolean not null default false,
+  entered_by uuid references public.profiles(id) on delete set null,
+  amount_cents integer check (amount_cents is null or amount_cents >= 1),
+  reserved_by uuid references public.profiles on delete set null
 );
 create index reservations_wish on public.reservations (wish_id);
 
@@ -128,12 +148,15 @@ create trigger lists_updated  before update on public.lists  for each row execut
 create trigger wishes_updated before update on public.wishes for each row execute function public.set_updated_at();
 
 -- Neues Konto -> Profil mit dem Teil der E-Mail vor dem @ als Anzeigename
-create function public.handle_new_user() returns trigger
+-- Neues Konto: Kontoart übernehmen und zugewiesene Listen eintragen
+create or replace function public.handle_new_user() returns trigger
 language plpgsql security definer set search_path = public as $$
 begin
-  insert into profiles (id, display_name)
-  values (new.id, left(coalesce(nullif(split_part(new.email, '@', 1), ''), 'Ich'), 60))
+  insert into profiles (id, display_name, account_type)
+  values (new.id, left(coalesce(nullif(split_part(new.email, '@', 1), ''), 'Ich'), 60),
+          coalesce((select account_type from allowed_emails where email = lower(new.email)), 'guest'))
   on conflict (id) do nothing;
+  perform apply_list_assignments(new.id, new.email);
   return new;
 end $$;
 create trigger on_auth_user_created after insert on auth.users
@@ -199,16 +222,22 @@ create policy "reservations release" on public.reservations for delete using (
 -- ---------------------------------------------------------------------
 -- Funktionen für angemeldete Eltern
 -- ---------------------------------------------------------------------
-create function public.create_list(p_title text, p_recipient_name text default null, p_occasion list_occasion default 'other',
-                                   p_event_date date default null, p_cover int default 0, p_description text default null)
+-- Liste anlegen: nur Familienkonten
+create or replace function public.create_list(p_title text, p_recipient_name text default null, p_occasion list_occasion default 'other',
+                                   p_event_date date default null, p_cover int default 0, p_description text default null,
+                                   p_allow_parents_buy boolean default false)
 returns public.lists language plpgsql security definer set search_path = public as $$
 declare v_list lists;
 begin
   if auth.uid() is null then raise exception 'not_authenticated' using errcode = '42501'; end if;
+  -- Nur Familienkonten dürfen eigene Listen anlegen (Schenkendenkonten nicht)
+  if coalesce((select account_type from profiles where id = auth.uid()), 'guest') <> 'family' then
+    raise exception 'family_only' using errcode = '42501';
+  end if;
   insert into profiles (id, display_name) values (auth.uid(), 'Ich') on conflict (id) do nothing;
-  insert into lists (title, recipient_name, occasion, event_date, cover, description, created_by)
+  insert into lists (title, recipient_name, occasion, event_date, cover, description, allow_parents_buy, created_by)
   values (trim(p_title), nullif(trim(p_recipient_name), ''), p_occasion, p_event_date, coalesce(p_cover, 0),
-          nullif(trim(p_description), ''), auth.uid())
+          nullif(trim(p_description), ''), coalesce(p_allow_parents_buy, false), auth.uid())
   returning * into v_list;
   insert into list_members (list_id, user_id, role) values (v_list.id, auth.uid(), 'owner');
   return v_list;
@@ -256,81 +285,79 @@ end $$;
 -- Funktionen für Gäste (ohne Konto)
 -- ---------------------------------------------------------------------
 -- Gästeansicht: freie Mengen, niemals Namen
-create function public.guest_list(p_token text) returns jsonb
+-- Gästeansicht: weiß, ob die Option angeboten wird
+create or replace function public.guest_list(p_token text) returns jsonb
 language sql stable security definer set search_path = public as $$
   select jsonb_build_object(
     'id', l.id, 'title', l.title, 'recipient_name', l.recipient_name, 'occasion', l.occasion,
     'event_date', l.event_date, 'description', l.description, 'cover', l.cover,
+    'allow_parents_buy', l.allow_parents_buy,
     'wishes', coalesce((
       select jsonb_agg(jsonb_build_object(
         'id', w.id, 'title', w.title, 'url', w.url, 'shop', w.shop, 'image_path', w.image_path,
         'price_cents', w.price_cents, 'quantity', w.quantity, 'priority', w.priority, 'note', w.note,
-        'available', w.quantity - coalesce((select sum(r.quantity) from reservations r where r.wish_id = w.id), 0)
+        'group_gift', w.group_gift,
+        'target_cents', case when w.group_gift then gift_target(w) end,
+        'funded_cents', case when w.group_gift then gift_funded(w.id) end,
+        'contributors', case when w.group_gift then (select count(*) from reservations r where r.wish_id = w.id) end,
+        'available', case
+          when w.group_gift then case when gift_funded(w.id) >= gift_target(w) then 0 else 1 end
+          else w.quantity - coalesce((select sum(r.quantity) from reservations r where r.wish_id = w.id), 0) end
       ) order by w.priority, w.created_at)
       from wishes w where w.list_id = l.id), '[]'::jsonb))
-  from lists l where l.guest_token = p_token
+  from lists l where l.guest_token = p_token and l.archived_at is null
 $$;
 
 -- Reservieren: die Zeilensperre lässt gleichzeitige Klicks nacheinander laufen
-create function public.reserve_wish(p_token text, p_wish uuid, p_quantity int, p_name text)
+-- Gäste: Wunsch „Bitte besorgt ihr es“ zählt nur, wenn die Liste es erlaubt
+create or replace function public.reserve_wish(p_token text, p_wish uuid, p_quantity int, p_name text, p_parents_buy boolean default false)
 returns jsonb language plpgsql security definer set search_path = public as $$
-declare
-  v_list  uuid;
-  v_date  date;
-  v_qty   int;
-  v_taken int;
-  v_code  text;
-  v_name  text := left(trim(coalesce(p_name, '')), 60);
+declare v_list uuid; v_date date; v_allow boolean;
 begin
-  if v_name = '' then return jsonb_build_object('ok', false, 'error', 'name_required'); end if;
-  if p_quantity is null or p_quantity < 1 or p_quantity > 20 then
-    return jsonb_build_object('ok', false, 'error', 'invalid_quantity');
-  end if;
-
-  select id, event_date into v_list, v_date from lists where guest_token = p_token;
+  select id, event_date, allow_parents_buy into v_list, v_date, v_allow from lists where guest_token = p_token and archived_at is null;
   if v_list is null then return jsonb_build_object('ok', false, 'error', 'link_invalid'); end if;
-
-  select quantity into v_qty from wishes where id = p_wish and list_id = v_list for update;
-  if not found then return jsonb_build_object('ok', false, 'error', 'wish_not_found'); end if;
-
-  select coalesce(sum(quantity), 0) into v_taken from reservations where wish_id = p_wish;
-  if v_taken + p_quantity > v_qty then
-    return jsonb_build_object('ok', false, 'error', 'already_taken', 'available', greatest(v_qty - v_taken, 0));
+  if rate_limited('reserve:' || v_list, 10, interval '1 minute') then
+    return jsonb_build_object('ok', false, 'error', 'rate_limited');
   end if;
-
-  v_code := gen_code();
-  insert into reservations (wish_id, quantity, guest_name, code_hash, forget_after)
-  values (p_wish, p_quantity, v_name, hash_code(v_code), coalesce(v_date, current_date) + 60);
-  return jsonb_build_object('ok', true, 'code', v_code);   -- bleibt nur auf dem Gerät des Gastes
-end $$;
-
-create function public.cancel_reservation(p_code text) returns jsonb
+  return reserve_core(v_list, v_date, p_wish, p_quantity, p_name, coalesce(p_parents_buy, false) and v_allow, null);
+end $$;create or replace function public.cancel_reservation(p_code text) returns jsonb
 language plpgsql security definer set search_path = public as $$
+declare v_bucket text := 'cancel_fail:' || client_ip();
 begin
+  if (select count(*) from rate_events where bucket = v_bucket and at > now() - interval '10 minutes') >= 20 then
+    return jsonb_build_object('ok', false, 'error', 'rate_limited');
+  end if;
   delete from reservations where code_hash = hash_code(p_code);
-  return jsonb_build_object('ok', found);
+  if not found then
+    insert into rate_events (bucket) values (v_bucket);   -- nur Fehlversuche zählen
+    return jsonb_build_object('ok', false);
+  end if;
+  return jsonb_build_object('ok', true);
 end $$;
 
 -- Das Gerät kennt seine Codes und fragt nur deren Stand ab
 create function public.my_reservations(p_codes text[])
-returns table (code text, wish_id uuid, quantity int)
-language sql stable security definer set search_path = public as $$
-  select c, r.wish_id, r.quantity
-  from unnest(p_codes[1:50]) as c
-  join reservations r on r.code_hash = hash_code(c)
-$$;
+returns table (code text, wish_id uuid, quantity int, amount_cents int)
+language plpgsql security definer set search_path = public as $$
+begin
+  if rate_limited('mine:' || client_ip(), 30, interval '1 minute') then return; end if;
+  return query
+    select c, r.wish_id, r.quantity, r.amount_cents
+    from unnest(p_codes[1:50]) as c
+    join reservations r on r.code_hash = hash_code(c);
+end $$;
 
 -- ---------------------------------------------------------------------
 -- Ausführungsrechte
 -- ---------------------------------------------------------------------
 revoke execute on all functions in schema public from public, anon, authenticated;
 grant execute on function public.my_role(uuid) to anon, authenticated;   -- wird von den Policies genutzt
-grant execute on function public.create_list(text, text, list_occasion, date, int, text),
-                          public.set_show_reservations(uuid, boolean),
-                          public.create_invite(uuid), public.accept_invite(text),
-                          public.rotate_guest_link(uuid) to authenticated;
-grant execute on function public.guest_list(text), public.reserve_wish(text, uuid, int, text),
-                          public.cancel_reservation(text), public.my_reservations(text[]) to anon, authenticated;
+grant execute on function public.set_show_reservations(uuid, boolean),
+  public.create_invite(uuid),
+  public.accept_invite(text),
+  public.rotate_guest_link(uuid) to authenticated;grant execute on function public.guest_list(text),
+  public.cancel_reservation(text),
+  public.my_reservations(text[]) to anon, authenticated;
 
 -- ---------------------------------------------------------------------
 -- Datensparsamkeit (später aktivieren, wenn pg_cron eingeschaltet ist):
@@ -340,7 +367,7 @@ grant execute on function public.guest_list(text), public.reserve_wish(text, uui
 -- ---------------------------------------------------------------------
 
 -- ---------------------------------------------------------------------
--- Zugangsliste (identisch mit 02_zugangsliste.sql)
+-- Zugangsliste (eingeführt mit 02_zugangsliste.sql)
 -- ---------------------------------------------------------------------
 create table public.allowed_emails (
   email    text primary key check (email = lower(trim(email)) and email like '%@%'),
@@ -368,7 +395,7 @@ create trigger before_auth_user_created before insert on auth.users
 --   drop trigger before_auth_user_created on auth.users;
 
 -- ---------------------------------------------------------------------
--- Bildspeicher (identisch mit 03_bilder.sql)
+-- Bildspeicher (eingeführt mit 03_bilder.sql)
 -- ---------------------------------------------------------------------
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('wish-images', 'wish-images', true, 2097152, array['image/jpeg', 'image/png', 'image/webp'])
@@ -383,9 +410,10 @@ create policy "wish images delete" on storage.objects for delete to authenticate
          and public.my_role(((storage.foldername(name))[1])::uuid) is not null);
 
 -- ---------------------------------------------------------------------
--- Einladungen freischalten (identisch mit 04_einladungen.sql)
+-- Einladungen freischalten (eingeführt mit 04_einladungen.sql)
 -- ---------------------------------------------------------------------
-create function public.allow_email(p_email text) returns void
+-- Einladen durch einen Administrator: Familienkonto
+create or replace function public.allow_email(p_email text, p_list uuid default null) returns text
 language plpgsql security definer set search_path = public as $$
 declare v_email text := lower(trim(coalesce(p_email, '')));
 begin
@@ -396,15 +424,19 @@ begin
   if v_email !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' or char_length(v_email) > 254 then
     raise exception 'invalid_email' using errcode = '22023';
   end if;
-  insert into allowed_emails (email, note) values (v_email, 'eingeladen von ' || auth.uid()::text)
-  on conflict (email) do nothing;
+  if email_known(v_email) then return 'allowed'; end if;
+  if is_admin() then
+    -- Einladung zum Mitbearbeiten: Familienkonto
+    insert into allowed_emails (email, note, account_type) values (v_email, 'eingeladen von ' || auth.uid()::text, 'family') on conflict (email) do nothing;
+    return 'allowed';
+  end if;
+  insert into access_requests (email, invited_by, list_id) values (v_email, auth.uid(), p_list)
+  on conflict (email) where status = 'pending' do update set invited_by = excluded.invited_by, list_id = excluded.list_id;
+  return 'pending';
 end $$;
 
-revoke execute on function public.allow_email(text) from public, anon, authenticated;
-grant execute on function public.allow_email(text) to authenticated;
-
 -- ---------------------------------------------------------------------
--- Zugriff verwalten (identisch mit 05_zugriff.sql)
+-- Zugriff verwalten (eingeführt mit 05_zugriff.sql)
 -- ---------------------------------------------------------------------
 create function public.add_member(p_list uuid, p_user uuid) returns void
 language plpgsql security definer set search_path = public as $$
@@ -427,15 +459,6 @@ grant execute on function public.add_member(uuid, uuid) to authenticated;
 create policy "members leave" on public.list_members for delete
   using (user_id = auth.uid() and role <> 'owner');
 
--- ---------------------------------------------------------------------
--- Runde 5 (identisch mit 06_runde5.sql)
--- ---------------------------------------------------------------------
--- Abgeschlossene (archivierte) Listen: Gast-Link pausiert, Liste bleibt erhalten
-alter table public.lists add column if not exists archived_at timestamptz;
-
--- Erinnerungs-Mails lassen sich pro Person abbestellen
-alter table public.profiles add column if not exists reminder_emails boolean not null default true;
-
 -- Protokoll: Welche Erinnerung wurde für welche Liste schon verschickt?
 create table if not exists public.list_reminders (
   list_id    uuid not null references public.lists on delete cascade,
@@ -444,55 +467,7 @@ create table if not exists public.list_reminders (
   sent_at    timestamptz not null default now(),
   primary key (list_id, kind, event_date)
 );
-alter table public.list_reminders enable row level security;   -- kein Zugriff aus der App
-
--- Gäste: abgeschlossene Listen sind nicht mehr erreichbar und nicht reservierbar
-create or replace function public.guest_list(p_token text) returns jsonb
-language sql stable security definer set search_path = public as $$
-  select jsonb_build_object(
-    'id', l.id, 'title', l.title, 'recipient_name', l.recipient_name, 'occasion', l.occasion,
-    'event_date', l.event_date, 'description', l.description, 'cover', l.cover,
-    'wishes', coalesce((
-      select jsonb_agg(jsonb_build_object(
-        'id', w.id, 'title', w.title, 'url', w.url, 'shop', w.shop, 'image_path', w.image_path,
-        'price_cents', w.price_cents, 'quantity', w.quantity, 'priority', w.priority, 'note', w.note,
-        'available', w.quantity - coalesce((select sum(r.quantity) from reservations r where r.wish_id = w.id), 0)
-      ) order by w.priority, w.created_at)
-      from wishes w where w.list_id = l.id), '[]'::jsonb))
-  from lists l where l.guest_token = p_token and l.archived_at is null
-$$;
-
-create or replace function public.reserve_wish(p_token text, p_wish uuid, p_quantity int, p_name text)
-returns jsonb language plpgsql security definer set search_path = public as $$
-declare
-  v_list  uuid;
-  v_date  date;
-  v_qty   int;
-  v_taken int;
-  v_code  text;
-  v_name  text := left(trim(coalesce(p_name, '')), 60);
-begin
-  if v_name = '' then return jsonb_build_object('ok', false, 'error', 'name_required'); end if;
-  if p_quantity is null or p_quantity < 1 or p_quantity > 20 then
-    return jsonb_build_object('ok', false, 'error', 'invalid_quantity');
-  end if;
-
-  select id, event_date into v_list, v_date from lists where guest_token = p_token and archived_at is null;
-  if v_list is null then return jsonb_build_object('ok', false, 'error', 'link_invalid'); end if;
-
-  select quantity into v_qty from wishes where id = p_wish and list_id = v_list for update;
-  if not found then return jsonb_build_object('ok', false, 'error', 'wish_not_found'); end if;
-
-  select coalesce(sum(quantity), 0) into v_taken from reservations where wish_id = p_wish;
-  if v_taken + p_quantity > v_qty then
-    return jsonb_build_object('ok', false, 'error', 'already_taken', 'available', greatest(v_qty - v_taken, 0));
-  end if;
-
-  v_code := gen_code();
-  insert into reservations (wish_id, quantity, guest_name, code_hash, forget_after)
-  values (p_wish, p_quantity, v_name, hash_code(v_code), coalesce(v_date, current_date) + 60);
-  return jsonb_build_object('ok', true, 'code', v_code);   -- bleibt nur auf dem Gerät des Gastes
-end $$;
+alter table public.list_reminders enable row level security;
 
 -- Reservierte Wünsche dürfen nicht in eine andere Liste wandern
 -- (die Gäste der alten Liste würden ihre Reservierung sonst aus den Augen verlieren)
@@ -505,12 +480,12 @@ begin
   end if;
   return new;
 end $$;
-drop trigger if exists wishes_move on public.wishes;
 create trigger wishes_move before update of list_id on public.wishes
   for each row execute function public.check_wish_move();
 
 -- Erinnerungen: fällige Listen (in 14 oder 3 Tagen) samt Empfängern und Stand.
 -- Empfänger mit ausgeschaltetem „Reservierungen anzeigen“ bekommen die Mail ohne Zahlen.
+-- Erinnerungen: Gruppengeschenk zählt erst als vergeben, wenn alles zusammen ist
 create or replace function public.reminder_batch(p_today date default current_date)
 returns table (list_id uuid, kind text, event_date date, title text, recipient_name text,
                total int, taken int, hearts int, hearts_taken int,
@@ -523,7 +498,8 @@ language sql stable security definer set search_path = public as $$
     where l.archived_at is null and l.event_date in (p_today + 14, p_today + 3)
   ), wq as (
     select w.list_id, w.quantity, w.priority,
-           least(w.quantity, coalesce((select sum(r.quantity) from reservations r where r.wish_id = w.id), 0)) as tq
+           case when w.group_gift then case when gift_funded(w.id) >= gift_target(w) then w.quantity else 0 end
+                else least(w.quantity, coalesce((select sum(r.quantity) from reservations r where r.wish_id = w.id), 0)) end as tq
     from wishes w where w.list_id in (select id from due)
   )
   select d.id, d.kind, d.event_date, d.title, d.recipient_name,
@@ -549,7 +525,7 @@ revoke execute on function public.reminder_batch(date), public.mark_reminder_sen
 grant execute on function public.reminder_batch(date), public.mark_reminder_sent(uuid, text, date) to service_role;
 
 -- ---------------------------------------------------------------------
--- Sicherheit (identisch mit 08_sicherheit.sql)
+-- Sicherheit (eingeführt mit 08_sicherheit.sql)
 -- ---------------------------------------------------------------------
 create table if not exists public.rate_events (
   bucket text not null,
@@ -579,73 +555,11 @@ begin
   return false;
 end $$;
 
-create or replace function public.reserve_wish(p_token text, p_wish uuid, p_quantity int, p_name text)
-returns jsonb language plpgsql security definer set search_path = public as $$
-declare
-  v_list  uuid;
-  v_date  date;
-  v_qty   int;
-  v_taken int;
-  v_code  text;
-  v_name  text := left(trim(coalesce(p_name, '')), 60);
-begin
-  if v_name = '' then return jsonb_build_object('ok', false, 'error', 'name_required'); end if;
-  if p_quantity is null or p_quantity < 1 or p_quantity > 20 then
-    return jsonb_build_object('ok', false, 'error', 'invalid_quantity');
-  end if;
-
-  select id, event_date into v_list, v_date from lists where guest_token = p_token and archived_at is null;
-  if v_list is null then return jsonb_build_object('ok', false, 'error', 'link_invalid'); end if;
-  -- Bremsklotz: höchstens 10 Reservierungen pro Liste und Minute
-  if rate_limited('reserve:' || v_list, 10, interval '1 minute') then
-    return jsonb_build_object('ok', false, 'error', 'rate_limited');
-  end if;
-
-  select quantity into v_qty from wishes where id = p_wish and list_id = v_list for update;
-  if not found then return jsonb_build_object('ok', false, 'error', 'wish_not_found'); end if;
-
-  select coalesce(sum(quantity), 0) into v_taken from reservations where wish_id = p_wish;
-  if v_taken + p_quantity > v_qty then
-    return jsonb_build_object('ok', false, 'error', 'already_taken', 'available', greatest(v_qty - v_taken, 0));
-  end if;
-
-  v_code := gen_code();
-  insert into reservations (wish_id, quantity, guest_name, code_hash, forget_after)
-  values (p_wish, p_quantity, v_name, hash_code(v_code), coalesce(v_date, current_date) + 60);
-  return jsonb_build_object('ok', true, 'code', v_code);   -- bleibt nur auf dem Gerät des Gastes
-end $$;
-
-create or replace function public.cancel_reservation(p_code text) returns jsonb
-language plpgsql security definer set search_path = public as $$
-declare v_bucket text := 'cancel_fail:' || client_ip();
-begin
-  if (select count(*) from rate_events where bucket = v_bucket and at > now() - interval '10 minutes') >= 20 then
-    return jsonb_build_object('ok', false, 'error', 'rate_limited');
-  end if;
-  delete from reservations where code_hash = hash_code(p_code);
-  if not found then
-    insert into rate_events (bucket) values (v_bucket);   -- nur Fehlversuche zählen
-    return jsonb_build_object('ok', false);
-  end if;
-  return jsonb_build_object('ok', true);
-end $$;
-
-create or replace function public.my_reservations(p_codes text[])
-returns table (code text, wish_id uuid, quantity int)
-language plpgsql security definer set search_path = public as $$
-begin
-  if rate_limited('mine:' || client_ip(), 30, interval '1 minute') then return; end if;
-  return query
-    select c, r.wish_id, r.quantity
-    from unnest(p_codes[1:50]) as c
-    join reservations r on r.code_hash = hash_code(c);
-end $$;
-
-revoke execute on function public.rate_limited(text, int, interval), public.client_ip() from public, anon, authenticated;
-grant execute on function public.reserve_wish(text, uuid, int, text), public.cancel_reservation(text), public.my_reservations(text[]) to anon, authenticated;
+revoke execute on function public.rate_limited(text, int, interval), public.client_ip() from public, anon, authenticated;grant execute on function public.cancel_reservation(text),
+  public.my_reservations(text[]) to anon, authenticated;
 
 -- ---------------------------------------------------------------------
--- Fehlerprotokoll (identisch mit 09_fehlerprotokoll.sql)
+-- Fehlerprotokoll (eingeführt mit 09_fehlerprotokoll.sql)
 -- ---------------------------------------------------------------------
 create table if not exists public.client_errors (
   id      bigint generated always as identity primary key,
@@ -671,17 +585,6 @@ end $$;
 revoke execute on function public.log_client_error(text, text, text, text) from public;
 grant execute on function public.log_client_error(text, text, text, text) to anon, authenticated;
 
--- ---------------------------------------------------------------------
--- Eltern besorgen, Eltern reservieren, Benachrichtigungen (identisch mit 10_reservierungen.sql)
--- ---------------------------------------------------------------------
--- Reservierung: „Bitte besorgt ihr es“ und wer (aus der Familie) sie eingetragen hat
-alter table public.reservations add column if not exists parents_buy boolean not null default false;
-alter table public.reservations add column if not exists entered_by uuid references public.profiles(id) on delete set null;
-
--- Benachrichtigungen bei neuen Reservierungen: sofort, täglich (Standard) oder aus
-alter table public.profiles add column if not exists notify_reservations text not null default 'daily'
-  check (notify_reservations in ('instant', 'daily', 'off'));
-
 -- Bis wann wurde zuletzt benachrichtigt (je Art)
 create table if not exists public.notify_state (
   mode    text primary key check (mode in ('instant', 'daily')),
@@ -694,11 +597,13 @@ alter table public.notify_state enable row level security;   -- kein Zugriff aus
 -- Zeilensperre auf dem Wunsch, damit gleichzeitige Klicks nacheinander laufen.
 -- Nicht direkt aufrufbar, nur über reserve_wish und reserve_for_guest.
 -- ---------------------------------------------------------------------
+-- Normales Reservieren ist bei Gruppengeschenken nicht möglich (dafür gibt es Beiträge)
 create or replace function public.reserve_core(p_list uuid, p_event date, p_wish uuid, p_quantity int, p_name text,
                                                p_parents_buy boolean, p_entered_by uuid)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare
   v_qty   int;
+  v_group boolean;
   v_taken int;
   v_code  text;
   v_name  text := left(trim(coalesce(p_name, '')), 60);
@@ -707,8 +612,9 @@ begin
   if p_quantity is null or p_quantity < 1 or p_quantity > 20 then
     return jsonb_build_object('ok', false, 'error', 'invalid_quantity');
   end if;
-  select quantity into v_qty from wishes where id = p_wish and list_id = p_list for update;
+  select quantity, group_gift into v_qty, v_group from wishes where id = p_wish and list_id = p_list for update;
   if not found then return jsonb_build_object('ok', false, 'error', 'wish_not_found'); end if;
+  if v_group then return jsonb_build_object('ok', false, 'error', 'group_gift'); end if;
   select coalesce(sum(quantity), 0) into v_taken from reservations where wish_id = p_wish;
   if v_taken + p_quantity > v_qty then
     return jsonb_build_object('ok', false, 'error', 'already_taken', 'available', greatest(v_qty - v_taken, 0));
@@ -717,20 +623,6 @@ begin
   insert into reservations (wish_id, quantity, guest_name, code_hash, forget_after, parents_buy, entered_by)
   values (p_wish, p_quantity, v_name, hash_code(v_code), coalesce(p_event, current_date) + 60, coalesce(p_parents_buy, false), p_entered_by);
   return jsonb_build_object('ok', true, 'code', v_code);
-end $$;
-
--- Gäste: mit Link, Bremsklotz, optional „Bitte besorgt ihr es“
-drop function if exists public.reserve_wish(text, uuid, int, text);
-create or replace function public.reserve_wish(p_token text, p_wish uuid, p_quantity int, p_name text, p_parents_buy boolean default false)
-returns jsonb language plpgsql security definer set search_path = public as $$
-declare v_list uuid; v_date date;
-begin
-  select id, event_date into v_list, v_date from lists where guest_token = p_token and archived_at is null;
-  if v_list is null then return jsonb_build_object('ok', false, 'error', 'link_invalid'); end if;
-  if rate_limited('reserve:' || v_list, 10, interval '1 minute') then
-    return jsonb_build_object('ok', false, 'error', 'rate_limited');
-  end if;
-  return reserve_core(v_list, v_date, p_wish, p_quantity, p_name, p_parents_buy, null);
 end $$;
 
 -- Eltern: für jemanden reservieren (z. B. Oma hat angerufen)
@@ -750,13 +642,12 @@ end $$;
 create or replace function public.notify_window(p_mode text) returns timestamptz
 language sql stable security definer set search_path = public as $$
   select coalesce((select last_at from notify_state where mode = p_mode), now() - interval '1 day')
-$$;
-
+$$;-- Tägliche Mail: Beiträge mit Betrag
 create or replace function public.reservation_notices(p_mode text, p_since timestamptz, p_until timestamptz)
 returns table (email text, list_id uuid, list_title text, items jsonb)
 language sql stable security definer set search_path = public as $$
   select u.email::text, l.id, l.title,
-         jsonb_agg(jsonb_build_object('wish', w.title, 'name', r.guest_name, 'quantity', r.quantity,
+         jsonb_agg(jsonb_build_object('wish', w.title, 'name', r.guest_name, 'quantity', r.quantity, 'amount_cents', r.amount_cents,
                                       'parents_buy', r.parents_buy, 'entered_by_family', r.entered_by is not null)
                    order by r.created_at)
   from reservations r
@@ -786,22 +677,15 @@ grant execute on function public.reserve_wish(text, uuid, int, text, boolean) to
 grant execute on function public.reserve_for_guest(uuid, int, text, boolean) to authenticated;
 
 -- ---------------------------------------------------------------------
--- Benachrichtigungen nur täglich oder aus (identisch mit 12_ohne_sofort.sql)
+-- Benachrichtigungen nur täglich oder aus (eingeführt mit 12_ohne_sofort.sql)
 -- ---------------------------------------------------------------------
 update public.profiles set notify_reservations = 'daily' where notify_reservations = 'instant';
 
 alter table public.profiles drop constraint if exists profiles_notify_reservations_check;
 alter table public.profiles add constraint profiles_notify_reservations_check
   check (notify_reservations in ('daily', 'off'));
-
--- ---------------------------------------------------------------------
--- Gruppengeschenke (identisch mit 13_gruppengeschenk.sql)
--- ---------------------------------------------------------------------
-alter table public.wishes add column if not exists group_gift boolean not null default false;
 alter table public.wishes drop constraint if exists wishes_group_gift_needs_price;
 alter table public.wishes add constraint wishes_group_gift_needs_price check (not group_gift or price_cents is not null);
-
-alter table public.reservations add column if not exists amount_cents integer check (amount_cents is null or amount_cents >= 1);
 alter table public.reservations drop constraint if exists reservations_quantity_check;
 alter table public.reservations add constraint reservations_quantity_check
   check (quantity >= 1 or (quantity = 0 and amount_cents is not null));
@@ -824,37 +708,8 @@ begin
   end if;
   return new;
 end $$;
-drop trigger if exists wishes_group_gift_switch on public.wishes;
 create trigger wishes_group_gift_switch before update of group_gift on public.wishes
   for each row execute function public.check_group_gift_switch();
-
--- Normales Reservieren ist bei Gruppengeschenken nicht möglich (dafür gibt es Beiträge)
-create or replace function public.reserve_core(p_list uuid, p_event date, p_wish uuid, p_quantity int, p_name text,
-                                               p_parents_buy boolean, p_entered_by uuid)
-returns jsonb language plpgsql security definer set search_path = public as $$
-declare
-  v_qty   int;
-  v_group boolean;
-  v_taken int;
-  v_code  text;
-  v_name  text := left(trim(coalesce(p_name, '')), 60);
-begin
-  if v_name = '' then return jsonb_build_object('ok', false, 'error', 'name_required'); end if;
-  if p_quantity is null or p_quantity < 1 or p_quantity > 20 then
-    return jsonb_build_object('ok', false, 'error', 'invalid_quantity');
-  end if;
-  select quantity, group_gift into v_qty, v_group from wishes where id = p_wish and list_id = p_list for update;
-  if not found then return jsonb_build_object('ok', false, 'error', 'wish_not_found'); end if;
-  if v_group then return jsonb_build_object('ok', false, 'error', 'group_gift'); end if;
-  select coalesce(sum(quantity), 0) into v_taken from reservations where wish_id = p_wish;
-  if v_taken + p_quantity > v_qty then
-    return jsonb_build_object('ok', false, 'error', 'already_taken', 'available', greatest(v_qty - v_taken, 0));
-  end if;
-  v_code := gen_code();
-  insert into reservations (wish_id, quantity, guest_name, code_hash, forget_after, parents_buy, entered_by)
-  values (p_wish, p_quantity, v_name, hash_code(v_code), coalesce(p_event, current_date) + 60, coalesce(p_parents_buy, false), p_entered_by);
-  return jsonb_build_object('ok', true, 'code', v_code);
-end $$;
 
 -- Kern fürs Beisteuern: gesperrt wie das Reservieren, begrenzt auf den offenen Rest
 create or replace function public.contribute_core(p_list uuid, p_event date, p_wish uuid, p_amount int, p_name text, p_entered_by uuid)
@@ -906,170 +761,18 @@ begin
   return contribute_core(v_list, v_date, p_wish, p_amount_cents, p_name, auth.uid());
 end $$;
 
--- Gästeansicht: bei Gruppengeschenken Ziel, Summe und Anzahl, nie Namen
-create or replace function public.guest_list(p_token text) returns jsonb
-language sql stable security definer set search_path = public as $$
-  select jsonb_build_object(
-    'id', l.id, 'title', l.title, 'recipient_name', l.recipient_name, 'occasion', l.occasion,
-    'event_date', l.event_date, 'description', l.description, 'cover', l.cover,
-    'wishes', coalesce((
-      select jsonb_agg(jsonb_build_object(
-        'id', w.id, 'title', w.title, 'url', w.url, 'shop', w.shop, 'image_path', w.image_path,
-        'price_cents', w.price_cents, 'quantity', w.quantity, 'priority', w.priority, 'note', w.note,
-        'group_gift', w.group_gift,
-        'target_cents', case when w.group_gift then gift_target(w) end,
-        'funded_cents', case when w.group_gift then gift_funded(w.id) end,
-        'contributors', case when w.group_gift then (select count(*) from reservations r where r.wish_id = w.id) end,
-        'available', case
-          when w.group_gift then case when gift_funded(w.id) >= gift_target(w) then 0 else 1 end
-          else w.quantity - coalesce((select sum(r.quantity) from reservations r where r.wish_id = w.id), 0) end
-      ) order by w.priority, w.created_at)
-      from wishes w where w.list_id = l.id), '[]'::jsonb))
-  from lists l where l.guest_token = p_token and l.archived_at is null
-$$;
-
--- Eigene Reservierungen/Beiträge: jetzt mit Betrag (Rückgabetyp ändert sich, daher neu anlegen)
-drop function if exists public.my_reservations(text[]);
-create function public.my_reservations(p_codes text[])
-returns table (code text, wish_id uuid, quantity int, amount_cents int)
-language plpgsql security definer set search_path = public as $$
-begin
-  if rate_limited('mine:' || client_ip(), 30, interval '1 minute') then return; end if;
-  return query
-    select c, r.wish_id, r.quantity, r.amount_cents
-    from unnest(p_codes[1:50]) as c
-    join reservations r on r.code_hash = hash_code(c);
-end $$;
-
--- Erinnerungen: Gruppengeschenk zählt erst als vergeben, wenn alles zusammen ist
-create or replace function public.reminder_batch(p_today date default current_date)
-returns table (list_id uuid, kind text, event_date date, title text, recipient_name text,
-               total int, taken int, hearts int, hearts_taken int,
-               emails_with_stats text[], emails_plain text[])
-language sql stable security definer set search_path = public as $$
-  with due as (
-    select l.id, l.title, l.recipient_name, l.event_date,
-           case when l.event_date = p_today + 14 then '14d' else '3d' end as kind
-    from lists l
-    where l.archived_at is null and l.event_date in (p_today + 14, p_today + 3)
-  ), wq as (
-    select w.list_id, w.quantity, w.priority,
-           case when w.group_gift then case when gift_funded(w.id) >= gift_target(w) then w.quantity else 0 end
-                else least(w.quantity, coalesce((select sum(r.quantity) from reservations r where r.wish_id = w.id), 0)) end as tq
-    from wishes w where w.list_id in (select id from due)
-  )
-  select d.id, d.kind, d.event_date, d.title, d.recipient_name,
-         coalesce((select sum(quantity) from wq where wq.list_id = d.id), 0)::int,
-         coalesce((select sum(tq) from wq where wq.list_id = d.id), 0)::int,
-         (select count(*) from wq where wq.list_id = d.id and priority = 'heart')::int,
-         (select count(*) from wq where wq.list_id = d.id and priority = 'heart' and tq >= quantity)::int,
-         array(select u.email::text from list_members m join auth.users u on u.id = m.user_id join profiles p on p.id = m.user_id
-               where m.list_id = d.id and p.reminder_emails and m.show_reservations and u.email is not null),
-         array(select u.email::text from list_members m join auth.users u on u.id = m.user_id join profiles p on p.id = m.user_id
-               where m.list_id = d.id and p.reminder_emails and not m.show_reservations and u.email is not null)
-  from due d
-  where not exists (select 1 from list_reminders lr where lr.list_id = d.id and lr.kind = d.kind and lr.event_date = d.event_date)
-$$;
-
--- Tägliche Mail: Beiträge mit Betrag
-create or replace function public.reservation_notices(p_mode text, p_since timestamptz, p_until timestamptz)
-returns table (email text, list_id uuid, list_title text, items jsonb)
-language sql stable security definer set search_path = public as $$
-  select u.email::text, l.id, l.title,
-         jsonb_agg(jsonb_build_object('wish', w.title, 'name', r.guest_name, 'quantity', r.quantity, 'amount_cents', r.amount_cents,
-                                      'parents_buy', r.parents_buy, 'entered_by_family', r.entered_by is not null)
-                   order by r.created_at)
-  from reservations r
-  join wishes w on w.id = r.wish_id
-  join lists l on l.id = w.list_id
-  join list_members m on m.list_id = l.id and m.show_reservations
-  join profiles p on p.id = m.user_id and p.notify_reservations = p_mode
-  join auth.users u on u.id = m.user_id
-  where r.created_at > p_since and r.created_at <= p_until
-    and r.entered_by is distinct from m.user_id
-    and u.email is not null
-  group by u.email, l.id, l.title
-$$;
-
 revoke execute on function public.contribute_core(uuid, date, uuid, int, text, uuid), public.gift_funded(uuid),
   public.check_group_gift_switch() from public, anon, authenticated;
 grant execute on function public.contribute(text, uuid, int, text), public.my_reservations(text[]) to anon, authenticated;
 grant execute on function public.contribute_for_guest(uuid, int, text) to authenticated;
 grant execute on function public.gift_target(public.wishes) to anon, authenticated;
 
--- ---------------------------------------------------------------------
--- „Bitte besorgt ihr es“ pro Liste (identisch mit 14_eltern_besorgen.sql)
--- ---------------------------------------------------------------------
-alter table public.lists add column if not exists allow_parents_buy boolean not null default false;
-
 -- Listen, bei denen Gäste die Option schon genutzt haben, behalten sie
 update public.lists l set allow_parents_buy = true
 where exists (select 1 from public.reservations r join public.wishes w on w.id = r.wish_id
               where w.list_id = l.id and r.parents_buy and r.amount_cents is null);
-
--- Liste anlegen: mit der neuen Einstellung
-drop function if exists public.create_list(text, text, list_occasion, date, int, text);
-create function public.create_list(p_title text, p_recipient_name text default null, p_occasion list_occasion default 'other',
-                                   p_event_date date default null, p_cover int default 0, p_description text default null,
-                                   p_allow_parents_buy boolean default false)
-returns public.lists language plpgsql security definer set search_path = public as $$
-declare v_list lists;
-begin
-  if auth.uid() is null then raise exception 'not_authenticated' using errcode = '42501'; end if;
-  insert into profiles (id, display_name) values (auth.uid(), 'Ich') on conflict (id) do nothing;
-  insert into lists (title, recipient_name, occasion, event_date, cover, description, allow_parents_buy, created_by)
-  values (trim(p_title), nullif(trim(p_recipient_name), ''), p_occasion, p_event_date, coalesce(p_cover, 0),
-          nullif(trim(p_description), ''), coalesce(p_allow_parents_buy, false), auth.uid())
-  returning * into v_list;
-  insert into list_members (list_id, user_id, role) values (v_list.id, auth.uid(), 'owner');
-  return v_list;
-end $$;
 revoke execute on function public.create_list(text, text, list_occasion, date, int, text, boolean) from public, anon;
 grant execute on function public.create_list(text, text, list_occasion, date, int, text, boolean) to authenticated;
-
--- Gäste: Wunsch „Bitte besorgt ihr es“ zählt nur, wenn die Liste es erlaubt
-create or replace function public.reserve_wish(p_token text, p_wish uuid, p_quantity int, p_name text, p_parents_buy boolean default false)
-returns jsonb language plpgsql security definer set search_path = public as $$
-declare v_list uuid; v_date date; v_allow boolean;
-begin
-  select id, event_date, allow_parents_buy into v_list, v_date, v_allow from lists where guest_token = p_token and archived_at is null;
-  if v_list is null then return jsonb_build_object('ok', false, 'error', 'link_invalid'); end if;
-  if rate_limited('reserve:' || v_list, 10, interval '1 minute') then
-    return jsonb_build_object('ok', false, 'error', 'rate_limited');
-  end if;
-  return reserve_core(v_list, v_date, p_wish, p_quantity, p_name, coalesce(p_parents_buy, false) and v_allow, null);
-end $$;
-
--- Gästeansicht: weiß, ob die Option angeboten wird
-create or replace function public.guest_list(p_token text) returns jsonb
-language sql stable security definer set search_path = public as $$
-  select jsonb_build_object(
-    'id', l.id, 'title', l.title, 'recipient_name', l.recipient_name, 'occasion', l.occasion,
-    'event_date', l.event_date, 'description', l.description, 'cover', l.cover,
-    'allow_parents_buy', l.allow_parents_buy,
-    'wishes', coalesce((
-      select jsonb_agg(jsonb_build_object(
-        'id', w.id, 'title', w.title, 'url', w.url, 'shop', w.shop, 'image_path', w.image_path,
-        'price_cents', w.price_cents, 'quantity', w.quantity, 'priority', w.priority, 'note', w.note,
-        'group_gift', w.group_gift,
-        'target_cents', case when w.group_gift then gift_target(w) end,
-        'funded_cents', case when w.group_gift then gift_funded(w.id) end,
-        'contributors', case when w.group_gift then (select count(*) from reservations r where r.wish_id = w.id) end,
-        'available', case
-          when w.group_gift then case when gift_funded(w.id) >= gift_target(w) then 0 else 1 end
-          else w.quantity - coalesce((select sum(r.quantity) from reservations r where r.wish_id = w.id), 0) end
-      ) order by w.priority, w.created_at)
-      from wishes w where w.list_id = l.id), '[]'::jsonb))
-  from lists l where l.guest_token = p_token and l.archived_at is null
-$$;
-
--- ---------------------------------------------------------------------
--- Listen sortieren und verschieben (identisch mit 15_listen_reihenfolge.sql)
--- ---------------------------------------------------------------------
-alter table public.list_members add column if not exists sort_order int;
-
-alter table public.profiles add column if not exists list_sort text not null default 'custom'
-  check (list_sort in ('custom', 'date', 'new', 'name'));
 
 -- Eigene Reihenfolge speichern: Position in der Liste der IDs = Platz in der Übersicht.
 -- Ändert nur die eigenen Einträge, nie die anderer Mitglieder.
@@ -1084,7 +787,7 @@ revoke execute on function public.set_list_order(uuid[]) from public, anon;
 grant execute on function public.set_list_order(uuid[]) to authenticated;
 
 -- ---------------------------------------------------------------------
--- Zuletzt gesucht pro Person (identisch mit 16_letzte_suchen.sql)
+-- Zuletzt gesucht pro Person (eingeführt mit 16_letzte_suchen.sql)
 -- ---------------------------------------------------------------------
 create table if not exists public.recent_searches (
   user_id    uuid primary key references public.profiles(id) on delete cascade default auth.uid(),
@@ -1103,7 +806,7 @@ revoke all on public.recent_searches from anon;
 grant select, insert, update, delete on public.recent_searches to authenticated;
 
 -- ---------------------------------------------------------------------
--- Freigabe neuer Bearbeiter (identisch mit 17_freigabe.sql)
+-- Freigabe neuer Bearbeiter (eingeführt mit 17_freigabe.sql)
 -- ---------------------------------------------------------------------
 create table if not exists public.app_admins (
   user_id uuid primary key references public.profiles(id) on delete cascade
@@ -1124,7 +827,8 @@ create table if not exists public.access_requests (
   list_id     uuid references public.lists(id) on delete set null,
   created_at  timestamptz not null default now(),
   decided_at  timestamptz,
-  decided_by  uuid references public.profiles(id) on delete set null
+  decided_by  uuid references public.profiles(id) on delete set null,
+  assign_lists uuid[] not null default '{}'
 );
 create unique index if not exists access_requests_one_pending on public.access_requests (email) where status = 'pending';
 alter table public.access_requests enable row level security;   -- Zugriff nur über die Funktionen unten
@@ -1158,37 +862,14 @@ begin
   return jsonb_build_object('status', 'pending', 'notify', v_new);
 end $$;
 
--- Einladen: Administratoren schalten direkt frei, alle anderen erzeugen eine Anfrage
-drop function if exists public.allow_email(text);
-create function public.allow_email(p_email text, p_list uuid default null) returns text
-language plpgsql security definer set search_path = public as $$
-declare v_email text := lower(trim(coalesce(p_email, '')));
-begin
-  if auth.uid() is null
-     or not exists (select 1 from list_members where user_id = auth.uid() and role = 'owner') then
-    raise exception 'forbidden' using errcode = '42501';
-  end if;
-  if v_email !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' or char_length(v_email) > 254 then
-    raise exception 'invalid_email' using errcode = '22023';
-  end if;
-  if email_known(v_email) then return 'allowed'; end if;
-  if is_admin() then
-    insert into allowed_emails (email, note) values (v_email, 'eingeladen von ' || auth.uid()::text) on conflict (email) do nothing;
-    return 'allowed';
-  end if;
-  insert into access_requests (email, invited_by, list_id) values (v_email, auth.uid(), p_list)
-  on conflict (email) where status = 'pending' do update set invited_by = excluded.invited_by, list_id = excluded.list_id;
-  return 'pending';
-end $$;
-
 -- Für Administratoren: offene Anfragen
-create or replace function public.pending_access_requests()
-returns table (id uuid, email text, created_at timestamptz, invited_by_name text, list_title text)
+create function public.pending_access_requests()
+returns table (id uuid, email text, created_at timestamptz, invited_by_name text, list_title text, list_id uuid)
 language plpgsql stable security definer set search_path = public as $$
 begin
   if not is_admin() then raise exception 'forbidden' using errcode = '42501'; end if;
   return query
-    select r.id, r.email, r.created_at, p.display_name, l.title
+    select r.id, r.email, r.created_at, p.display_name, l.title, r.list_id
     from access_requests r
     left join profiles p on p.id = r.invited_by
     left join lists l on l.id = r.list_id
@@ -1197,17 +878,27 @@ begin
 end $$;
 
 -- Für Administratoren: freigeben oder ablehnen (gibt die E-Mail-Adresse zurück)
-create or replace function public.decide_access(p_id uuid, p_approve boolean) returns text
+create function public.decide_access(p_id uuid, p_approve boolean, p_type text default 'guest', p_lists uuid[] default '{}') returns text
 language plpgsql security definer set search_path = public as $$
-declare v_email text;
+declare v_email text; v_lists uuid[]; v_user uuid;
 begin
   if not is_admin() then raise exception 'forbidden' using errcode = '42501'; end if;
-  update access_requests set status = case when p_approve then 'approved' else 'denied' end, decided_at = now(), decided_by = auth.uid()
-  where id = p_id and status = 'pending'
+  if p_type not in ('family', 'guest') then raise exception 'invalid_type' using errcode = '22023'; end if;
+  select coalesce(array_agg(distinct x), '{}') into v_lists from unnest(coalesce(p_lists, '{}')) x where my_role(x) is not null;
+  update access_requests
+     set status = case when p_approve then 'approved' else 'denied' end, decided_at = now(), decided_by = auth.uid(),
+         assign_lists = case when p_approve then v_lists else '{}' end
+   where id = p_id and status = 'pending'
   returning email into v_email;
   if v_email is null then raise exception 'not_found' using errcode = 'P0002'; end if;
   if p_approve then
-    insert into allowed_emails (email, note) values (v_email, 'freigegeben von ' || auth.uid()::text) on conflict (email) do nothing;
+    insert into allowed_emails (email, note, account_type) values (v_email, 'freigegeben von ' || auth.uid()::text, p_type)
+    on conflict (email) do update set account_type = excluded.account_type;
+    select id into v_user from auth.users where lower(email) = v_email;
+    if v_user is not null then              -- Konto gibt es schon: gleich umsetzen
+      update profiles set account_type = p_type where id = v_user;
+      perform apply_list_assignments(v_user, v_email);
+    end if;
   end if;
   return v_email;
 end $$;
@@ -1226,24 +917,22 @@ $$;
 
 revoke execute on function public.request_access(text, text), public.admin_emails(), public.access_request_info(text), public.email_known(text)
   from public, anon, authenticated;
-grant execute on function public.request_access(text, text), public.admin_emails(), public.access_request_info(text) to service_role;
-grant execute on function public.allow_email(text, uuid), public.pending_access_requests(), public.decide_access(uuid, boolean), public.is_admin() to authenticated;
+grant execute on function public.request_access(text, text), public.admin_emails(), public.access_request_info(text) to service_role;grant execute on function public.allow_email(text, uuid),
+  public.pending_access_requests(),
+  public.is_admin() to authenticated;
 
 -- ---------------------------------------------------------------------
--- Funktionsrechte nachschärfen (identisch mit 18_rechte_nachschaerfen.sql)
+-- Funktionsrechte nachschärfen (eingeführt mit 18_rechte_nachschaerfen.sql)
 -- ---------------------------------------------------------------------
 revoke execute on function public.allow_email(text, uuid),
   public.reserve_for_guest(uuid, int, text, boolean),
   public.contribute_for_guest(uuid, int, text),
   public.pending_access_requests(),
-  public.decide_access(uuid, boolean),
   public.is_admin()
-  from public, anon;
-grant execute on function public.allow_email(text, uuid),
+  from public, anon;grant execute on function public.allow_email(text, uuid),
   public.reserve_for_guest(uuid, int, text, boolean),
   public.contribute_for_guest(uuid, int, text),
   public.pending_access_requests(),
-  public.decide_access(uuid, boolean),
   public.is_admin()
   to authenticated;
 
@@ -1254,7 +943,7 @@ grant execute on function public.reserve_wish(text, uuid, int, text, boolean), p
   public.my_reservations(text[]) to anon, authenticated;
 
 -- ---------------------------------------------------------------------
--- Verlauf (identisch mit 19_verlauf.sql)
+-- Verlauf (eingeführt mit 19_verlauf.sql)
 -- ---------------------------------------------------------------------
 create table if not exists public.audit_log (
   id           bigint generated always as identity primary key,
@@ -1334,7 +1023,6 @@ begin
   end if;
   return null;
 end $$;
-drop trigger if exists audit_lists on public.lists;
 create trigger audit_lists after insert or update on public.lists for each row execute function public.audit_lists();
 
 -- ---------------- Wünsche ----------------
@@ -1365,7 +1053,6 @@ begin
   end if;
   return null;
 end $$;
-drop trigger if exists audit_wishes on public.wishes;
 create trigger audit_wishes after insert or update or delete on public.wishes for each row execute function public.audit_wishes();
 
 -- ---------------- Reservierungen ----------------
@@ -1394,7 +1081,6 @@ begin
   end if;
   return null;
 end $$;
-drop trigger if exists audit_reservations on public.reservations;
 create trigger audit_reservations after insert or delete on public.reservations for each row execute function public.audit_reservations();
 
 -- ---------------- Mitglieder ----------------
@@ -1415,7 +1101,6 @@ begin
   end if;
   return null;
 end $$;
-drop trigger if exists audit_members on public.list_members;
 create trigger audit_members after insert or delete on public.list_members for each row execute function public.audit_members();
 
 -- ---------------- Zugang (nur für Administratoren sichtbar) ----------------
@@ -1438,11 +1123,8 @@ begin
   end if;
   return null;
 end $$;
-drop trigger if exists audit_access_requests on public.access_requests;
 create trigger audit_access_requests after insert or update on public.access_requests for each row execute function public.audit_access();
-drop trigger if exists audit_allowed_emails on public.allowed_emails;
 create trigger audit_allowed_emails after insert on public.allowed_emails for each row execute function public.audit_access();
-drop trigger if exists audit_app_admins on public.app_admins;
 create trigger audit_app_admins after insert or delete on public.app_admins for each row execute function public.audit_access();
 
 revoke execute on function public.audit_write(uuid, text, text, uuid, jsonb, text, date), public.audit_actor_name(), public.audit_purge(),
@@ -1450,7 +1132,7 @@ revoke execute on function public.audit_write(uuid, text, text, uuid, jsonb, tex
   from public, anon, authenticated;
 
 -- ---------------------------------------------------------------------
--- Kontoarten (identisch mit 20_kontoarten.sql)
+-- Kontoarten (eingeführt mit 20_kontoarten.sql)
 -- ---------------------------------------------------------------------
 -- Nur beim allerersten Ausführen: Spalten anlegen und alle bisherigen Konten zu Familienkonten machen
 -- (bisher war jedes Konto „Familie“). Ein erneutes Ausführen ändert keine Kontoart mehr.
@@ -1464,82 +1146,6 @@ begin
     alter table public.allowed_emails add column account_type text not null default 'guest' check (account_type in ('family', 'guest'));
     update public.allowed_emails set account_type = 'family';
   end if;
-end $$;
-
--- Neues Konto: Kontoart aus der Freischaltung übernehmen
-create or replace function public.handle_new_user() returns trigger
-language plpgsql security definer set search_path = public as $$
-begin
-  insert into profiles (id, display_name, account_type)
-  values (new.id, left(coalesce(nullif(split_part(new.email, '@', 1), ''), 'Ich'), 60),
-          coalesce((select account_type from allowed_emails where email = lower(new.email)), 'guest'))
-  on conflict (id) do nothing;
-  return new;
-end $$;
-
--- Liste anlegen: nur Familienkonten
-create or replace function public.create_list(p_title text, p_recipient_name text default null, p_occasion list_occasion default 'other',
-                                   p_event_date date default null, p_cover int default 0, p_description text default null,
-                                   p_allow_parents_buy boolean default false)
-returns public.lists language plpgsql security definer set search_path = public as $$
-declare v_list lists;
-begin
-  if auth.uid() is null then raise exception 'not_authenticated' using errcode = '42501'; end if;
-  -- Nur Familienkonten dürfen eigene Listen anlegen (Schenkendenkonten nicht)
-  if coalesce((select account_type from profiles where id = auth.uid()), 'guest') <> 'family' then
-    raise exception 'family_only' using errcode = '42501';
-  end if;
-  insert into profiles (id, display_name) values (auth.uid(), 'Ich') on conflict (id) do nothing;
-  insert into lists (title, recipient_name, occasion, event_date, cover, description, allow_parents_buy, created_by)
-  values (trim(p_title), nullif(trim(p_recipient_name), ''), p_occasion, p_event_date, coalesce(p_cover, 0),
-          nullif(trim(p_description), ''), coalesce(p_allow_parents_buy, false), auth.uid())
-  returning * into v_list;
-  insert into list_members (list_id, user_id, role) values (v_list.id, auth.uid(), 'owner');
-  return v_list;
-end $$;
-
--- Einladen durch einen Administrator: Familienkonto
-create or replace function public.allow_email(p_email text, p_list uuid default null) returns text
-language plpgsql security definer set search_path = public as $$
-declare v_email text := lower(trim(coalesce(p_email, '')));
-begin
-  if auth.uid() is null
-     or not exists (select 1 from list_members where user_id = auth.uid() and role = 'owner') then
-    raise exception 'forbidden' using errcode = '42501';
-  end if;
-  if v_email !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' or char_length(v_email) > 254 then
-    raise exception 'invalid_email' using errcode = '22023';
-  end if;
-  if email_known(v_email) then return 'allowed'; end if;
-  if is_admin() then
-    -- Einladung zum Mitbearbeiten: Familienkonto
-    insert into allowed_emails (email, note, account_type) values (v_email, 'eingeladen von ' || auth.uid()::text, 'family') on conflict (email) do nothing;
-    return 'allowed';
-  end if;
-  insert into access_requests (email, invited_by, list_id) values (v_email, auth.uid(), p_list)
-  on conflict (email) where status = 'pending' do update set invited_by = excluded.invited_by, list_id = excluded.list_id;
-  return 'pending';
-end $$;
-
--- Freigeben mit Kontoart (Standard: Schenkender)
-drop function if exists public.decide_access(uuid, boolean);
-drop function if exists public.decide_access(uuid, boolean, text);
-create function public.decide_access(p_id uuid, p_approve boolean, p_type text default 'guest') returns text
-language plpgsql security definer set search_path = public as $$
-declare v_email text;
-begin
-  if not is_admin() then raise exception 'forbidden' using errcode = '42501'; end if;
-  if p_type not in ('family', 'guest') then raise exception 'invalid_type' using errcode = '22023'; end if;
-  update access_requests set status = case when p_approve then 'approved' else 'denied' end, decided_at = now(), decided_by = auth.uid()
-  where id = p_id and status = 'pending'
-  returning email into v_email;
-  if v_email is null then raise exception 'not_found' using errcode = 'P0002'; end if;
-  if p_approve then
-    insert into allowed_emails (email, note, account_type) values (v_email, 'freigegeben von ' || auth.uid()::text, p_type)
-    on conflict (email) do update set account_type = excluded.account_type;
-    update profiles set account_type = p_type where id = (select id from auth.users where lower(email) = v_email);
-  end if;
-  return v_email;
 end $$;
 
 -- Für Administratoren: alle Konten und Kontoart umstellen
@@ -1573,17 +1179,17 @@ begin
   end if;
   return null;
 end $$;
-drop trigger if exists audit_account_type on public.profiles;
 create trigger audit_account_type after update of account_type on public.profiles for each row execute function public.audit_account_type();
 
-revoke execute on function public.decide_access(uuid, boolean, text), public.list_accounts(), public.set_account_type(uuid, text)
-  from public, anon;
-grant execute on function public.decide_access(uuid, boolean, text), public.list_accounts(), public.set_account_type(uuid, text)
+revoke execute on function public.list_accounts(),
+  public.set_account_type(uuid, text)
+  from public, anon;grant execute on function public.list_accounts(),
+  public.set_account_type(uuid, text)
   to authenticated;
 revoke execute on function public.audit_account_type() from public, anon, authenticated;
 
 -- ---------------------------------------------------------------------
--- Konten zum Schenken (identisch mit 21_schenkende.sql)
+-- Konten zum Schenken (eingeführt mit 21_schenkende.sql)
 -- ---------------------------------------------------------------------
 create table if not exists public.list_followers (
   list_id    uuid not null references public.lists on delete cascade,
@@ -1595,16 +1201,12 @@ create table if not exists public.list_followers (
 );
 create index if not exists list_followers_user on public.list_followers (user_id);
 alter table public.list_followers enable row level security;
-drop policy if exists "followers read" on public.list_followers;
 create policy "followers read" on public.list_followers for select to authenticated
   using (user_id = auth.uid() or my_role(list_id) is not null);
-drop policy if exists "followers remove" on public.list_followers;
 create policy "followers remove" on public.list_followers for delete to authenticated
   using (user_id = auth.uid() or my_role(list_id) is not null);
 revoke all on public.list_followers from anon;
 revoke insert, update on public.list_followers from authenticated;
-
-alter table public.reservations add column if not exists reserved_by uuid references public.profiles on delete set null;
 create index if not exists reservations_reserved_by on public.reservations (reserved_by) where reserved_by is not null;
 
 -- Wer angemeldet als Gast reserviert: Reservierung gehört dem Konto, Liste wird gespeichert
@@ -1621,7 +1223,6 @@ begin
   end if;
   return new;
 end $$;
-drop trigger if exists reservation_owner on public.reservations;
 create trigger reservation_owner before insert on public.reservations for each row execute function public.reservation_owner();
 
 -- Liste über den Gast-Link speichern (angemeldet). Mitglieder brauchen das nicht.
@@ -1709,19 +1310,20 @@ begin
 end $$;
 
 -- Verlauf: Speichern und Entfernen
+-- Verlauf „von euch freigegeben“: Name dessen, der freigegeben hat (auch wenn das Konto erst später entsteht)
 create or replace function public.audit_followers() returns trigger
 language plpgsql security definer set search_path = public as $$
 begin
   if tg_op = 'INSERT' then
     perform audit_write(new.list_id, 'member', case when new.source = 'family' then 'follower_added' else 'follower_saved' end, new.user_id,
-      jsonb_build_object('member', (select display_name from profiles where id = new.user_id)));
+      jsonb_build_object('member', (select display_name from profiles where id = new.user_id)),
+      case when new.source = 'family' then (select display_name from profiles where id = new.added_by) end);
   elsif exists (select 1 from lists where id = old.list_id) then
     perform audit_write(old.list_id, 'member', case when auth.uid() = old.user_id then 'follower_left' else 'follower_removed' end, old.user_id,
       jsonb_build_object('member', (select display_name from profiles where id = old.user_id)));
   end if;
   return null;
 end $$;
-drop trigger if exists audit_followers on public.list_followers;
 create trigger audit_followers after insert or delete on public.list_followers for each row execute function public.audit_followers();
 
 revoke execute on function public.follow_list(text), public.add_follower(uuid, text), public.list_followers_of(uuid),
@@ -1731,11 +1333,6 @@ grant execute on function public.follow_list(text), public.add_follower(uuid, te
   public.my_followed_lists(), public.my_account_reservations(text), public.cancel_my_reservation(uuid), public.claim_reservations(text[])
   to authenticated;
 revoke execute on function public.reservation_owner(), public.audit_followers() from public, anon, authenticated;
-
--- ---------------------------------------------------------------------
--- Zuweisung beim Freigeben, Protokoll-Lücken (identisch mit 22_zuweisung_protokoll.sql)
--- ---------------------------------------------------------------------
-alter table public.access_requests add column if not exists assign_lists uuid[] not null default '{}';
 
 -- Zuweisungen aus freigegebenen Anfragen anwenden (einmalig, danach geleert)
 create or replace function public.apply_list_assignments(p_user uuid, p_email text) returns int
@@ -1760,78 +1357,6 @@ begin
   return v_n;
 end $$;
 
--- Neues Konto: Kontoart übernehmen und zugewiesene Listen eintragen
-create or replace function public.handle_new_user() returns trigger
-language plpgsql security definer set search_path = public as $$
-begin
-  insert into profiles (id, display_name, account_type)
-  values (new.id, left(coalesce(nullif(split_part(new.email, '@', 1), ''), 'Ich'), 60),
-          coalesce((select account_type from allowed_emails where email = lower(new.email)), 'guest'))
-  on conflict (id) do nothing;
-  perform apply_list_assignments(new.id, new.email);
-  return new;
-end $$;
-
--- Freigeben mit Kontoart und Listen (nur Listen, bei denen der Administrator selbst Mitglied ist)
-drop function if exists public.decide_access(uuid, boolean);
-drop function if exists public.decide_access(uuid, boolean, text);
-drop function if exists public.decide_access(uuid, boolean, text, uuid[]);
-create function public.decide_access(p_id uuid, p_approve boolean, p_type text default 'guest', p_lists uuid[] default '{}') returns text
-language plpgsql security definer set search_path = public as $$
-declare v_email text; v_lists uuid[]; v_user uuid;
-begin
-  if not is_admin() then raise exception 'forbidden' using errcode = '42501'; end if;
-  if p_type not in ('family', 'guest') then raise exception 'invalid_type' using errcode = '22023'; end if;
-  select coalesce(array_agg(distinct x), '{}') into v_lists from unnest(coalesce(p_lists, '{}')) x where my_role(x) is not null;
-  update access_requests
-     set status = case when p_approve then 'approved' else 'denied' end, decided_at = now(), decided_by = auth.uid(),
-         assign_lists = case when p_approve then v_lists else '{}' end
-   where id = p_id and status = 'pending'
-  returning email into v_email;
-  if v_email is null then raise exception 'not_found' using errcode = 'P0002'; end if;
-  if p_approve then
-    insert into allowed_emails (email, note, account_type) values (v_email, 'freigegeben von ' || auth.uid()::text, p_type)
-    on conflict (email) do update set account_type = excluded.account_type;
-    select id into v_user from auth.users where lower(email) = v_email;
-    if v_user is not null then              -- Konto gibt es schon: gleich umsetzen
-      update profiles set account_type = p_type where id = v_user;
-      perform apply_list_assignments(v_user, v_email);
-    end if;
-  end if;
-  return v_email;
-end $$;
-
--- Offene Anfragen: jetzt mit der Liste der Einladung (zum Vorauswählen)
-drop function if exists public.pending_access_requests();
-create function public.pending_access_requests()
-returns table (id uuid, email text, created_at timestamptz, invited_by_name text, list_title text, list_id uuid)
-language plpgsql stable security definer set search_path = public as $$
-begin
-  if not is_admin() then raise exception 'forbidden' using errcode = '42501'; end if;
-  return query
-    select r.id, r.email, r.created_at, p.display_name, l.title, r.list_id
-    from access_requests r
-    left join profiles p on p.id = r.invited_by
-    left join lists l on l.id = r.list_id
-    where r.status = 'pending'
-    order by r.created_at;
-end $$;
-
--- Verlauf „von euch freigegeben“: Name dessen, der freigegeben hat (auch wenn das Konto erst später entsteht)
-create or replace function public.audit_followers() returns trigger
-language plpgsql security definer set search_path = public as $$
-begin
-  if tg_op = 'INSERT' then
-    perform audit_write(new.list_id, 'member', case when new.source = 'family' then 'follower_added' else 'follower_saved' end, new.user_id,
-      jsonb_build_object('member', (select display_name from profiles where id = new.user_id)),
-      case when new.source = 'family' then (select display_name from profiles where id = new.added_by) end);
-  elsif exists (select 1 from lists where id = old.list_id) then
-    perform audit_write(old.list_id, 'member', case when auth.uid() = old.user_id then 'follower_left' else 'follower_removed' end, old.user_id,
-      jsonb_build_object('member', (select display_name from profiles where id = old.user_id)));
-  end if;
-  return null;
-end $$;
-
 -- Gelöschte Listen: ins Sicherheitsprotokoll (der Verlauf der Liste verschwindet mit ihr)
 create or replace function public.audit_list_deleted() returns trigger
 language plpgsql security definer set search_path = public as $$
@@ -1839,7 +1364,6 @@ begin
   perform audit_write(null, 'access', 'list_deleted', old.id, jsonb_build_object('title', old.title, 'recipient', old.recipient_name));
   return old;
 end $$;
-drop trigger if exists audit_list_deleted on public.lists;
 create trigger audit_list_deleted before delete on public.lists for each row execute function public.audit_list_deleted();
 
 -- Einladungslinks: erstellt und zurückgezogen
@@ -1855,7 +1379,6 @@ begin
   end if;
   return null;
 end $$;
-drop trigger if exists audit_invites on public.invites;
 create trigger audit_invites after insert or update or delete on public.invites for each row execute function public.audit_invites();
 
 -- Namensänderungen: im Verlauf jeder Liste, in der die Person vorkommt
@@ -1871,10 +1394,11 @@ begin
   end if;
   return null;
 end $$;
-drop trigger if exists audit_renamed on public.profiles;
 create trigger audit_renamed after update of display_name on public.profiles for each row execute function public.audit_renamed();
 
 revoke execute on function public.decide_access(uuid, boolean, text, uuid[]), public.pending_access_requests() from public, anon;
 grant execute on function public.decide_access(uuid, boolean, text, uuid[]), public.pending_access_requests() to authenticated;
 revoke execute on function public.apply_list_assignments(uuid, text), public.audit_list_deleted(), public.audit_invites(),
   public.audit_renamed() from public, anon, authenticated;
+
+reset check_function_bodies;

@@ -47,6 +47,9 @@ Bisher laden Gäste Bilder direkt von den Shop-Servern, die dabei die IP-Adresse
 - Umzug von GitHub Pages zu einem Hoster mit Sicherheitsheadern (GitHub Pages ist für nicht-kommerzielle Projekte gedacht)
 - Strengerer Schutz der Link-Vorschau gegen Tricks über Domainnamen
 
+## Kleine Gestaltungsfehler (bewusst nicht im Refactoring behoben)
+- **Anmeldecode-Feld:** Laut CSS soll es die runde Überschriften-Schrift (Bricolage) mit fetter Stärke haben. Die allgemeine Regel für Eingabefelder überschreibt das aber, sodass die normale Schrift erscheint. Beheben hieße eine sichtbare Änderung, deshalb gesondert entscheiden.
+
 ## Erledigt
 - **Datensicherung** (November 2026): nächtlich, verschlüsselt, 30 Tage, inklusive Bilder. Anleitung in `BACKUP.md`.
 - **Offline-Modus** (November 2026): App startet ohne Netz, zeigt den zuletzt geladenen Stand; Updates kommen trotzdem sofort an.
