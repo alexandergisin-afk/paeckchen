@@ -95,11 +95,11 @@ export function Settings() {
             <small className="save-state" aria-live="polite">{nameState === "saving" ? "Wird gespeichert …" : nameState === "saved" ? "Gespeichert ✓" : "\u00a0"}</small>
           </label>
           <p className="hint">Angemeldet als {session?.user.email}</p>
-          <button className="btn soft small" style={{ marginTop: 12 }} onClick={() => { clearCache(); db().auth.signOut(); }}><IconLogout /> Abmelden</button>
+          <button className="btn soft small mt-12" onClick={() => { clearCache(); db().auth.signOut(); }}><IconLogout /> Abmelden</button>
           {!confirmGlobal ? (
-            <button type="button" className="link-btn" style={{ marginTop: 10, display: "block" }} onClick={() => setConfirmGlobal(true)}>Auf allen Geräten abmelden</button>
+            <button type="button" className="link-btn mt-10 d-block" onClick={() => setConfirmGlobal(true)}>Auf allen Geräten abmelden</button>
           ) : (
-            <div className="notice" style={{ marginTop: 12 }} role="group" aria-label="Auf allen Geräten abmelden">
+            <div className="notice mt-12" role="group" aria-label="Auf allen Geräten abmelden">
               <p style={{ margin: "0 0 10px" }}>Du wirst überall abgemeldet, auch auf anderen Handys und Computern, etwa wenn ein Gerät verloren gegangen ist. Auf anderen Geräten wirkt das spätestens nach einer Stunde.</p>
               <div className="toolbar">
                 <button type="button" className="btn small" onClick={async () => { clearCache(); await db().auth.signOut({ scope: "global" }); }}>Ja, überall abmelden</button>
@@ -113,28 +113,28 @@ export function Settings() {
         {pendingCount !== null && (
           <Link className="panel settings-link" to="/einstellungen/konten">
             <span className="settings-link-icon" aria-hidden="true"><IconUsers /></span>
-            <span><b>Konten</b><span className="hint" style={{ display: "block" }}>Wer eigene Listen anlegen darf und wer nur schenkt</span></span>
+            <span><b>Konten</b><span className="hint d-block">Wer eigene Listen anlegen darf und wer nur schenkt</span></span>
             <span className="list-chev" aria-hidden="true"><IconChevron /></span>
           </Link>
         )}
         {pendingCount !== null && (
           <Link className="panel settings-link" to="/einstellungen/protokoll">
             <span className="settings-link-icon" aria-hidden="true"><IconHistory /></span>
-            <span><b>Sicherheitsprotokoll</b><span className="hint" style={{ display: "block" }}>Wer wann Zugang bekommen oder verloren hat</span></span>
+            <span><b>Sicherheitsprotokoll</b><span className="hint d-block">Wer wann Zugang bekommen oder verloren hat</span></span>
             <span className="list-chev" aria-hidden="true"><IconChevron /></span>
           </Link>
         )}
         {pendingCount !== null && (
           <Link className="panel settings-link" to="/einstellungen/anfragen">
             <span className="settings-link-icon" aria-hidden="true"><IconMail /></span>
-            <span><b>Zugangsanfragen</b>{pendingCount > 0 && <span className="count-badge">{pendingCount}</span>}<span className="hint" style={{ display: "block" }}>{pendingCount > 0 ? "Neue Konten warten auf deine Freigabe" : "Keine offenen Anfragen"}</span></span>
+            <span><b>Zugangsanfragen</b>{pendingCount > 0 && <span className="count-badge">{pendingCount}</span>}<span className="hint d-block">{pendingCount > 0 ? "Neue Konten warten auf deine Freigabe" : "Keine offenen Anfragen"}</span></span>
             <span className="list-chev" aria-hidden="true"><IconChevron /></span>
           </Link>
         )}
         {!isGuest && (
         <Link className="panel settings-link" to="/einstellungen/zugriff">
             <span className="settings-link-icon" aria-hidden="true"><IconUsers /></span>
-            <span><b>Zugriff verwalten</b><span className="hint" style={{ display: "block" }}>Wer welche Listen mitbearbeiten darf und was jede Rolle darf</span></span>
+            <span><b>Zugriff verwalten</b><span className="hint d-block">Wer welche Listen mitbearbeiten darf und was jede Rolle darf</span></span>
             <span className="list-chev" aria-hidden="true"><IconChevron /></span>
           </Link>
         )}
@@ -157,10 +157,10 @@ export function Settings() {
         {!isGuest && (
         <details className="panel settings-more">
           <summary><b>Wünsche aus anderen Apps teilen</b><span className="hint">So landet ein Produkt aus einer Shop-App direkt in Päckli</span></summary>
-          <p className="hint" style={{ marginTop: 6 }}>
+          <p className="hint mt-6">
             <b>Android:</b> Lege Päckli als App auf den Startbildschirm (siehe unten). Danach erscheint Päckli im Teilen-Menü jeder Shop-App.
           </p>
-          <p className="hint" style={{ marginTop: 10 }}>
+          <p className="hint mt-10">
             <b>iPhone:</b> Einmalig einen Kurzbefehl anlegen: In der App <b>Kurzbefehle</b> einen neuen Kurzbefehl erstellen, in den Details <b>„Im Share-Sheet anzeigen“</b> einschalten
             und als Eingabe <b>URLs</b> wählen. Dann die Aktion <b>„URLs öffnen“</b> hinzufügen und dort diese Adresse eintragen, direkt gefolgt von der Variable <b>„Kurzbefehleingabe“</b>:
           </p>
@@ -173,26 +173,26 @@ export function Settings() {
         <details className="panel settings-more">
           <summary><b>Als App auf dem Startbildschirm</b><span className="hint">Päckli wie eine App mit eigenem Symbol öffnen</span></summary>
           {isInstalled() ? (
-            <p className="hint" style={{ marginTop: 6 }}>Päckli ist auf diesem Gerät bereits als App installiert.</p>
+            <p className="hint mt-6">Päckli ist auf diesem Gerät bereits als App installiert.</p>
           ) : installable ? (
             <>
-              <p className="hint" style={{ margin: "6px 0 12px" }}>Dann öffnest du Päckli mit einem Tipp, ohne Browserleiste.</p>
+              <p className="hint my-6-12">Dann öffnest du Päckli mit einem Tipp, ohne Browserleiste.</p>
               <button className="btn" onClick={promptInstall}>App installieren</button>
             </>
           ) : isIOS() ? (
-            <p className="hint" style={{ marginTop: 6 }}>
+            <p className="hint mt-6">
               Öffne Päckli in <b>Safari</b>, tippe unten auf das <b>Teilen-Symbol</b> (Quadrat mit Pfeil) und dann auf <b>„Zum Home-Bildschirm“</b>.
               Zum Anmelden in der App gibst du am besten den Code aus der Mail ein.
             </p>
           ) : (
-            <p className="hint" style={{ marginTop: 6 }}>
+            <p className="hint mt-6">
               Öffne im Browser-Menü (⋮) den Punkt <b>„App installieren“</b> oder <b>„Zum Startbildschirm hinzufügen“</b>.
             </p>
           )}
         </details>
         <section className="panel">
           <h2>Datenschutz</h2>
-          <p className="hint" style={{ marginTop: 6 }}>
+          <p className="hint mt-6">
             Von dir speichern wir deine E-Mail-Adresse und deinen Namen. Von Schenkenden nur den Namen, den sie beim Reservieren angeben.
             Andere Gäste sehen keine Namen, und eure E-Mail-Adressen sieht niemand außer euch selbst.
           </p>

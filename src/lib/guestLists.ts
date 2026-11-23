@@ -3,6 +3,7 @@
  * nutzen können: Startseite „Deine Wunschlisten“ statt jedes Mal den Link zu suchen.
  * Gespeichert wird nur auf dem Gerät (Link-Schlüssel, Titel, Datum), nichts auf dem Server.
  */
+import { getJSON, KEYS, setJSON } from "./storage";
 export interface VisitedList {
   token: string;
   title: string;
@@ -12,12 +13,13 @@ export interface VisitedList {
   seenAt: number;
 }
 
-const KEY = "paeckli-gast-listen";
+const KEY = KEYS.guestLists;
 const MAX = 30;
 
 export function getGuestLists(): VisitedList[] {
-  try {
-    const all = JSON.parse(localStorage.getItem(KEY) ?? "[]") as VisitedList[];
+  const all = getJSON<VisitedList[]>(KEY, []);
+  if (!Array.isArray(all)) return [];
+  {
     const today = new Date().toISOString().slice(0, 10);
     // Bevorstehende Anlässe zuerst (der nächste oben), dann der Rest nach letztem Besuch
     return all.sort((a, b) => {
@@ -26,19 +28,14 @@ export function getGuestLists(): VisitedList[] {
       if (ua === 0) return a.event_date!.localeCompare(b.event_date!);
       return b.seenAt - a.seenAt;
     });
-  } catch {
-    return [];
   }
 }
 
 export function rememberGuestList(l: Omit<VisitedList, "seenAt">) {
-  try {
-    const rest = getGuestLists().filter((x) => x.token !== l.token);
-    const next = [{ ...l, seenAt: Date.now() }, ...rest].slice(0, MAX);
-    localStorage.setItem(KEY, JSON.stringify(next));
-  } catch { /* Speicher voll oder gesperrt: dann eben nicht */ }
+  const rest = getGuestLists().filter((x) => x.token !== l.token);
+  setJSON(KEY, [{ ...l, seenAt: Date.now() }, ...rest].slice(0, MAX));
 }
 
 export function forgetGuestList(token: string) {
-  try { localStorage.setItem(KEY, JSON.stringify(getGuestLists().filter((x) => x.token !== token))); } catch { /* egal */ }
+  setJSON(KEY, getGuestLists().filter((x) => x.token !== token));
 }

@@ -1,9 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { cover } from "../lib/types";
-import { daysChip, dateLabel } from "../lib/format";
 import { forgetGuestList, getGuestLists } from "../lib/guestLists";
-import { IconChevron } from "../components/Icons";
+import { RemovableListRow } from "../components/ListRow";
 
 /** Startseite für Schenkende ohne Konto: alle Wunschlisten, die auf diesem Gerät geöffnet wurden. */
 export function GuestHome() {
@@ -27,31 +25,15 @@ export function VisitedLists() {
   return (
     <>
       {lists.length === 0 ? (
-        <div className="empty" style={{ marginTop: 18 }}>
+        <div className="empty mt-18">
           <p>Noch keine Wunschliste. Öffne einmal den Link, den du bekommen hast, dann erscheint sie hier.</p>
         </div>
       ) : (
-        <div className="list-rows" style={{ marginTop: 18 }}>
-          {lists.map((l) => {
-            const c = cover(l.cover);
-            const d = daysChip(l.event_date);
-            return (
-              <div className="guest-home-row" key={l.token}>
-                <Link className="list-row" to={`/w/${l.token}`}>
-                  <span className={`list-cover t${c.t}`} aria-hidden="true">{c.e}</span>
-                  <span className="list-text">
-                    <span className="list-title">{l.title}</span>
-                    <span className="list-meta">
-                      {[l.recipient_name ? `Für ${l.recipient_name}` : "", dateLabel(l.event_date)].filter(Boolean).join(", ")}
-                      {d && <span className={`days-chip ${d.soon ? "soon" : ""}`}>{d.text}</span>}
-                    </span>
-                  </span>
-                  <span className="list-chev" aria-hidden="true"><IconChevron /></span>
-                </Link>
-                <button type="button" className="guest-home-x" aria-label={`„${l.title}“ aus dieser Übersicht entfernen`} onClick={() => remove(l.token)}>×</button>
-              </div>
-            );
-          })}
+        <div className="list-rows mt-18">
+          {lists.map((l) => (
+            <RemovableListRow key={l.token} to={`/w/${l.token}`} list={l}
+              removeLabel={`„${l.title}“ aus dieser Übersicht entfernen`} onRemove={() => remove(l.token)} />
+          ))}
         </div>
       )}
     </>

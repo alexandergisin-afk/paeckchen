@@ -3,6 +3,7 @@
  * Ohne Bibliothek, auf einer Zeichenfläche über der Seite, die sich danach selbst entfernt.
  * Wer am Gerät „Bewegung reduzieren“ eingestellt hat, bekommt kein Konfetti.
  */
+import { hasFlag, setFlag } from "./storage";
 const COLORS = ["#D2306A", "#4B2E83", "#1D7A5A", "#F5B700", "#9B7BE0", "#FF8FB1"];
 
 export function prefersCalm(): boolean {
@@ -83,10 +84,8 @@ function burst(strength: "small" | "big") {
 
 /** Einmalig pro Liste: „Alles vergeben!“ (merkt sich das Gerät). */
 export function celebrateOnce(key: string, strength: "small" | "big" = "big"): boolean {
-  try {
-    if (localStorage.getItem(key)) return false;
-    localStorage.setItem(key, "1");
-  } catch { /* egal */ }
+  if (hasFlag(key)) return false;
+  setFlag(key);
   celebrate(strength);
   return true;
 }

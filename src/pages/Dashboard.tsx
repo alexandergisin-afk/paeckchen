@@ -6,16 +6,18 @@ import { PullIndicator } from "../components/PullIndicator";
 import { Link, useNavigate } from "react-router-dom";
 import { db } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
-import { cover, type Role } from "../lib/types";
+import { type Role } from "../lib/types";
 import { takenQuantity } from "../lib/gift";
 import { SORT_LABELS, sortLists, type ListSort } from "../lib/listSort";
 import { useLongPressSort } from "../lib/useDragSort";
 import { cached, isFresh, load as loadCached, remember } from "../lib/cache";
 import { listKey, loadListPage } from "../lib/listData";
-import { dateLabel, daysUntil, friendlyError, toast, daysChip } from "../lib/format";
-import { IconChart, IconChevron, IconPlus } from "../components/Icons";
+import { daysUntil, friendlyError, toast } from "../lib/format";
+import { IconChart, IconPlus } from "../components/Icons";
 import { FormSheet } from "../components/FormSheet";
 import { ListForm, toRow, type ListInput } from "../components/ListForm";
+import { hasFlag, KEYS, setFlag } from "../lib/storage";
+import { ListRowBody } from "../components/ListRow";
 
 /** Für die Übersicht: pro Liste die Wünsche mit Menge und (falls sichtbar) den Reservierungen. */
 const DASH_SELECT =
@@ -48,7 +50,7 @@ export function Dashboard() {
   const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(false);
   const [sort, setSort] = useState<ListSort>(() => cached<ListSort>("list-sort") ?? "custom");
-  const [dragTip, setDragTip] = useState(() => { try { return !localStorage.getItem("paeckli-drag-tipp"); } catch { return true; } });
+  const [dragTip, setDragTip] = useState(() => !hasFlag(KEYS.dragTip));
 
   // Gewählte Sortierung aus dem Profil (gilt auf allen Geräten)
   useEffect(() => {
@@ -72,7 +74,7 @@ export function Dashboard() {
       list_members: l.list_members.map((m) => (m.user_id === session?.user.id ? { ...m, sort_order: order.indexOf(l.id) + 1 || null } : m)),
     })));
     if (sort !== "custom") chooseSort("custom");
-    if (dragTip) { setDragTip(false); try { localStorage.setItem("paeckli-drag-tipp", "1"); } catch { /* egal */ } }
+    if (dragTip) { setDragTip(false); setFlag(KEYS.dragTip); }
     const { error } = await db().rpc("set_list_order", { p_ids: order });
     if (error) { toast(friendlyError(error)); load(); return; }
     toast("Reihenfolge gespeichert.");
@@ -165,7 +167,6 @@ export function Dashboard() {
       {lists && active.length > 0 && (
         <div className={`list-rows ${dnd.drag ? "reordering" : ""}`}>
           {shown.map((l) => {
-            const c = cover(l.cover);
             const mine = l.list_members.find((m) => m.user_id === me);
             const show = mine?.show_reservations ?? true;
             const total = l.wishes.reduce((a, w) => a + w.quantity, 0);
@@ -178,14 +179,7 @@ export function Dashboard() {
                 aria-describedby={active.length > 1 ? "drag-kbd" : undefined}
                 style={dragging ? { transform: `translateY(${dnd.drag!.offset}px) scale(1.02)` } : undefined}
                 {...dnd.rowProps(l.id)}>
-                <span className={`list-cover t${c.t}`} aria-hidden="true">{c.e}</span>
-                <span className="list-text">
-                  <span className="list-title">{l.title}</span>
-                  <span className="list-meta">
-                    {[l.recipient_name ? `Für ${l.recipient_name}` : "", dateLabel(l.event_date)].filter(Boolean).join(", ")}
-                    {(() => { const d = daysChip(l.event_date); return d && <span className={`days-chip ${d.soon ? "soon" : ""}`}>{d.text}</span>; })()}
-                    {mine?.role === "editor" && <span className="badge" style={{ marginLeft: 6 }}>Mitbearbeiter</span>}
-                  </span>
+                <ListRowBody list={l} badge={mine?.role === "editor" && <span className="badge ml-6">Mitbearbeiter</span>}>
                   {n === 0 ? (
                     <span className="list-progress-text">Noch keine Wünsche</span>
                   ) : show ? (
@@ -196,8 +190,7 @@ export function Dashboard() {
                   ) : (
                     <span className="list-progress-text">{n} {n === 1 ? "Wunsch" : "Wünsche"}</span>
                   )}
-                </span>
-                <span className="list-chev" aria-hidden="true"><IconChevron /></span>
+                </ListRowBody>
               </Link>
             );
           })}
@@ -207,17 +200,11 @@ export function Dashboard() {
       {archived.length > 0 && (
         <details className="arch">
           <summary>Abgeschlossen ({archived.length})</summary>
-          <div className="list-rows" style={{ marginTop: 10 }}>
+          <div className="list-rows mt-10">
             {archived.map((l) => {
-              const c = cover(l.cover);
               return (
                 <Link className="list-row is-archived" to={`/liste/${l.id}`} key={l.id}>
-                  <span className={`list-cover t${c.t}`} aria-hidden="true">{c.e}</span>
-                  <span className="list-text">
-                    <span className="list-title">{l.title}</span>
-                    <span className="list-meta">{[l.recipient_name ? `Für ${l.recipient_name}` : "", dateLabel(l.event_date)].filter(Boolean).join(", ")}</span>
-                  </span>
-                  <span className="list-chev" aria-hidden="true"><IconChevron /></span>
+                  <ListRowBody list={l} days={false} />
                 </Link>
               );
             })}

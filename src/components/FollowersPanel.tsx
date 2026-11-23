@@ -44,10 +44,10 @@ export function FollowersPanel({ listId }: { listId: string }) {
   return (
     <section className="panel" aria-label="Schenkende mit Konto">
       <h2>Schenkende mit Konto</h2>
-      <p className="hint" style={{ marginTop: 6 }}>
+      <p className="hint mt-6">
         Sie haben die Liste in ihrer Übersicht und sehen sie wie Gäste: ohne Namen anderer Schenkender, ohne Bearbeiten.
       </p>
-      {items && items.length === 0 && <p className="hint" style={{ marginTop: 10 }}>Noch niemand.</p>}
+      {items && items.length === 0 && <p className="hint mt-10">Noch niemand.</p>}
       {items && items.length > 0 && (
         <ul className="follower-list">
           {items.map((f) => (
@@ -68,8 +68,8 @@ export function FollowersPanel({ listId }: { listId: string }) {
         </label>
         <button className="btn soft" disabled={busy || !email.trim()}>Hinzufügen</button>
       </form>
-      {note && <p className="notice" style={{ marginTop: 10 }}>{note}</p>}
-      <p className="hint" style={{ marginTop: 12 }}>
+      {note && <p className="notice mt-10">{note}</p>}
+      <p className="hint mt-12">
         Entfernen nimmt die Liste nur aus der Übersicht der Person. Wer den Link kennt, kann sie weiterhin öffnen.
         Soll jemand gar keinen Zugang mehr haben, erneuert den Link für Schenkende.
       </p>

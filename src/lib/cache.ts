@@ -3,16 +3,17 @@
  * Übersicht, Listen und Gästeansichten werden zusätzlich auf dem Gerät gespeichert, damit sie auch ohne
  * Internet angezeigt werden können (Offline-Modus). Beim Abmelden wird alles gelöscht.
  */
+import { getItem, KEYS, removeItem, setItem } from "./storage";
 const store = new Map<string, { at: number; value: unknown }>();
 const inflight = new Map<string, Promise<unknown>>();
 
-const OFFLINE_KEY = "paeckli-offline";
+const OFFLINE_KEY = KEYS.offline;
 const PERSIST = /^(dashboard|list:|guest:)/;
 const MAX_BYTES = 1_500_000;
 
 // Beim Start: auf dem Gerät Gespeichertes übernehmen
 try {
-  const raw = typeof localStorage !== "undefined" ? localStorage.getItem(OFFLINE_KEY) : null;
+  const raw = getItem(OFFLINE_KEY); // ohne Browser (Tests) einfach null
   if (raw) for (const [k, v] of Object.entries(JSON.parse(raw) as Record<string, { at: number; value: unknown }>)) store.set(k, v);
 } catch { /* beschädigt oder nicht verfügbar: ignorieren */ }
 
@@ -33,7 +34,7 @@ function persistSoon() {
         out[k] = v;
         size += len;
       }
-      localStorage.setItem(OFFLINE_KEY, JSON.stringify(out));
+      setItem(OFFLINE_KEY, JSON.stringify(out));
     } catch { /* Speicher voll oder gesperrt: dann eben nur im Arbeitsspeicher */ }
   }, 300);
 }
@@ -79,5 +80,5 @@ export function clearCache() {
   window.clearTimeout(saveTimer); // ein gerade angestoßenes Speichern nicht mehr nachlaufen lassen
   store.clear();
   inflight.clear();
-  try { localStorage.removeItem(OFFLINE_KEY); } catch { /* egal */ }
+  removeItem(OFFLINE_KEY);
 }

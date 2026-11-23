@@ -50,19 +50,19 @@ export function AccountsPage() {
       <Link className="back" to="/einstellungen"><IconBack /> Einstellungen</Link>
       <h1>Konten</h1>
       <p className="lead">Familienkonten dürfen eigene Listen anlegen. Konten zum Schenken sehen nur Wunschlisten und reservieren, wie Gäste mit Link.</p>
-      {error && <p className="notice error" style={{ marginTop: 16 }}>{error}</p>}
+      {error && <p className="notice error mt-16">{error}</p>}
       {!items && !error && <SkeletonRows count={3} label="Konten werden geladen" />}
       {items && groups.map((g) => {
         const list = items.filter((a) => a.account_type === g.type);
         return (
           <section key={g.type} aria-label={g.title}>
-            <h2 className="settings-group" style={{ marginTop: 22 }}>{g.title} ({list.length})</h2>
+            <h2 className="settings-group mt-22">{g.title} ({list.length})</h2>
             {list.length === 0 && <p className="hint">Niemand.</p>}
-            <div className="stack" style={{ marginTop: 8 }}>
+            <div className="stack mt-8">
               {list.map((a) => (
                 <div className="panel account" key={a.id}>
                   <div className="account-who">
-                    <b>{a.display_name}{a.is_admin && <span className="badge" style={{ marginLeft: 8 }}>Administrator</span>}</b>
+                    <b>{a.display_name}{a.is_admin && <span className="badge ml-8">Administrator</span>}</b>
                     <span className="hint">{a.email}{a.lists_owned > 0 ? `, ${a.lists_owned} eigene ${a.lists_owned === 1 ? "Liste" : "Listen"}` : ""}</span>
                   </div>
                   <div className="view-toggle account-toggle" role="group" aria-label={`Kontoart von ${a.display_name}`}>
@@ -70,7 +70,7 @@ export function AccountsPage() {
                     <button type="button" aria-pressed={a.account_type === "family"} disabled={busyId === a.id} onClick={() => change(a, "family")}>Familie</button>
                   </div>
                   {a.account_type === "guest" && a.lists_owned > 0 && (
-                    <p className="hint" style={{ margin: 0 }}>Bestehende eigene Listen bleiben erhalten und können weiter gepflegt werden, nur neue anlegen geht nicht mehr.</p>
+                    <p className="hint m-0">Bestehende eigene Listen bleiben erhalten und können weiter gepflegt werden, nur neue anlegen geht nicht mehr.</p>
                   )}
                 </div>
               ))}

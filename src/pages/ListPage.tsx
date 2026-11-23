@@ -22,6 +22,7 @@ import { WishForm } from "../components/WishForm";
 import { AddWishFlow } from "../components/AddWishFlow";
 import { WishCard, WishRow } from "../components/WishRow";
 import { ShareContent } from "../components/ShareSheet";
+import { getItem, KEYS, setItem } from "../lib/storage";
 
 type SheetState =
   | null
@@ -50,11 +51,11 @@ export function ListPage() {
   const [busy, setBusy] = useState(false);
   const [wishBusy, setWishBusy] = useState(false);
   const [view, setView] = useState<"rows" | "grid">(() => {
-    try { return localStorage.getItem("paeckli-wish-view") === "grid" ? "grid" : "rows"; } catch { return "rows"; }
+    return getItem(KEYS.wishView) === "grid" ? "grid" : "rows";
   });
   const chooseView = (v: "rows" | "grid") => {
     setView(v);
-    try { localStorage.setItem("paeckli-wish-view", v); } catch { /* egal */ }
+    setItem(KEYS.wishView, v);
   };
   const close = () => setSheet(null);
   const [params, setParams] = useSearchParams();
@@ -109,7 +110,7 @@ export function ListPage() {
     if (state !== "ok" || !list || !visible || !wishes.length) return;
     const total = wishes.reduce((a, w) => a + w.quantity, 0);
     const taken = wishes.reduce((a, w) => a + takenQuantity(w, reservations.filter((r) => r.wish_id === w.id)), 0);
-    if (total > 0 && taken >= total && celebrateOnce(`paeckli-alles-vergeben-${list.id}`)) toast("Alles vergeben! 🎉");
+    if (total > 0 && taken >= total && celebrateOnce(KEYS.allReserved(list.id))) toast("Alles vergeben! 🎉");
   }, [state, list, session, wishes, reservations]);
   useRefreshOnReturn(() => load());
 
@@ -122,7 +123,7 @@ export function ListPage() {
     return (
       <div className="wrap narrow">
         <h1>{state === "missing" ? "Diese Liste gibt es nicht oder du hast keinen Zugriff." : "Die Liste konnte nicht geladen werden."}</h1>
-        <p style={{ marginTop: 16 }}><Link className="btn soft" to="/">Zu meinen Listen</Link></p>
+        <p className="mt-16"><Link className="btn soft" to="/">Zu meinen Listen</Link></p>
       </div>
     );
 
@@ -462,8 +463,8 @@ export function ListPage() {
           <>
             <h2>{sheet.mode === "move" ? "Verschieben nach …" : "Kopieren nach …"}</h2>
             <p className="hint">„{sheet.wish.title}“</p>
-            {!sheet.targets ? <p className="loading" style={{ minHeight: 80 }}>Listen werden geladen …</p> : sheet.targets.length === 0 ? (
-              <p style={{ marginTop: 12 }}>Du hast keine andere aktive Liste.</p>
+            {!sheet.targets ? <p className="loading minh-80">Listen werden geladen …</p> : sheet.targets.length === 0 ? (
+              <p className="mt-12">Du hast keine andere aktive Liste.</p>
             ) : (
               <div className="menu">
                 {sheet.targets.map((t) => (
@@ -495,7 +496,7 @@ export function ListPage() {
       <Sheet open={sheet?.kind === "archive"} onClose={close} label="Liste abschließen">
         <h2>„{list.title}“ abschließen?</h2>
         <p>Die Liste bleibt mit allen Wünschen und Reservierungen erhalten und wandert ins Archiv. Gäste können sie nicht mehr öffnen. Du kannst sie jederzeit wieder öffnen.</p>
-        <div className="toolbar" style={{ marginTop: 18 }}>
+        <div className="toolbar mt-18">
           <button className="btn" disabled={busy} onClick={() => setArchived(true)}>Abschließen</button>
           <button className="btn soft" onClick={close}>Abbrechen</button>
         </div>
@@ -508,7 +509,7 @@ export function ListPage() {
       <Sheet open={sheet?.kind === "deleteList"} onClose={close} label="Liste löschen">
         <h2>„{list.title}“ löschen?</h2>
         <p>Alle Wünsche und Reservierungen dieser Liste werden gelöscht, und der Gast-Link funktioniert nicht mehr. Das lässt sich nicht rückgängig machen.</p>
-        <div className="toolbar" style={{ marginTop: 18 }}>
+        <div className="toolbar mt-18">
           <button className="btn danger" onClick={deleteList} disabled={busy}>Endgültig löschen</button>
           <button className="btn soft" onClick={close}>Abbrechen</button>
         </div>
@@ -521,7 +522,7 @@ export function ListPage() {
             <p>{resOf(sheet.wish).length > 0
               ? `${resOf(sheet.wish).map((r) => r.guest_name).join(", ")} ${resOf(sheet.wish).length === 1 ? "hat" : "haben"} diesen Wunsch schon reserviert und ${resOf(sheet.wish).length === 1 ? "verliert die Reservierung" : "verlieren ihre Reservierungen"}. Sprich dich am besten vorher ab.`
               : "Deine Reservierungen sind ausgeblendet. Falls schon jemand diesen Wunsch reserviert hat, verliert die Person ihre Reservierung."}</p>
-            <div className="toolbar" style={{ marginTop: 18 }}>
+            <div className="toolbar mt-18">
               <button className="btn danger" onClick={() => deleteWish(sheet.wish)} disabled={busy}>Löschen</button>
               <button className="btn soft" onClick={close}>Abbrechen</button>
             </div>
@@ -550,10 +551,10 @@ function ReuseForm({ list, showRes, onSubmit }: {
   const [archiveOld, setArchiveOld] = useState(!list.archived_at);
   return (
     <form id="reuse-list" onSubmit={(e) => { e.preventDefault(); if (title.trim()) onSubmit({ title: title.trim(), date, onlyFree, archiveOld }); }}>
-      <p className="hint" style={{ marginBottom: 16 }}>Legt eine neue Liste mit denselben Angaben an und übernimmt die Wünsche, ohne Reservierungen.</p>
+      <p className="hint mb-16">Legt eine neue Liste mit denselben Angaben an und übernimmt die Wünsche, ohne Reservierungen.</p>
       <label className="field"><span>Name der neuen Liste</span><input required maxLength={120} value={title} onChange={(e) => setTitle(e.target.value)} /></label>
       <label className="field"><span>Datum (optional)</span><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></label>
-      <label className="switch" style={{ marginBottom: 14 }}>
+      <label className="switch mb-14">
         <input type="checkbox" checked={onlyFree} onChange={(e) => setOnlyFree(e.target.checked)} />
         <span><b>Nur Wünsche übernehmen, die noch frei sind</b><br /><span className="hint">{showRes ? "Was schon verschenkt wurde, bleibt weg." : "Da du Reservierungen ausgeblendet hast, werden alle Wünsche übernommen."}</span></span>
       </label>
@@ -577,7 +578,7 @@ function ReserveForForm({ wish, free, busy, onSubmit }: {
   return (
     <form onSubmit={(e) => { e.preventDefault(); if (name.trim()) onSubmit(name.trim(), qty, parentsBuy); }}>
       <h2>Für jemanden reservieren</h2>
-      <p className="hint" style={{ marginBottom: 14 }}>„{wish.title}“ wird für diese Person reserviert, zum Beispiel wenn sie angerufen hat. Alle anderen sehen dann: vergeben.</p>
+      <p className="hint mb-14">„{wish.title}“ wird für diese Person reserviert, zum Beispiel wenn sie angerufen hat. Alle anderen sehen dann: vergeben.</p>
       <label className="field">
         <span>Für wen?</span>
         <input required autoFocus maxLength={60} value={name} placeholder="z. B. Oma Gisela" onChange={(e) => setName(e.target.value)} />
@@ -592,7 +593,7 @@ function ReserveForForm({ wish, free, busy, onSubmit }: {
           </div>
         </div>
       )}
-      <label className="switch" style={{ margin: "6px 0 18px" }}>
+      <label className="switch my-6-18">
         <input type="checkbox" checked={parentsBuy} onChange={(e) => setParentsBuy(e.target.checked)} />
         <span><b>Wir besorgen das Geschenk</b><br /><span className="hint">Die Person gibt euch das Geld, ihr kauft es.</span></span>
       </label>
@@ -615,7 +616,7 @@ function ContributeForForm({ wish, open, busy, onSubmit }: { wish: Wish; open: n
   return (
     <form onSubmit={(e) => { e.preventDefault(); if (ok) onSubmit(name.trim(), cents!); }}>
       <h2>Beitrag eintragen</h2>
-      <p className="hint" style={{ marginBottom: 14 }}>Für „{wish.title}“ fehlen noch {euroShort(open)}.</p>
+      <p className="hint mb-14">Für „{wish.title}“ fehlen noch {euroShort(open)}.</p>
       <label className="field">
         <span>Von wem?</span>
         <input required autoFocus maxLength={60} value={name} placeholder="z. B. Oma Gisela" onChange={(e) => setName(e.target.value)} />

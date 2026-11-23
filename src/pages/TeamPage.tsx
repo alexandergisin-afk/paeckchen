@@ -56,7 +56,7 @@ export function TeamPage() {
     return (
       <div className="wrap narrow">
         <h1>Diese Liste gibt es nicht oder du hast keinen Zugriff.</h1>
-        <p style={{ marginTop: 16 }}><Link className="btn soft" to="/">Zu meinen Listen</Link></p>
+        <p className="mt-16"><Link className="btn soft" to="/">Zu meinen Listen</Link></p>
       </div>
     );
 
@@ -92,7 +92,7 @@ export function TeamPage() {
       <Link className="back" to={`/liste/${list.id}`}><IconBack /> {list.title}</Link>
       <h1>Mitglieder</h1>
       <p className="lead">Wer „{list.title}“ mitpflegt und wie Schenkende die Liste öffnen.</p>
-      <div className="stack" style={{ marginTop: 22 }}>
+      <div className="stack mt-22">
         <section className="panel">
           <h2>Personen mit Zugang</h2>
           {members.map((m) => {
@@ -107,12 +107,12 @@ export function TeamPage() {
           })}
           {isOwner ? (
             <>
-              <div style={{ marginTop: 14 }}>
+              <div className="mt-14">
                 <button className="btn" onClick={() => setSheet({ kind: "invite" })}><IconUsers /> Zum Mitbearbeiten einladen</button>
               </div>
               {pending.length > 0 && (
                 <>
-                  <h3 style={{ marginTop: 18 }}>Offene Einladungen</h3>
+                  <h3 className="mt-18">Offene Einladungen</h3>
                   {pending.map((i) => (
                     <div className="member" key={i.id}>
                       <div className="who"><b>Einladung als Mitbearbeiter</b><div className="hint">gültig bis {new Date(i.expires_at).toLocaleDateString("de-DE")}</div></div>
@@ -123,13 +123,13 @@ export function TeamPage() {
               )}
             </>
           ) : (
-            <p className="hint" style={{ marginTop: 12 }}>Nur {ownerName} kann weitere Personen einladen oder entfernen.</p>
+            <p className="hint mt-12">Nur {ownerName} kann weitere Personen einladen oder entfernen.</p>
           )}
         </section>
 
         <section className="panel">
           <h2>Link für Schenkende</h2>
-          <p className="hint" style={{ marginTop: 6 }}>Damit kann man Wünsche ansehen und reservieren, aber nichts bearbeiten.</p>
+          <p className="hint mt-6">Damit kann man Wünsche ansehen und reservieren, aber nichts bearbeiten.</p>
           <div className="linkbox"><code>{guestLink(list.guest_token)}</code><CopyButton text={guestLink(list.guest_token)} /></div>
           <div className="toolbar">
             <Link className="btn soft small" to={`/w/${list.guest_token}`}>Als Gast ansehen</Link>
@@ -156,7 +156,7 @@ export function TeamPage() {
           <>
             <h2>{sheet.member.profiles?.display_name ?? "Diese Person"} entfernen?</h2>
             <p>Die Person verliert sofort den Zugriff auf „{list.title}“. Ihre Wünsche bleiben auf der Liste.</p>
-            <div className="toolbar" style={{ marginTop: 18 }}>
+            <div className="toolbar mt-18">
               <button className="btn danger" disabled={busy} onClick={() => remove(sheet.member)}>Zugriff entziehen</button>
               <button className="btn soft" onClick={close}>Abbrechen</button>
             </div>
@@ -167,7 +167,7 @@ export function TeamPage() {
       <Sheet open={sheet?.kind === "renew"} onClose={close} label="Gast-Link erneuern">
         <h2>Gast-Link erneuern?</h2>
         <p>Der alte Link funktioniert danach nicht mehr. Bereits gemachte Reservierungen bleiben erhalten. Den neuen Link musst du noch einmal verschicken.</p>
-        <div className="toolbar" style={{ marginTop: 18 }}>
+        <div className="toolbar mt-18">
           <button className="btn" disabled={busy} onClick={renew}>Neuen Link erstellen</button>
           <button className="btn soft" onClick={close}>Abbrechen</button>
         </div>
@@ -209,7 +209,7 @@ function InviteFlow({ listId, listTitle, onDone }: { listId: string; listTitle: 
         <h2>Einladung ist fertig</h2>
         <p>Schick den Link an <b>{email.trim()}</b>. Er funktioniert einmal und 7 Tage lang. Angemeldet wird mit genau dieser E-Mail-Adresse.</p>
         {pending && (
-          <p className="notice" style={{ marginTop: 12 }}>
+          <p className="notice mt-12">
             <b>Wartet auf Freigabe:</b> Die Verwaltung muss {email.trim()} noch freigeben und wurde per Mail informiert. Danach bekommt {email.trim()} eine Mail mit dem Anmeldecode, und der Link funktioniert.
           </p>
         )}
@@ -227,7 +227,7 @@ function InviteFlow({ listId, listTitle, onDone }: { listId: string; listTitle: 
     <>
       <h2>Zum Mitbearbeiten einladen</h2>
       <p>Die eingeladene Person kann Wünsche hinzufügen, bearbeiten und die Liste teilen. Löschen kann sie die Liste nicht.</p>
-      <form onSubmit={submit} style={{ marginTop: 16 }}>
+      <form className="mt-16" onSubmit={submit}>
         <label className="field">
           <span>E-Mail-Adresse der Person</span>
           <input type="email" required autoFocus autoComplete="off" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@beispiel.de" />

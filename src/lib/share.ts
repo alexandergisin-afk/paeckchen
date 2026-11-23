@@ -4,7 +4,8 @@
  * iPhone: Ein Kurzbefehl öffnet #/teilen?url=… .
  * Der Link wird gemerkt, bis er einer Liste zugeordnet ist (auch über eine Anmeldung hinweg).
  */
-const KEY = "paeckli-pending-share";
+import { getItem, KEYS, removeItem, setItem } from "./storage";
+const KEY = KEYS.pendingShare;
 
 /** Findet den ersten Link in einem Text („Schau mal: https://…“). */
 export function firstUrl(...parts: (string | null | undefined)[]): string | null {
@@ -16,13 +17,13 @@ export function firstUrl(...parts: (string | null | undefined)[]): string | null
 }
 
 export function rememberShare(url: string) {
-  try { localStorage.setItem(KEY, url); } catch { /* egal */ }
+  setItem(KEY, url);
 }
 export function pendingShare(): string | null {
-  try { return localStorage.getItem(KEY); } catch { return null; }
+  return getItem(KEY);
 }
 export function clearShare() {
-  try { localStorage.removeItem(KEY); } catch { /* egal */ }
+  removeItem(KEY);
 }
 
 /** Beim Start: geteilten Link aus der Adresse übernehmen und die Adresse aufräumen. */

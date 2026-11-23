@@ -9,6 +9,7 @@ import { Setup } from "./pages/Setup";
 import { Login } from "./pages/Login";
 import { GuestHome } from "./pages/GuestHome";
 import { getGuestLists } from "./lib/guestLists";
+import { getItem, KEYS, removeItem, setItem } from "./lib/storage";
 
 // Seiten werden erst geladen, wenn man sie öffnet: Gäste laden so nur die Gästeansicht.
 const Dashboard = lazy(() => import("./pages/Dashboard").then((m) => ({ default: m.Dashboard })));
@@ -50,9 +51,9 @@ function ReturnAfterLogin() {
   useEffect(() => {
     if (!session) return;
     try {
-      const back = localStorage.getItem(RETURN_AFTER_LOGIN);
+      const back = getItem(RETURN_AFTER_LOGIN);
       if (!back) return;
-      localStorage.removeItem(RETURN_AFTER_LOGIN);
+      removeItem(RETURN_AFTER_LOGIN);
       if (back.startsWith("/w/")) navigate(back, { replace: true });
     } catch { /* egal */ }
   }, [session, navigate]);
@@ -63,13 +64,13 @@ function ReturnAfterLogin() {
 function AfterLogin() {
   let to = "/";
   try {
-    const back = localStorage.getItem(RETURN_AFTER_LOGIN);
+    const back = getItem(RETURN_AFTER_LOGIN);
     if (back && back.startsWith("/w/")) to = back;
-    localStorage.removeItem(RETURN_AFTER_LOGIN);
+    removeItem(RETURN_AFTER_LOGIN);
   } catch { /* egal */ }
   return <Navigate to={to} replace />;
 }
-export const RETURN_AFTER_LOGIN = "paeckli-nach-anmeldung";
+export const RETURN_AFTER_LOGIN = KEYS.returnAfterLogin;
 
 /** Absturz-Schutz pro Seite: Wechselt man die Seite, bekommt die neue eine frische Chance. */
 function RouteErrorBoundary({ children }: { children: ReactNode }) {
@@ -77,7 +78,7 @@ function RouteErrorBoundary({ children }: { children: ReactNode }) {
   return <ErrorBoundary key={pathname}>{children}</ErrorBoundary>;
 }
 
-export const PENDING_INVITE = "paeckchen-pending-invite";
+export const PENDING_INVITE = KEYS.pendingInvite;
 
 /**
  * Eltern-Bereich: nur mit Anmeldung.
@@ -90,14 +91,14 @@ function RequireAuth({ children, linkError }: { children: ReactNode; linkError: 
   if (loading) return <p className="loading">Einen Moment …</p>;
   if (!session) {
     if (path.startsWith("/einladung/")) {
-      try { localStorage.setItem(PENDING_INVITE, path.slice("/einladung/".length)); } catch { /* egal */ }
+      setItem(PENDING_INVITE, path.slice("/einladung/".length));
     }
     // Schenkende ohne Konto: Startseite mit den auf diesem Gerät geöffneten Wunschlisten
     if (path === "/" && !linkError && getGuestLists().length > 0) return <GuestHome />;
     return <Login linkError={linkError} invite={path.startsWith("/einladung/")} />;
   }
   let pending: string | null = null;
-  try { pending = localStorage.getItem(PENDING_INVITE); } catch { /* egal */ }
+  pending = getItem(PENDING_INVITE);
   // Aufgeräumt wird in InvitePage, damit das Rendern frei von Nebenwirkungen bleibt.
   if (pending && !path.startsWith("/einladung/")) return <Navigate to={`/einladung/${pending}`} replace />;
   return <>{children}</>;

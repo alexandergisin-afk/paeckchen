@@ -18,6 +18,7 @@ import { addCode, getCodes, getName, keepCodes, removeCode, setName } from "../l
 import { IconCheck, IconExt, IconGift, IconGrid, IconRows } from "../components/Icons";
 import { Sheet } from "../components/Sheet";
 import { PriorityBadge, WishTile } from "../components/WishRow";
+import { getItem, hasFlag, KEYS, setFlag, setItem } from "../lib/storage";
 
 /** Eigene Reservierung: per Code (Gerät) oder am Konto (id, angemeldet) */
 interface Mine { code: string; id?: string; wish_id: string; quantity: number; amount_cents?: number | null }
@@ -48,11 +49,11 @@ export function GuestPage() {
   const [sheet, setSheet] = useState<GSheet>(null);
   const [busy, setBusy] = useState(false);
   const [view, setView] = useState<"rows" | "grid">(() => {
-    try { return localStorage.getItem("paeckli-guest-view") === "rows" ? "rows" : "grid"; } catch { return "grid"; }
+    return getItem(KEYS.guestView) === "rows" ? "rows" : "grid";
   });
   const chooseView = (v: "rows" | "grid") => {
     setView(v);
-    try { localStorage.setItem("paeckli-guest-view", v); } catch { /* egal */ }
+    setItem(KEYS.guestView, v);
   };
   const close = () => setSheet(null);
 
@@ -122,8 +123,8 @@ export function GuestPage() {
 
   const [installable, setInstallable] = useState(canPrompt());
   useEffect(() => onInstallChange(() => setInstallable(canPrompt())), []);
-  const [appHint, setAppHint] = useState(() => { try { return !localStorage.getItem("paeckli-gast-app-hinweis"); } catch { return true; } });
-  const hideAppHint = () => { setAppHint(false); try { localStorage.setItem("paeckli-gast-app-hinweis", "1"); } catch { /* egal */ } };
+  const [appHint, setAppHint] = useState(() => !hasFlag(KEYS.guestAppHint));
+  const hideAppHint = () => { setAppHint(false); setFlag(KEYS.guestAppHint); };
   const otherLists = getGuestLists().filter((l) => l.token !== token).length;
   useRefreshOnReturn(() => load());
 
@@ -144,16 +145,16 @@ export function GuestPage() {
       <div className="wrap narrow">
         <h1>Die Liste konnte gerade nicht geladen werden.</h1>
         <p className="lead">Prüf bitte deine Internetverbindung.</p>
-        <p style={{ marginTop: 16 }}><button className="btn" onClick={() => { setState("loading"); load(); }}>Erneut versuchen</button></p>
+        <p className="mt-16"><button className="btn" onClick={() => { setState("loading"); load(); }}>Erneut versuchen</button></p>
       </div>
     );
 
   const ids = new Set(list.wishes.map((w) => w.id));
   const myHere = mine.filter((m) => ids.has(m.wish_id));
   const mineOf = (w: GuestWish) => myHere.filter((m) => m.wish_id === w.id);
-  const howtoKey = `paeckli-howto-${token}`;
-  const firstVisit = myHere.length === 0 && (() => { try { return !localStorage.getItem(howtoKey); } catch { return true; } })();
-  const markHowtoSeen = () => { try { localStorage.setItem(howtoKey, "1"); } catch { /* egal */ } };
+  const howtoKey = KEYS.howto(token);
+  const firstVisit = myHere.length === 0 && !hasFlag(howtoKey);
+  const markHowtoSeen = () => setFlag(howtoKey);
   const myWishes = list.wishes.filter((w) => mineOf(w).length);
   const open = list.wishes.filter((w) => w.available > 0 && inPrice(w, price));
   const taken = list.wishes.filter((w) => w.available <= 0 && !mineOf(w).length);
@@ -343,11 +344,11 @@ export function GuestPage() {
       {taken.length > 0 && (
         <details className="arch">
           <summary>Schon vergeben ({taken.length})</summary>
-          <div className="ggrid" style={{ marginTop: 12 }}>{taken.map((w) => card(w, "taken"))}</div>
+          <div className="ggrid mt-12">{taken.map((w) => card(w, "taken"))}</div>
         </details>
       )}
 
-      <p className="hint" style={{ marginTop: 34, textAlign: "center" }}>
+      <p className="hint mt-34 ta-center">
         Auf einem anderen Gerät reserviert oder umentschieden? Sag einfach der Familie Bescheid, dann wird die Reservierung freigegeben.
       </p>
 
@@ -365,15 +366,15 @@ export function GuestPage() {
       {!session && (
         <section className="account-hint" aria-label="Mit Konto schenken">
           <p><b>Du schenkst öfter?</b> Mit einem Konto siehst du deine Wunschlisten und Geschenke auf allen Geräten.</p>
-          <Link className="btn soft" to="/anmelden" onClick={() => { try { localStorage.setItem("paeckli-nach-anmeldung", `/w/${token}`); } catch { /* egal */ } }}>
+          <Link className="btn soft" to="/anmelden" onClick={() => setItem(KEYS.returnAfterLogin, `/w/${token}`)}>
             Anmelden oder Konto anlegen
           </Link>
         </section>
       )}
       {session ? (
-        <p className="hint" style={{ marginTop: 16, textAlign: "center" }}><Link to="/">Zu deinen Wunschlisten</Link></p>
+        <p className="hint mt-16 ta-center"><Link to="/">Zu deinen Wunschlisten</Link></p>
       ) : otherLists > 0 && (
-        <p className="hint" style={{ marginTop: 16, textAlign: "center" }}>
+        <p className="hint mt-16 ta-center">
           <Link to="/meine-listen">Alle deine Wunschlisten ({otherLists + 1})</Link>
         </p>
       )}
@@ -393,8 +394,8 @@ export function GuestPage() {
             <li>Bestätigen.</li>
           </ol>
         )}
-        <p className="hint" style={{ marginTop: 10 }}>Danach findest du das Päckli-Symbol auf deinem Startbildschirm. Es öffnet direkt diese Wunschliste.</p>
-        <button className="btn block" onClick={close} style={{ marginTop: 14 }}>Verstanden</button>
+        <p className="hint mt-10">Danach findest du das Päckli-Symbol auf deinem Startbildschirm. Es öffnet direkt diese Wunschliste.</p>
+        <button className="btn block mt-14" onClick={close}>Verstanden</button>
       </Sheet>
 
       <Sheet open={sheet?.kind === "reserve"} onClose={close} label="Wunsch reservieren">
@@ -446,9 +447,9 @@ export function GuestPage() {
           <>
             <h2>{sheet.complete ? "Geschafft! Das Geschenk ist komplett." : "Danke!"}</h2>
             <p>Du steuerst <b>{euroShort(sheet.amount)}</b> zu „{sheet.wish.title}“ bei.{sheet.complete ? " Damit ist alles zusammen." : ""}</p>
-            <p className="notice" style={{ marginTop: 12 }}>Die Eltern kaufen das Geschenk, sobald alles zusammen ist. Deinen Betrag gibst du ihnen direkt.</p>
-            <p className="hint" style={{ marginTop: 12 }}>Dieses Gerät merkt sich deinen Beitrag. Hier kannst du ihn jederzeit zurückziehen.</p>
-            <button className="btn block" onClick={close} style={{ marginTop: 14 }}>Fertig</button>
+            <p className="notice mt-12">Die Eltern kaufen das Geschenk, sobald alles zusammen ist. Deinen Betrag gibst du ihnen direkt.</p>
+            <p className="hint mt-12">Dieses Gerät merkt sich deinen Beitrag. Hier kannst du ihn jederzeit zurückziehen.</p>
+            <button className="btn block mt-14" onClick={close}>Fertig</button>
           </>
         )}
       </Sheet>
@@ -458,7 +459,7 @@ export function GuestPage() {
           <>
             <h2>Da hat sich etwas getan.</h2>
             <p>{sheet.text}</p>
-            <button className="btn block" onClick={close} style={{ marginTop: 16 }}>Zur Liste</button>
+            <button className="btn block mt-16" onClick={close}>Zur Liste</button>
           </>
         )}
       </Sheet>
@@ -469,16 +470,16 @@ export function GuestPage() {
             <h2>Reserviert!</h2>
             <WishTile wish={sheet.wish} wrapped animate className="confirm-tile" />
             <p>„{sheet.wish.title}“ ist jetzt für dich reserviert. Alle anderen sehen nur noch: vergeben.</p>
-            {sheet.parentsBuy && <p className="notice" style={{ marginTop: 12 }}>Die Eltern wissen Bescheid, dass sie das Geschenk für dich besorgen. Das Geld regelt ihr am besten direkt miteinander.</p>}
+            {sheet.parentsBuy && <p className="notice mt-12">Die Eltern wissen Bescheid, dass sie das Geschenk für dich besorgen. Das Geld regelt ihr am besten direkt miteinander.</p>}
             {!sheet.parentsBuy && sheet.wish.url && (
-              <p style={{ marginTop: 14 }}>
+              <p className="mt-14">
                 <a className="btn line block" href={sheet.wish.url} target="_blank" rel="noopener noreferrer"><IconExt /> Zum Shop</a>
               </p>
             )}
-            <p className="hint" style={{ marginTop: 12 }}>
+            <p className="hint mt-12">
               Dieses Gerät merkt sich deine Reservierung. Hier kannst du sie jederzeit wieder aufheben. Von einem anderen Gerät aus sag einfach der Familie Bescheid.
             </p>
-            <button className="btn block" onClick={close} style={{ marginTop: 14 }}>Fertig</button>
+            <button className="btn block mt-14" onClick={close}>Fertig</button>
           </>
         )}
       </Sheet>
@@ -488,7 +489,7 @@ export function GuestPage() {
           <>
             <h2>Da war jemand schneller.</h2>
             <p>{sheet.available > 0 ? `Es sind nur noch ${sheet.available} frei.` : "Dieser Wunsch ist gerade vergeben worden."} Schau dir gern die anderen Wünsche an.</p>
-            <button className="btn block" onClick={close} style={{ marginTop: 16 }}>Zur Liste</button>
+            <button className="btn block mt-16" onClick={close}>Zur Liste</button>
           </>
         )}
       </Sheet>
@@ -498,7 +499,7 @@ export function GuestPage() {
           <>
             <h2>{sheet.wish.group_gift ? "Beitrag zurückziehen?" : "Reservierung aufheben?"}</h2>
             <p>{sheet.wish.group_gift ? `Dein Beitrag zu „${sheet.wish.title}“ wird entfernt.` : `„${sheet.wish.title}“ ist danach wieder für alle frei.`}</p>
-            <div className="toolbar" style={{ marginTop: 18 }}>
+            <div className="toolbar mt-18">
               <button className="btn danger" disabled={busy} onClick={() => cancel(sheet)}>Ja, aufheben</button>
               <button className="btn soft" onClick={close}>Behalten</button>
             </div>
@@ -522,7 +523,7 @@ function ReserveForm({ wish, allowParentsBuy, busy, onSubmit }: { wish: GuestWis
     <>
       <h2>Reservieren: {wish.title}</h2>
       <p>Damit sagst du: <b>Um dieses Geschenk kümmere ich mich.</b> Alle anderen sehen dann, dass es vergeben ist. Kaufen kannst du es danach in Ruhe, wo du möchtest.</p>
-      <form onSubmit={submit} style={{ marginTop: 16 }}>
+      <form className="mt-16" onSubmit={submit}>
         {wish.available > 1 && (
           <label className="field">
             <span>Wie viele schenkst du?</span>
@@ -559,7 +560,7 @@ function ContributeForm({ wish, full, busy, onSubmit }: { wish: GuestWish; full:
   return (
     <form onSubmit={(e) => { e.preventDefault(); if (valid) onSubmit(amount!, name.trim()); }}>
       <h2>{full ? `„${wish.title}“ ganz schenken` : `Bei „${wish.title}“ mitschenken`}</h2>
-      <p className="hint" style={{ marginBottom: 14 }}>{full ? `Du übernimmst den vollen Betrag von ${euroShort(open)}.` : `Noch offen: ${euroShort(open)}. Wie viel möchtest du beisteuern?`}</p>
+      <p className="hint mb-14">{full ? `Du übernimmst den vollen Betrag von ${euroShort(open)}.` : `Noch offen: ${euroShort(open)}. Wie viel möchtest du beisteuern?`}</p>
       {!full && (
         <div className="amount-chips" role="group" aria-label="Betrag">
           {presets.map((c) => (

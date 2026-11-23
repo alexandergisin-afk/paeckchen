@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { db } from "../lib/supabase";
-import { cover } from "../lib/types";
 import { clearShare, firstUrl, pendingShare, rememberShare } from "../lib/share";
 import { friendlyError, toast } from "../lib/format";
-import { IconBack, IconChevron } from "../components/Icons";
+import { IconBack } from "../components/Icons";
+import { ListRowBody } from "../components/ListRow";
 
 interface Row { id: string; title: string; cover: number; archived_at: string | null }
 
@@ -52,16 +52,13 @@ export function SharePage() {
         <>
           <p className="lead">In welche Liste soll der Link von <b>{host || "diesem Shop"}</b>?</p>
           {!lists ? <p className="loading">Listen werden geladen …</p> : lists.length === 0 ? (
-            <div className="empty" style={{ marginTop: 18 }}><p>Du hast noch keine Liste. Leg zuerst eine an.</p><Link className="btn" to="/">Zu meinen Listen</Link></div>
+            <div className="empty mt-18"><p>Du hast noch keine Liste. Leg zuerst eine an.</p><Link className="btn" to="/">Zu meinen Listen</Link></div>
           ) : (
-            <div className="list-rows" style={{ marginTop: 18 }}>
+            <div className="list-rows mt-18">
               {lists.map((l) => {
-                const c = cover(l.cover);
                 return (
                   <button key={l.id} className="list-row" onClick={() => pick(l.id)} style={{ border: 0, font: "inherit", textAlign: "left", cursor: "pointer" }}>
-                    <span className={`list-cover t${c.t}`} aria-hidden="true">{c.e}</span>
-                    <span className="list-text"><span className="list-title">{l.title}</span></span>
-                    <span className="list-chev" aria-hidden="true"><IconChevron /></span>
+                    <ListRowBody list={l} meta={false} />
                   </button>
                 );
               })}

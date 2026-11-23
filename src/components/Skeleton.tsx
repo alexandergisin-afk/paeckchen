@@ -39,12 +39,12 @@ export function SkeletonListPage() {
 export function SkeletonGuest() {
   return (
     <div className="wrap" role="status" aria-label="Wunschliste wird geladen">
-      <div className="sk-lines" style={{ marginBottom: 18 }}><Bar w="30%" h={10} /><Bar w="72%" h={26} /><Bar w="48%" /></div>
+      <div className="sk-lines mb-18"><Bar w="30%" h={10} /><Bar w="72%" h={26} /><Bar w="48%" /></div>
       <div className="sk-grid">
         {Array.from({ length: 4 }, (_, i) => (
           <div className="sk-card" key={i}>
             <span className="sk sk-img" />
-            <span className="sk-lines" style={{ padding: 12 }}><Bar w="45%" h={12} /><Bar w="85%" h={16} /><Bar w="35%" h={16} /></span>
+            <span className="sk-lines p-12"><Bar w="45%" h={12} /><Bar w="85%" h={16} /><Bar w="35%" h={16} /></span>
           </div>
         ))}
       </div>
@@ -56,7 +56,7 @@ export function SkeletonGuest() {
 export function SkeletonPanels({ count = 3 }: { count?: number }) {
   return (
     <div className="wrap narrow" role="status" aria-label="Statistik wird berechnet">
-      <div className="sk-lines" style={{ marginBottom: 18 }}><Bar w="40%" h={28} /></div>
+      <div className="sk-lines mb-18"><Bar w="40%" h={28} /></div>
       {Array.from({ length: count }, (_, i) => (
         <div className="sk-panel" key={i}><Bar w="30%" h={18} /><div className="sk-tiles2"><span className="sk" /><span className="sk" /></div></div>
       ))}

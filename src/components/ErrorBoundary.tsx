@@ -20,7 +20,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { failed: 
       <div className="wrap narrow">
         <h1>Da ist etwas schiefgelaufen.</h1>
         <p className="lead">Das tut uns leid. Meist hilft es, die Seite neu zu laden. Der Fehler wurde gemeldet.</p>
-        <p style={{ marginTop: 18 }}><button className="btn" onClick={() => window.location.reload()}>Neu laden</button></p>
+        <p className="mt-18"><button className="btn" onClick={() => window.location.reload()}>Neu laden</button></p>
       </div>
     );
   }

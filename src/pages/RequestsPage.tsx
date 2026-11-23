@@ -53,15 +53,15 @@ export function RequestsPage() {
       <Link className="back" to="/einstellungen"><IconBack /> Einstellungen</Link>
       <h1>Zugangsanfragen</h1>
       <p className="lead">Neue Konten bekommen ihre Mail mit dem Anmeldecode erst, wenn du sie hier freigibst. Zum Reservieren braucht niemand ein Konto, der Link zur Wunschliste genügt.</p>
-      {error && <p className="notice error" style={{ marginTop: 16 }}>{error}</p>}
+      {error && <p className="notice error mt-16">{error}</p>}
       {!items && !error && <p className="loading">Wird geladen …</p>}
-      {items && items.length === 0 && <div className="empty" style={{ marginTop: 18 }}><p>Keine offenen Anfragen.</p></div>}
+      {items && items.length === 0 && <div className="empty mt-18"><p>Keine offenen Anfragen.</p></div>}
       {items && items.length > 0 && (
-        <div className="stack" style={{ marginTop: 18 }}>
+        <div className="stack mt-18">
           {items.map((r) => (
             <section className="panel request" key={r.id}>
               <b className="request-email">{r.email}</b>
-              <p className="hint" style={{ margin: "4px 0 12px" }}>
+              <p className="hint my-4-12">
                 {r.invited_by_name ? `Eingeladen von ${r.invited_by_name}${r.list_title ? ` zu „${r.list_title}“` : ""}` : "Hat sich ohne Einladung angemeldet"}
                 {", "}{new Date(r.created_at).toLocaleDateString("de-DE", { day: "numeric", month: "long" })}
               </p>

@@ -79,9 +79,9 @@ export function HistoryPage({ mode }: { mode: "list" | "access" }) {
           ? <>Wer was in {title ? <b>„{title}“</b> : "dieser Liste"} geändert hat. Reservierungen erscheinen nur, wenn du sie dir anzeigen lässt.</>
           : "Wer wann Zugang angefragt, bekommen oder verloren hat."}
       </p>
-      {error && <p className="notice error" style={{ marginTop: 16 }}>{error}</p>}
+      {error && <p className="notice error mt-16">{error}</p>}
       {!entries && !error && <SkeletonRows count={4} label="Verlauf wird geladen" />}
-      {entries && entries.length === 0 && <div className="empty" style={{ marginTop: 18 }}><p>Noch keine Einträge.</p></div>}
+      {entries && entries.length === 0 && <div className="empty mt-18"><p>Noch keine Einträge.</p></div>}
       {groups.map((g) => (
         <section key={g.day} className="history-day" aria-label={g.day}>
           <h2 className="settings-group">{g.day}</h2>
@@ -99,9 +99,9 @@ export function HistoryPage({ mode }: { mode: "list" | "access" }) {
           </ol>
         </section>
       ))}
-      {more && <button className="btn soft block" style={{ marginTop: 16 }} disabled={busy} onClick={loadMore}>{busy ? "Wird geladen …" : "Ältere Einträge laden"}</button>}
+      {more && <button className="btn soft block mt-16" disabled={busy} onClick={loadMore}>{busy ? "Wird geladen …" : "Ältere Einträge laden"}</button>}
       {entries && entries.length > 0 && !more && (
-        <p className="hint" style={{ marginTop: 18 }}>
+        <p className="hint mt-18">
           {mode === "list" ? "Einträge werden nach einem Jahr gelöscht, solche mit Namen von Gästen schon 60 Tage nach dem Anlass." : "Einträge werden nach einem Jahr gelöscht."}
         </p>
       )}

@@ -51,11 +51,11 @@ export function Login({ linkError, invite = false }: { linkError: string | null;
           <p className="lead">
             Neue Konten gibt die Familie frei. Wir haben Bescheid gegeben, dass <b>{email}</b> ein Konto möchte.
           </p>
-          <p className="notice" style={{ marginTop: 16 }}>
+          <p className="notice mt-16">
             Sobald das passiert ist, bekommst du eine Mail mit deinem Anmeldecode. Du kannst ihn dann hier eingeben oder in der Mail auf den Knopf tippen.
           </p>
-          <button className="btn block" style={{ marginTop: 18 }} onClick={() => { setState("sent"); setError(null); }}>Ich habe den Code schon</button>
-          <button className="btn quiet" style={{ marginTop: 6 }} onClick={() => { setState("idle"); setCode(""); setError(null); }}>
+          <button className="btn block mt-18" onClick={() => { setState("sent"); setError(null); }}>Ich habe den Code schon</button>
+          <button className="btn quiet mt-6" onClick={() => { setState("idle"); setCode(""); setError(null); }}>
             Andere E-Mail-Adresse verwenden
           </button>
         </>
@@ -66,7 +66,7 @@ export function Login({ linkError, invite = false }: { linkError: string | null;
             Wir haben dir eine Mail an <b>{email}</b> geschickt. Tippe dort auf den Knopf oder gib hier den Code aus der Mail ein.
           </p>
           {error && <p className="notice error" role="alert">{error}</p>}
-          <form onSubmit={verify} style={{ marginTop: 18 }}>
+          <form className="mt-18" onSubmit={verify}>
             <label className="field">
               <span>Code aus der Mail</span>
               <input
@@ -76,8 +76,8 @@ export function Login({ linkError, invite = false }: { linkError: string | null;
             </label>
             <button className="btn block" type="submit" disabled={state === "verifying"}>{state === "verifying" ? "Wird geprüft …" : "Anmelden"}</button>
           </form>
-          <p className="hint" style={{ marginTop: 16 }}>Die Mail kann ein, zwei Minuten brauchen und landet manchmal im Spam-Ordner.</p>
-          <button className="btn quiet" style={{ marginTop: 6 }} onClick={() => { setState("idle"); setCode(""); setError(null); }}>
+          <p className="hint mt-16">Die Mail kann ein, zwei Minuten brauchen und landet manchmal im Spam-Ordner.</p>
+          <button className="btn quiet mt-6" onClick={() => { setState("idle"); setCode(""); setError(null); }}>
             Andere E-Mail-Adresse verwenden
           </button>
         </>
@@ -90,7 +90,7 @@ export function Login({ linkError, invite = false }: { linkError: string | null;
               : "Gib deine E-Mail-Adresse ein. Wir schicken dir einen Code zum Anmelden, ganz ohne Passwort."}
           </p>
           {error && <p className="notice error" role="alert">{error}</p>}
-          <form onSubmit={send} style={{ marginTop: 20 }}>
+          <form className="mt-20" onSubmit={send}>
             <label className="field">
               <span>E-Mail-Adresse</span>
               <input type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@beispiel.de" />

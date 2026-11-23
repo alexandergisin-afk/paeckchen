@@ -103,7 +103,7 @@ export function StatsPage() {
         </p>
       )}
       {s.hiddenLists > 0 && (
-        <p className="hint" style={{ marginBottom: 14 }}>
+        <p className="hint mb-14">
           Bei {s.hiddenLists === 1 ? "einer Liste" : `${s.hiddenLists} Listen`} hast du Reservierungen ausgeblendet. Sie werden hier nicht mitgezählt.
         </p>
       )}
@@ -134,7 +134,7 @@ export function StatsPage() {
             <div className="stat-tile"><span className="stat-num">{s.geld.avgPrice != null ? formatPrice(s.geld.avgPrice) : "–"}</span><span className="stat-label">durchschnittlicher Preis</span></div>
           </div>
           {s.geld.parentsBuy.items > 0 && (
-            <p className="notice" style={{ marginTop: 12 }}>
+            <p className="notice mt-12">
               <b>Von euch zu besorgen:</b> {s.geld.parentsBuy.items} {s.geld.parentsBuy.items === 1 ? "Geschenk" : "Geschenke"}
               {s.geld.parentsBuy.value > 0 && <> im Wert von {formatPrice(s.geld.parentsBuy.value)}</>}. Das Geld bekommt ihr von den Schenkenden.
             </p>
@@ -153,9 +153,9 @@ export function StatsPage() {
 
         <section className="panel">
           <h2>Schenkende</h2>
-          {s.schenkende.distinct === 0 ? <p className="hint" style={{ marginTop: 6 }}>Noch hat niemand reserviert.</p> : (
+          {s.schenkende.distinct === 0 ? <p className="hint mt-6">Noch hat niemand reserviert.</p> : (
             <>
-              <p className="stat-foot" style={{ marginTop: 6 }}><b>{s.schenkende.distinct}</b> {s.schenkende.distinct === 1 ? "Person hat" : "Personen haben"} reserviert. Praktisch für die Dankeskarten:</p>
+              <p className="stat-foot mt-6"><b>{s.schenkende.distinct}</b> {s.schenkende.distinct === 1 ? "Person hat" : "Personen haben"} reserviert. Praktisch für die Dankeskarten:</p>
               <div className="hbars">
                 {s.schenkende.ranking.map((r) => (
                   <div className="hbar giver" key={r.name}>
@@ -171,9 +171,9 @@ export function StatsPage() {
 
         <section className="panel">
           <h2>Zeitverlauf</h2>
-          {!s.zeit.hasDates ? <p className="hint" style={{ marginTop: 6 }}>Sobald reserviert wird und die Liste ein Datum hat, siehst du hier, wann die Gäste aktiv werden.</p> : (
+          {!s.zeit.hasDates ? <p className="hint mt-6">Sobald reserviert wird und die Liste ein Datum hat, siehst du hier, wann die Gäste aktiv werden.</p> : (
             <>
-              <p className="hint" style={{ margin: "6px 0 12px" }}>Reservierungen nach Wochen vor dem Anlass</p>
+              <p className="hint my-6-12">Reservierungen nach Wochen vor dem Anlass</p>
               <div className="vbars" role="img" aria-label={s.zeit.weeks.slice(0, 9).map((w) => `${w.label}: ${w.count}`).join(", ")}>
                 {s.zeit.weeks.slice(0, 9).map((w) => (
                   <div className="vbar" key={w.label}>
@@ -183,7 +183,7 @@ export function StatsPage() {
                   </div>
                 ))}
               </div>
-              <p className="hint" style={{ marginTop: 6 }}>Zahlen = Wochen vor dem Anlass, 0 = letzte Woche{s.zeit.weeks[9].count > 0 ? `. Nach dem Anlass reserviert: ${s.zeit.weeks[9].count}` : ""}</p>
+              <p className="hint mt-6">Zahlen = Wochen vor dem Anlass, 0 = letzte Woche{s.zeit.weeks[9].count > 0 ? `. Nach dem Anlass reserviert: ${s.zeit.weeks[9].count}` : ""}</p>
             </>
           )}
           {s.zeit.avgDaysToReserve != null && (
@@ -193,7 +193,7 @@ export function StatsPage() {
 
         <section className="panel">
           <h2>Rückblick</h2>
-          <p className="hint" style={{ margin: "6px 0 12px" }}>{picked ? `${picked.recipient_name?.trim() || "Diese Person"} über alle Listen und Jahre` : "Pro beschenkter Person über alle Listen und Jahre"}</p>
+          <p className="hint my-6-12">{picked ? `${picked.recipient_name?.trim() || "Diese Person"} über alle Listen und Jahre` : "Pro beschenkter Person über alle Listen und Jahre"}</p>
           {review.length === 0 ? <p className="hint">Noch keine Listen.</p> : (
             <div className="review">
               {review.map((g) => (
@@ -201,10 +201,10 @@ export function StatsPage() {
                   <span className="avatar" aria-hidden="true">{g.name.charAt(0).toUpperCase()}</span>
                   <div>
                     <b>{g.name}</b>
-                    <span className="hint" style={{ display: "block" }}>
+                    <span className="hint d-block">
                       {g.lists} {g.lists === 1 ? "Liste" : "Listen"}{g.years.length ? ` (${g.years.join(", ")})` : ""}, {g.wishes} {g.wishes === 1 ? "Wunsch" : "Wünsche"}, davon {g.fulfilled} erfüllt
                     </span>
-                    {g.topShops.length > 0 && <span className="hint" style={{ display: "block" }}>Lieblingsshops: {g.topShops.join(", ")}</span>}
+                    {g.topShops.length > 0 && <span className="hint d-block">Lieblingsshops: {g.topShops.join(", ")}</span>}
                   </div>
                 </div>
               ))}

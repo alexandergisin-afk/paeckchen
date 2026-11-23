@@ -131,7 +131,9 @@ function LinkStep({ initialUrl, autoRead, onDone }: { initialUrl?: string; autoR
     else if (r.draft) setFallback(r.draft);
   };
 
-  useEffect(() => { if (initialUrl && autoRead) run(initialUrl); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+  // Nur beim ersten Öffnen: einen geteilten Link einmal automatisch auswerten (bewusst ohne Abhängigkeiten)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (initialUrl && autoRead) run(initialUrl); }, []);
 
   const paste = async () => {
     try {

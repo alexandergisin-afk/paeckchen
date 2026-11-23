@@ -4,6 +4,7 @@ import { cached, load as loadCached, remember } from "../lib/cache";
 import { db } from "../lib/supabase";
 import { SEARCH_SHOPS, formatPrice } from "../lib/wishes";
 import { IconSearch } from "./Icons";
+import { KEYS, removeItem } from "../lib/storage";
 
 export interface SearchResult {
   title: string;
@@ -22,7 +23,7 @@ type State =
 
 /** „Zuletzt gesucht“ gehört der angemeldeten Person (gilt auf allen Geräten), höchstens 3 Begriffe. */
 const MAX_RECENT = 3;
-const OLD_DEVICE_KEY = "paeckli-recent-searches"; // früher pro Gerät gespeichert
+const OLD_DEVICE_KEY = KEYS.oldRecentSearches; // früher pro Gerät gespeichert
 
 async function fetchRecent(uid: string): Promise<string[]> {
   const { data } = await db().from("recent_searches").select("terms").eq("user_id", uid).maybeSingle();
@@ -43,7 +44,7 @@ export function ProductSearch({ onPick, compact = false }: { onPick: (r: SearchR
   const [recent, setRecent] = useState<string[]>(() => (uid ? cached<string[]>(`recent:${uid}`) ?? [] : []));
 
   useEffect(() => {
-    try { localStorage.removeItem(OLD_DEVICE_KEY); } catch { /* egal */ }
+    removeItem(OLD_DEVICE_KEY);
     if (!uid) return;
     loadCached(`recent:${uid}`, () => fetchRecent(uid)).then(setRecent, () => undefined);
   }, [uid]);
@@ -140,12 +141,12 @@ export function ProductSearch({ onPick, compact = false }: { onPick: (r: SearchR
       {(state.kind === "results" || state.kind === "error") && q.trim() && (
         <details className="qs">
           <summary><IconSearch /> In einem bestimmten Shop suchen</summary>
-          <div className="chips" style={{ marginTop: 6 }}>
+          <div className="chips mt-6">
             {SEARCH_SHOPS.map((s) => (
               <a key={s.name} className="fchip" href={s.url(enc)} target="_blank" rel="noopener noreferrer">{s.name}</a>
             ))}
           </div>
-          <p className="hint" style={{ margin: "10px 0 4px" }}>Öffnet sich in einem neuen Tab. Link kopieren, zurückkommen und „Link einfügen“ wählen.</p>
+          <p className="hint my-10-4">Öffnet sich in einem neuen Tab. Link kopieren, zurückkommen und „Link einfügen“ wählen.</p>
         </details>
       )}
     </div>

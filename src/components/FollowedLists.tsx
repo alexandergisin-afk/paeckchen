@@ -1,10 +1,8 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import { useAuth } from "../lib/auth";
-import { cover } from "../lib/types";
-import { dateLabel, daysChip, friendlyError, toast } from "../lib/format";
+import { friendlyError, toast } from "../lib/format";
 import { cachedFollowed, loadFollowed, syncDeviceToAccount, unfollow, type FollowedList } from "../lib/followed";
-import { IconChevron } from "./Icons";
+import { RemovableListRow } from "./ListRow";
 
 /**
  * Wunschlisten zum Schenken, am Konto gespeichert (auf jedem Gerät gleich).
@@ -46,26 +44,10 @@ export function FollowedLists({ always }: { always: boolean }) {
         <p className="hint">Hier erscheinen Wunschlisten, die du über einen Link öffnest oder die dir jemand freigibt.</p>
       )}
       <div className="list-rows">
-        {(lists ?? []).map((l) => {
-          const c = cover(l.cover);
-          const d = daysChip(l.event_date);
-          return (
-            <div className="guest-home-row" key={l.list_id}>
-              <Link className="list-row" to={`/w/${l.guest_token}`}>
-                <span className={`list-cover t${c.t}`} aria-hidden="true">{c.e}</span>
-                <span className="list-text">
-                  <span className="list-title">{l.title}</span>
-                  <span className="list-meta">
-                    {[l.recipient_name ? `Für ${l.recipient_name}` : "", dateLabel(l.event_date)].filter(Boolean).join(", ")}
-                    {d && <span className={`days-chip ${d.soon ? "soon" : ""}`}>{d.text}</span>}
-                  </span>
-                </span>
-                <span className="list-chev" aria-hidden="true"><IconChevron /></span>
-              </Link>
-              <button type="button" className="guest-home-x" aria-label={`„${l.title}“ aus deiner Übersicht entfernen`} onClick={() => remove(l)}>×</button>
-            </div>
-          );
-        })}
+        {(lists ?? []).map((l) => (
+          <RemovableListRow key={l.list_id} to={`/w/${l.guest_token}`} list={l}
+            removeLabel={`„${l.title}“ aus deiner Übersicht entfernen`} onRemove={() => remove(l)} />
+        ))}
       </div>
     </section>
   );

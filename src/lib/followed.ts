@@ -2,6 +2,7 @@ import { db } from "./supabase";
 import { cached, load, remember } from "./cache";
 import { getCodes } from "./device";
 import { getGuestLists, forgetGuestList } from "./guestLists";
+import { hasFlag, KEYS, setFlag } from "./storage";
 
 /** Am Konto gespeicherte Wunschlisten (zum Schenken). */
 export interface FollowedList {
@@ -40,11 +41,11 @@ export async function unfollow(list: FollowedList, userId: string) {
  * ins Konto übernehmen (Listen speichern, Reservierungen zuordnen).
  */
 export async function syncDeviceToAccount(userId: string) {
-  const flag = `paeckli-geraet-uebernommen-${userId}`;
-  try { if (localStorage.getItem(flag)) return; } catch { return; }
+  const flag = KEYS.deviceSynced(userId);
+  if (hasFlag(flag)) return;
   const client = db();
   const codes = getCodes();
   if (codes.length) await client.rpc("claim_reservations", { p_codes: codes });
   for (const l of getGuestLists()) await client.rpc("follow_list", { p_token: l.token });
-  try { localStorage.setItem(flag, "1"); } catch { /* egal */ }
+  setFlag(flag);
 }
