@@ -6,11 +6,10 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { db } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { cover, type Reservation, type Wish, type WishList } from "../lib/types";
-import { countdownLabel, dateLabel, daysUntil, friendlyError, toast, toastAction } from "../lib/format";
+import { countdownLabel, dateLabel, daysUntil, friendlyError, toast, toastAction, firstNameOf } from "../lib/format";
 import { deferred } from "../lib/undo";
-import { describe, relTime, type AuditEntry } from "../lib/history";
-import { celebrate, celebrateOnce } from "../lib/celebrate";
-import { parsePrice, removeImage } from "../lib/wishes";
+import { celebrate } from "../lib/celebrate";
+import { removeImage } from "../lib/wishes";
 import { copyWishes, moveWish } from "../lib/listOps";
 import { cachedListPage, loadListPage, type ListPageData } from "../lib/listData";
 import { euroShort, giftFunded, giftTarget, isGroupGift, takenQuantity } from "../lib/gift";
@@ -23,6 +22,11 @@ import { AddWishFlow } from "../components/AddWishFlow";
 import { WishCard, WishRow } from "../components/WishRow";
 import { ShareContent } from "../components/ShareSheet";
 import { getItem, KEYS, setItem } from "../lib/storage";
+import { ReuseForm } from "../components/list/ReuseForm";
+import { ReserveForForm, ContributeForForm } from "../components/list/ForSomeoneForms";
+import { ContributionsPanel } from "../components/list/ContributionsPanel";
+import { LastChange } from "../components/list/LastChange";
+import { useAllReservedCelebration } from "../lib/useAllReservedCelebration";
 
 type SheetState =
   | null
@@ -92,26 +96,8 @@ export function ListPage() {
   useLayoutEffect(() => { apply(cachedListPage(id!)); }, [id, apply]);
   const ptr = usePullToRefresh(() => load());
 
-  // „Zuletzt“: neuester Eintrag im Verlauf (die Datenbank blendet Reservierungen bei „Ausblenden“ aus)
-  const [lastEntry, setLastEntry] = useState<AuditEntry | null>(null);
-  useEffect(() => {
-    if (!id || state !== "ok") return;
-    const t = window.setTimeout(() => {
-      db().from("audit_log").select("id,at,kind,action,actor_name,data").eq("list_id", id)
-        .order("at", { ascending: false }).order("id", { ascending: false }).limit(1)
-        .then(({ data }) => setLastEntry(((data ?? []) as AuditEntry[])[0] ?? null));
-    }, 400);
-    return () => window.clearTimeout(t);
-  }, [id, state, wishes, reservations, list]);
 
-  // Freudenmoment: Liste zum ersten Mal komplett vergeben (einmal pro Liste und Gerät)
-  useEffect(() => {
-    const visible = list?.list_members?.find((m) => m.user_id === session?.user.id)?.show_reservations ?? true;
-    if (state !== "ok" || !list || !visible || !wishes.length) return;
-    const total = wishes.reduce((a, w) => a + w.quantity, 0);
-    const taken = wishes.reduce((a, w) => a + takenQuantity(w, reservations.filter((r) => r.wish_id === w.id)), 0);
-    if (total > 0 && taken >= total && celebrateOnce(KEYS.allReserved(list.id))) toast("Alles vergeben! 🎉");
-  }, [state, list, session, wishes, reservations]);
+  useAllReservedCelebration(state === "ok" ? list : null, session?.user.id, wishes, reservations);
   useRefreshOnReturn(() => load());
 
   useEffect(() => {
@@ -361,14 +347,7 @@ export function ListPage() {
           </section>
         )}
 
-        {wishes.length > 0 && lastEntry && (
-          <Link className="last-change" to={`/liste/${list.id}/verlauf`} aria-label={`Zuletzt: ${describe(lastEntry)} ${relTime(lastEntry.at)}. Ganzen Verlauf ansehen`}>
-            <span className="last-change-icon" aria-hidden="true"><IconHistory /></span>
-            <span className="last-change-text"><b>Zuletzt:</b> {describe(lastEntry)}</span>
-            <span className="last-change-time">{relTime(lastEntry.at)}</span>
-            <span className="last-change-chev" aria-hidden="true"><IconChevron /></span>
-          </Link>
-        )}
+        {wishes.length > 0 && <LastChange listId={list.id} watch={[list, wishes, reservations]} />}
 
         {wishes.length > 0 && <div className="wl-bar">
           <h2 className="section-title">Wünsche</h2>
@@ -531,143 +510,5 @@ export function ListPage() {
       </Sheet>
 
     </>
-  );
-}
-
-function ReuseForm({ list, showRes, onSubmit }: {
-  list: WishList;
-  showRes: boolean;
-  onSubmit: (v: { title: string; date: string; onlyFree: boolean; archiveOld: boolean }) => void;
-}) {
-  const nextYear = (d: string | null) => {
-    if (!d) return "";
-    const x = new Date(d + "T12:00:00");
-    x.setFullYear(x.getFullYear() + 1);
-    return x.toISOString().slice(0, 10);
-  };
-  const [title, setTitle] = useState(list.title.replace(/\b(\d{1,2})\.(?= Geburtstag)/, (_, n) => `${Number(n) + 1}.`));
-  const [date, setDate] = useState(nextYear(list.event_date));
-  const [onlyFree, setOnlyFree] = useState(true);
-  const [archiveOld, setArchiveOld] = useState(!list.archived_at);
-  return (
-    <form id="reuse-list" onSubmit={(e) => { e.preventDefault(); if (title.trim()) onSubmit({ title: title.trim(), date, onlyFree, archiveOld }); }}>
-      <p className="hint mb-16">Legt eine neue Liste mit denselben Angaben an und übernimmt die Wünsche, ohne Reservierungen.</p>
-      <label className="field"><span>Name der neuen Liste</span><input required maxLength={120} value={title} onChange={(e) => setTitle(e.target.value)} /></label>
-      <label className="field"><span>Datum (optional)</span><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></label>
-      <label className="switch mb-14">
-        <input type="checkbox" checked={onlyFree} onChange={(e) => setOnlyFree(e.target.checked)} />
-        <span><b>Nur Wünsche übernehmen, die noch frei sind</b><br /><span className="hint">{showRes ? "Was schon verschenkt wurde, bleibt weg." : "Da du Reservierungen ausgeblendet hast, werden alle Wünsche übernommen."}</span></span>
-      </label>
-      {!list.archived_at && (
-        <label className="switch">
-          <input type="checkbox" checked={archiveOld} onChange={(e) => setArchiveOld(e.target.checked)} />
-          <span><b>Alte Liste abschließen</b><br /><span className="hint">Sie wandert ins Archiv, der alte Gast-Link wird pausiert.</span></span>
-        </label>
-      )}
-    </form>
-  );
-}
-
-/** Eltern tragen eine Reservierung für jemanden ein, z. B. nach einem Anruf von Oma. */
-function ReserveForForm({ wish, free, busy, onSubmit }: {
-  wish: Wish; free: number; busy: boolean; onSubmit: (name: string, qty: number, parentsBuy: boolean) => void;
-}) {
-  const [name, setName] = useState("");
-  const [qty, setQty] = useState(1);
-  const [parentsBuy, setParentsBuy] = useState(false);
-  return (
-    <form onSubmit={(e) => { e.preventDefault(); if (name.trim()) onSubmit(name.trim(), qty, parentsBuy); }}>
-      <h2>Für jemanden reservieren</h2>
-      <p className="hint mb-14">„{wish.title}“ wird für diese Person reserviert, zum Beispiel wenn sie angerufen hat. Alle anderen sehen dann: vergeben.</p>
-      <label className="field">
-        <span>Für wen?</span>
-        <input required autoFocus maxLength={60} value={name} placeholder="z. B. Oma Gisela" onChange={(e) => setName(e.target.value)} />
-      </label>
-      {free > 1 && (
-        <div className="qty-row">
-          <span className="qty-label">Wie viele? <span className="optional">(noch {free} frei)</span></span>
-          <div className="stepper" role="group" aria-label="Menge">
-            <button type="button" aria-label="Weniger" disabled={qty <= 1} onClick={() => setQty(qty - 1)}>−</button>
-            <output>{qty}</output>
-            <button type="button" aria-label="Mehr" disabled={qty >= free} onClick={() => setQty(qty + 1)}>+</button>
-          </div>
-        </div>
-      )}
-      <label className="switch my-6-18">
-        <input type="checkbox" checked={parentsBuy} onChange={(e) => setParentsBuy(e.target.checked)} />
-        <span><b>Wir besorgen das Geschenk</b><br /><span className="hint">Die Person gibt euch das Geld, ihr kauft es.</span></span>
-      </label>
-      <button type="submit" className="btn block big" disabled={busy}>{busy ? "Wird reserviert …" : "Reservieren"}</button>
-    </form>
-  );
-}
-
-const firstNameOf = (n: string) => {
-  const f = n.trim().split(/[\s._+-]+/)[0] ?? "";
-  return f ? f.charAt(0).toUpperCase() + f.slice(1) : "";
-};
-
-/** Eltern tragen einen Beitrag für jemanden ein (z. B. „Oma gibt 50 € dazu“). */
-function ContributeForForm({ wish, open, busy, onSubmit }: { wish: Wish; open: number; busy: boolean; onSubmit: (name: string, amount: number) => void }) {
-  const [name, setName] = useState("");
-  const [amount, setAmount] = useState("");
-  const cents = parsePrice(amount);
-  const ok = !!name.trim() && cents != null && cents >= Math.min(500, open) && cents <= open;
-  return (
-    <form onSubmit={(e) => { e.preventDefault(); if (ok) onSubmit(name.trim(), cents!); }}>
-      <h2>Beitrag eintragen</h2>
-      <p className="hint mb-14">Für „{wish.title}“ fehlen noch {euroShort(open)}.</p>
-      <label className="field">
-        <span>Von wem?</span>
-        <input required autoFocus maxLength={60} value={name} placeholder="z. B. Oma Gisela" onChange={(e) => setName(e.target.value)} />
-      </label>
-      <label className="field">
-        <span>Betrag</span>
-        <input required inputMode="decimal" value={amount} placeholder="z. B. 50" onChange={(e) => setAmount(e.target.value)} />
-        {cents != null && cents > open && <small className="field-error">Höchstens {euroShort(open)}.</small>}
-      </label>
-      <button type="submit" className="btn block big" disabled={busy || !ok}>{busy ? "Wird eingetragen …" : cents ? `${euroShort(cents)} eintragen` : "Eintragen"}</button>
-    </form>
-  );
-}
-
-/** Gruppengeschenk aus Elternsicht: wer sich mit wie viel beteiligt, was noch fehlt. */
-function ContributionsPanel({ wish, contributions, busy, onRelease, onAdd, onTakeRest }: {
-  wish: Wish; contributions: Reservation[]; busy: boolean;
-  onRelease: (r: Reservation) => void; onAdd: () => void; onTakeRest: (open: number) => void;
-}) {
-  const target = giftTarget(wish);
-  const funded = giftFunded(contributions);
-  const open = Math.max(0, target - funded);
-  const pct = target ? Math.min(100, Math.round((funded / target) * 100)) : 0;
-  const sorted = [...contributions].sort((a, b) => (b.amount_cents ?? 0) - (a.amount_cents ?? 0));
-  return (
-    <section className="contrib-panel" aria-label="Beiträge zum Gruppengeschenk">
-      <h3>Gemeinsames Geschenk</h3>
-      <div className="gift-sum">
-        <span><b>{euroShort(funded)}</b> von {euroShort(target)}</span>
-        <small>{open > 0 ? `es fehlen noch ${euroShort(open)}` : "komplett"}</small>
-      </div>
-      <span className="progress big" aria-hidden="true"><span style={{ width: `${pct}%` }} /></span>
-      {sorted.length === 0 ? (
-        <p className="hint" style={{ margin: "10px 0 0" }}>Noch hat niemand etwas beigesteuert.</p>
-      ) : (
-        <ul className="contrib-list">
-          {sorted.map((r) => (
-            <li key={r.id}>
-              <span className="contrib-name">{r.guest_name}{r.entered_by && <small> von euch eingetragen</small>}</span>
-              <b className="contrib-amount">{euroShort(r.amount_cents ?? 0)}</b>
-              <button type="button" className="btn quiet small" onClick={() => onRelease(r)} aria-label={`Beitrag von ${r.guest_name} (${euroShort(r.amount_cents ?? 0)}) freigeben`}>Freigeben</button>
-            </li>
-          ))}
-        </ul>
-      )}
-      {open > 0 && (
-        <div className="contrib-actions">
-          <button type="button" className="btn soft small" onClick={onAdd}><IconGift /> Beitrag eintragen</button>
-          <button type="button" className="btn soft small" disabled={busy} onClick={() => onTakeRest(open)}>Rest übernehmen ({euroShort(open)})</button>
-        </div>
-      )}
-    </section>
   );
 }

@@ -65,3 +65,9 @@ export function toastAction(text: string, label: string, onAction: () => void, m
   window.clearTimeout(toastTimer);
   toastTimer = window.setTimeout(() => el.classList.remove("show"), ms);
 }
+
+/** Vorname aus einem Anzeigenamen oder einer E-Mail-Adresse, z. B. „julia.weber“ → „Julia“. */
+export const firstNameOf = (n: string) => {
+  const f = n.trim().split(/[\s._+-]+/)[0] ?? "";
+  return f ? f.charAt(0).toUpperCase() + f.slice(1) : "";
+};

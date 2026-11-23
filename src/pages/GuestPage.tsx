@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { SkeletonGuest } from "../components/Skeleton";
 import { usePullToRefresh, useRefreshOnReturn } from "../lib/useRefresh";
 import { PullIndicator } from "../components/PullIndicator";
@@ -7,18 +7,20 @@ import { db } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { OCCASIONS, cover, type GuestList, type GuestWish } from "../lib/types";
 import { dateLabel, friendlyError, toast } from "../lib/format";
-import { formatPrice, parsePrice } from "../lib/wishes";
+import { formatPrice } from "../lib/wishes";
 import { euroShort } from "../lib/gift";
 import { celebrate } from "../lib/celebrate";
 import { cached, remember } from "../lib/cache";
-import { forgetGuestList, getGuestLists, rememberGuestList } from "../lib/guestLists";
+import { forgetGuestList, rememberGuestList } from "../lib/guestLists";
 import { syncDeviceToAccount } from "../lib/followed";
-import { canPrompt, isInstalled, isIOS, onInstallChange, promptInstall } from "../lib/install";
 import { addCode, getCodes, getName, keepCodes, removeCode, setName } from "../lib/device";
 import { IconCheck, IconExt, IconGift, IconGrid, IconRows } from "../components/Icons";
 import { Sheet } from "../components/Sheet";
 import { PriorityBadge, WishTile } from "../components/WishRow";
 import { getItem, hasFlag, KEYS, setFlag, setItem } from "../lib/storage";
+import { ReserveForm, ContributeForm } from "../components/guest/GuestForms";
+import { GuestFooter } from "../components/guest/GuestFooter";
+import { useAppStartUrl } from "../lib/useAppStartUrl";
 
 /** Eigene Reservierung: per Code (Gerät) oder am Konto (id, angemeldet) */
 interface Mine { code: string; id?: string; wish_id: string; quantity: number; amount_cents?: number | null }
@@ -30,7 +32,6 @@ type GSheet =
   | { kind: "contribute"; wish: GuestWish; full: boolean }
   | { kind: "contributed"; wish: GuestWish; amount: number; complete: boolean }
   | { kind: "giftInfo"; text: string }
-  | { kind: "appIos" }
   | { kind: "done"; wish: GuestWish; parentsBuy: boolean }
   | { kind: "taken"; available: number }
   | { kind: "cancel"; wish: GuestWish; code: string; id?: string };
@@ -96,36 +97,8 @@ export function GuestPage() {
   // Angemeldet: Name fürs Reservieren aus dem Konto vorschlagen
   useEffect(() => { if (session && displayName && !getName()) setName(displayName); }, [session, displayName]);
 
-  // „Als App speichern“: Auf dem iPhone übernimmt der Startbildschirm die aktuelle Adresse, wenn kein
-  // Manifest da ist. Darum hier die Liste in die Adresse schreiben und das Manifest kurz entfernen.
-  // (Android nutzt das Manifest und teilt den Speicher mit dem Browser, dort klappt „Deine Wunschlisten“ direkt.)
-  useEffect(() => {
-    try {
-      const url = new URL(window.location.href);
-      if (url.searchParams.get("liste") !== token) {
-        url.searchParams.set("liste", token);
-        window.history.replaceState(window.history.state, "", url.toString());
-      }
-    } catch { /* egal */ }
-    // Beim Verlassen der Gästeansicht die Merkhilfe wieder aus der Adresse nehmen
-    const cleanUrl = () => {
-      try {
-        const url = new URL(window.location.href);
-        if (url.searchParams.has("liste")) { url.searchParams.delete("liste"); window.history.replaceState(window.history.state, "", url.toString()); }
-      } catch { /* egal */ }
-    };
-    if (!isIOS()) return cleanUrl;
-    const link = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
-    const parent = link?.parentNode;
-    link?.remove();
-    return () => { if (link && parent) parent.appendChild(link); cleanUrl(); };
-  }, [token]);
+  useAppStartUrl(token);
 
-  const [installable, setInstallable] = useState(canPrompt());
-  useEffect(() => onInstallChange(() => setInstallable(canPrompt())), []);
-  const [appHint, setAppHint] = useState(() => !hasFlag(KEYS.guestAppHint));
-  const hideAppHint = () => { setAppHint(false); setFlag(KEYS.guestAppHint); };
-  const otherLists = getGuestLists().filter((l) => l.token !== token).length;
   useRefreshOnReturn(() => load());
 
   useEffect(() => {
@@ -352,51 +325,7 @@ export function GuestPage() {
         Auf einem anderen Gerät reserviert oder umentschieden? Sag einfach der Familie Bescheid, dann wird die Reservierung freigegeben.
       </p>
 
-      {/* Für Schenkende: Päckli als App und alle Wunschlisten an einem Ort */}
-      {!isInstalled() && appHint && (
-        <section className="app-hint" aria-label="Päckli als App">
-          <button type="button" className="app-hint-x" aria-label="Hinweis ausblenden" onClick={hideAppHint}>×</button>
-          <b>Päckli als App speichern</b>
-          <p>Dann öffnest du diese Wunschliste mit einem Tipp vom Startbildschirm, ohne den Link zu suchen. Weitere Wunschlisten, die du öffnest, sammelt Päckli dort für dich.</p>
-          {installable
-            ? <button type="button" className="btn soft" onClick={() => promptInstall()}>Als App speichern</button>
-            : <button type="button" className="btn soft" onClick={() => setSheet({ kind: "appIos" })}>So geht’s</button>}
-        </section>
-      )}
-      {!session && (
-        <section className="account-hint" aria-label="Mit Konto schenken">
-          <p><b>Du schenkst öfter?</b> Mit einem Konto siehst du deine Wunschlisten und Geschenke auf allen Geräten.</p>
-          <Link className="btn soft" to="/anmelden" onClick={() => setItem(KEYS.returnAfterLogin, `/w/${token}`)}>
-            Anmelden oder Konto anlegen
-          </Link>
-        </section>
-      )}
-      {session ? (
-        <p className="hint mt-16 ta-center"><Link to="/">Zu deinen Wunschlisten</Link></p>
-      ) : otherLists > 0 && (
-        <p className="hint mt-16 ta-center">
-          <Link to="/meine-listen">Alle deine Wunschlisten ({otherLists + 1})</Link>
-        </p>
-      )}
-
-      <Sheet open={sheet?.kind === "appIos"} onClose={close} label="Als App speichern">
-        <h2>Päckli als App speichern</h2>
-        {isIOS() ? (
-          <ol className="steps">
-            <li>Unten in Safari auf das Teilen-Symbol tippen (Quadrat mit Pfeil nach oben).</li>
-            <li>Nach unten scrollen und <b>„Zum Home-Bildschirm“</b> wählen.</li>
-            <li>Mit <b>„Hinzufügen“</b> bestätigen.</li>
-          </ol>
-        ) : (
-          <ol className="steps">
-            <li>Im Browser das Menü öffnen (⋮ oder ≡).</li>
-            <li><b>„App installieren“</b> oder <b>„Zum Startbildschirm hinzufügen“</b> wählen.</li>
-            <li>Bestätigen.</li>
-          </ol>
-        )}
-        <p className="hint mt-10">Danach findest du das Päckli-Symbol auf deinem Startbildschirm. Es öffnet direkt diese Wunschliste.</p>
-        <button className="btn block mt-14" onClick={close}>Verstanden</button>
-      </Sheet>
+      <GuestFooter token={token} signedIn={!!session} />
 
       <Sheet open={sheet?.kind === "reserve"} onClose={close} label="Wunsch reservieren">
         {sheet?.kind === "reserve" && <ReserveForm wish={sheet.wish} allowParentsBuy={!!list?.allow_parents_buy} busy={busy} onSubmit={(q, n, pb) => reserve(sheet.wish, q, n, pb)} />}
@@ -507,84 +436,5 @@ export function GuestPage() {
         )}
       </Sheet>
     </div>
-  );
-}
-
-function ReserveForm({ wish, allowParentsBuy, busy, onSubmit }: { wish: GuestWish; allowParentsBuy: boolean; busy: boolean; onSubmit: (qty: number, name: string, parentsBuy: boolean) => void }) {
-  const [name, setNameValue] = useState(getName());
-  const [qty, setQty] = useState("1");
-  const [parentsBuy, setParentsBuy] = useState(false);
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    if (!name.trim()) return;
-    onSubmit(Math.max(1, Math.min(wish.available, Number.parseInt(qty) || 1)), name.trim(), allowParentsBuy && parentsBuy);
-  };
-  return (
-    <>
-      <h2>Reservieren: {wish.title}</h2>
-      <p>Damit sagst du: <b>Um dieses Geschenk kümmere ich mich.</b> Alle anderen sehen dann, dass es vergeben ist. Kaufen kannst du es danach in Ruhe, wo du möchtest.</p>
-      <form className="mt-16" onSubmit={submit}>
-        {wish.available > 1 && (
-          <label className="field">
-            <span>Wie viele schenkst du?</span>
-            <input type="number" min={1} max={wish.available} value={qty} onChange={(e) => setQty(e.target.value)} />
-            <small>Noch {wish.available} frei.</small>
-          </label>
-        )}
-        <label className="field">
-          <span>Dein Name</span>
-          <input required maxLength={60} autoComplete="name" autoFocus={!name} value={name} placeholder="z. B. Oma Gisela" onChange={(e) => setNameValue(e.target.value)} />
-          <small>Damit die Eltern wissen, von wem das Geschenk kommt. Andere Gäste sehen deinen Namen nie.</small>
-        </label>
-        {allowParentsBuy && (
-          <label className="switch parents-buy">
-            <input type="checkbox" checked={parentsBuy} onChange={(e) => setParentsBuy(e.target.checked)} />
-            <span><b>Bitte besorgt ihr das Geschenk</b><br /><span className="hint">Die Eltern kaufen es für dich, du gibst ihnen das Geld.</span></span>
-          </label>
-        )}
-        <button className="btn ribbon block" type="submit" disabled={busy}><IconGift /> {busy ? "Wird reserviert …" : "Jetzt reservieren"}</button>
-      </form>
-    </>
-  );
-}
-
-/** Betrag fürs Gruppengeschenk wählen: Vorschläge, eigener Betrag oder der ganze Rest. */
-function ContributeForm({ wish, full, busy, onSubmit }: { wish: GuestWish; full: boolean; busy: boolean; onSubmit: (amount: number, name: string) => void }) {
-  const open = Math.max(0, (wish.target_cents ?? 0) - (wish.funded_cents ?? 0));
-  const [name, setNameValue] = useState(getName());
-  const [custom, setCustom] = useState(full ? (open / 100).toString().replace(".", ",") : "");
-  const [chip, setChip] = useState<number | null>(full ? open : null);
-  const presets = [2000, 5000, 10000].filter((c) => c < open);
-  const amount = chip ?? parsePrice(custom);
-  const valid = amount != null && amount >= Math.min(500, open) && amount <= open && !!name.trim();
-  return (
-    <form onSubmit={(e) => { e.preventDefault(); if (valid) onSubmit(amount!, name.trim()); }}>
-      <h2>{full ? `„${wish.title}“ ganz schenken` : `Bei „${wish.title}“ mitschenken`}</h2>
-      <p className="hint mb-14">{full ? `Du übernimmst den vollen Betrag von ${euroShort(open)}.` : `Noch offen: ${euroShort(open)}. Wie viel möchtest du beisteuern?`}</p>
-      {!full && (
-        <div className="amount-chips" role="group" aria-label="Betrag">
-          {presets.map((c) => (
-            <button key={c} type="button" className="amount-chip" aria-pressed={chip === c} onClick={() => { setChip(c); setCustom(""); }}>{euroShort(c)}</button>
-          ))}
-          <button type="button" className="amount-chip" aria-pressed={chip === open} onClick={() => { setChip(open); setCustom(""); }}>{(wish.funded_cents ?? 0) === 0 ? "Ganz" : "Rest"}<br /><small>{euroShort(open)}</small></button>
-        </div>
-      )}
-      {!full && (
-        <label className="field">
-          <span>Anderer Betrag</span>
-          <input inputMode="decimal" value={custom} placeholder="z. B. 30" onChange={(e) => { setCustom(e.target.value); setChip(null); }} />
-          {chip == null && amount != null && amount > open && <small className="field-error">Höchstens {euroShort(open)}.</small>}
-          {chip == null && amount != null && amount < Math.min(500, open) && <small className="field-error">Mindestens {euroShort(Math.min(500, open))}.</small>}
-        </label>
-      )}
-      <label className="field">
-        <span>Dein Name</span>
-        <input required maxLength={60} autoComplete="name" value={name} placeholder="z. B. Oma Gisela" onChange={(e) => setNameValue(e.target.value)} />
-        <small>Andere Gäste sehen nur die Summe, nicht wer wie viel gibt. Das Geld gibst du den Eltern direkt.</small>
-      </label>
-      <button className="btn ribbon block" type="submit" disabled={busy || !valid}>
-        <IconGift /> {busy ? "Wird eingetragen …" : amount ? `${euroShort(amount)} beisteuern` : "Beisteuern"}
-      </button>
-    </form>
   );
 }
