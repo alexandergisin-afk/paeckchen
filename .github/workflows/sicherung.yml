@@ -15,7 +15,7 @@ jobs:
   sichern:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Datenbank-Werkzeuge (PostgreSQL 17) installieren
         run: |
           sudo install -d /usr/share/postgresql-common/pgdg
@@ -32,7 +32,7 @@ jobs:
           BACKUP_PASSWORD: ${{ secrets.BACKUP_PASSWORD }}
         run: bash scripts/sicherung.sh sicherung
       - name: Sicherung ablegen (30 Tage)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: paeckli-sicherung-${{ env.STAMP }}
           path: sicherung/*.enc
