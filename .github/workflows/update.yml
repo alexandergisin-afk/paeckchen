@@ -1,3 +1,5 @@
+# Spielt ein Update-Paket ein: Lade eine Datei namens update.zip ins Hauptverzeichnis hoch.
+# Die Automatik entpackt sie an die richtigen Stellen, entfernt das Paket und veröffentlicht die App neu.
 name: Update einspielen
 
 on:
@@ -14,7 +16,7 @@ jobs:
   apply:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Paket entpacken
         run: |
           shopt -s nullglob
