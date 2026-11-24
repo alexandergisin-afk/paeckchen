@@ -101,6 +101,7 @@ Abrufen fremder Seiten und Mails.
 - **F-1** Anmeldung per E-Mail mit Einmal-Code oder Link, ohne Passwort. Der Code funktioniert auch in der installierten App.
 - **F-2** Konten nur für freigeschaltete Adressen (`allowed_emails`).
 - **F-3** Unbekannte Adressen erhalten statt einer Fehlermeldung eine **Zugangsanfrage**; Administratoren werden per Mail benachrichtigt.
+- **F-8** „Auf allen Geräten abmelden“ in den Einstellungen (mit Rückfrage): beendet alle Anmeldungen; auf anderen Geräten spätestens nach einer Stunde wirksam.
 - **F-4** Erst nach Freigabe durch einen Administrator wird die Mail mit dem Anmeldecode verschickt. Abgelehnte Adressen lösen 30 Tage keine neue Benachrichtigung aus.
 - **F-5** Bei der Freigabe wählt der Administrator die Kontoart: „Zum Schenken“ (vorausgewählt bei Anmeldung ohne Einladung) oder „Familie“ (vorausgewählt bei Einladung zum Mitbearbeiten).
 - **F-7** Beim Freigeben lassen sich eigene Listen zuweisen (nur Listen, bei denen der Administrator Mitglied ist). Sobald das Konto entsteht: bei „Zum Schenken“ in „Wunschlisten zum Schenken“, bei „Familie“ als Mitbearbeiter. Bei Einladungen ist die Liste der Einladung vorausgewählt.
@@ -455,11 +456,13 @@ Alle übrigen Lese- und Schreibzugriffe laufen direkt über die Tabellen, gesch�
 | | Geheimnisse schützen | Codes und Einladungen als SHA-256; Schlüssel nur in Edge-Function-Secrets |
 | | Missbrauch bremsen | 10 Reservierungen pro Liste und Minute, 20 falsche Codes in 10 Minuten, 30 Abfragen pro Minute, 5 Anfragen in 10 Minuten |
 | | Nachvollziehbarkeit | Verlauf per Trigger, für niemanden änder- oder löschbar; Überraschungsschutz auch im Verlauf |
+| | Kein Einbetten | Eingebettet in fremde Seiten zeigt Päckli nur einen Hinweis mit Link (Schutz vor Clickjacking; GitHub Pages erlaubt keine Server-Einstellung dafür) |
+| | Bibliotheken | Sicherheitsprüfung bei jeder Veröffentlichung (schwere Lücken in Bibliotheken der App stoppen sie); Dependabot meldet neue Lücken; neue Versionen erst nach zwei Wochen |
 | | Fremden Code verhindern | Content-Security-Policy: Skripte nur von Päckli, Verbindungen nur zu Supabase |
 | **Datenschutz** | Minimale Daten | Gäste: nur Name; Reservierungen 60 Tage nach dem Anlass gelöscht; Fehlerprotokoll anonym, 30 Tage |
 | | Keine Dritten beim Öffnen | Schriften lokal; keine Analyse- oder Werbedienste |
 | **Geschwindigkeit** | Schnelle Bedienung | Wichtige Programmteile und Schriften werden parallel vorgeladen; Listen im Leerlauf vorgeladen; Liste erscheint in unter 1 s auch bei langsamer Datenbank (Test) |
-| **Offline** | Start ohne Netz | Service Worker für die App-Hülle, zuletzt geladene Daten im Gerätespeicher; Startseite immer zuerst aus dem Netz, damit Updates sofort ankommen |
+| **Offline** | Start ohne Netz | Service Worker für die App-Hülle, zuletzt geladene Daten im Gerätespeicher; Startseite immer zuerst aus dem Netz, damit Updates sofort ankommen; gespeicherte Dateien werden unabhängig von Server-Kopfzeilen wie „Vary“ gefunden |
 | **Robustheit** | Netzaussetzer | Leseanfragen werden wiederholt, schreibende nicht (keine Doppelbuchungen); Absturzschutz mit „Neu laden“ |
 | **Barrierefreiheit** | Lesbar und bedienbar | Kontrast mindestens 4,5:1 in hell und dunkel (gemessen); Tippflächen ab 44 px; Tastaturbedienung inkl. Verschieben; Rücksicht auf „Bewegung reduzieren“ |
 | **Geräte** | Handy zuerst | Getestet auf 320, 360 und 390 px Breite; kein seitliches Scrollen |

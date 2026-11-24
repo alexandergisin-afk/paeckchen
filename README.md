@@ -97,6 +97,8 @@ scripts/            sicherung.sh (nächtliche Datensicherung)
 
 ## Neu einrichten
 
+Voraussetzung für Entwicklung und Tests: **Node.js 22** (steht in `.nvmrc` und `package.json`).
+
 ### 1. Supabase
 1. Projekt anlegen (Region Frankfurt).
 2. **SQL Editor:** `supabase/schema.sql` komplett ausführen und die eigene Adresse freischalten:
@@ -138,6 +140,8 @@ scripts/            sicherung.sh (nächtliche Datensicherung)
 
 1. **Datenbank zuerst:** Liegt dem Update eine nummerierte SQL-Datei bei, diese im SQL Editor ausführen.
    Jede Datei nur einmal, in der Reihenfolge der Nummern.
+   `schema.sql` dagegen **nicht** ausführen: Sie enthält jede Funktion genau einmal im aktuellen Stand und ist nur für
+   neue Projekte gedacht (etwa bei einer Wiederherstellung). Das Ergebnis ist in beiden Fällen identisch.
 2. **App:** `update.zip` ohne Entpacken ins Hauptverzeichnis hochladen. Die Automatik entpackt es,
    führt alle Tests aus und veröffentlicht nur, wenn alles grün ist.
 3. **Edge Functions:** Nur wenn das Update eine `*.ts`-Datei enthält, die Funktion im Dashboard ersetzen.
@@ -150,12 +154,16 @@ Nach etwa zwei Minuten läuft die vorherige Version wieder (betrifft nur die App
 ## Tests
 
 ```bash
-npm ci
+npm ci                      # installiert genau die Versionen aus package-lock.json
 npm run lint                # Linter (ESLint, auch Warnungen zählen)
 npm test                    # Logik (Vitest)
 npm run test:e2e            # Oberfläche (Playwright, baut die App selbst)
 ./supabase/tests/run.sh     # Datenbank (braucht PostgreSQL; PGHOST, PGUSER, PGPASSWORD, PGDATABASE)
 ```
+
+Neue Versionen von Bibliotheken nur übernehmen, wenn sie mindestens zwei Wochen alt sind (`npm install --before=…`).
+Die Versionsliste `package-lock.json` wird mit **npm 11** erstellt (`npx npm@11 install …`), weil npm 10 die aktuelle
+Kombination nicht auflösen kann; installiert wird sie überall problemlos mit `npm ci`.
 
 Bei jeder Veröffentlichung laufen Linter, Sicherheitsprüfung der Bibliotheken und alle drei Testebenen automatisch (`deploy.yml`). Die Datenbank-Tests bauen das
 komplette Schema in einer leeren Datenbank auf und prüfen unter anderem Zugriffsschutz, Doppelbuchungen,
@@ -173,6 +181,7 @@ Sicherheitsregeln (CSP), Geschwindigkeit, Offline-Start und Touch-Bedienung.
 | **Verlauf** | jede Änderung wird festgehalten (Tabelle `audit_log`); Gästenamen 60 Tage nach dem Anlass, sonst ein Jahr |
 | **Fehlerprotokoll** | Fehler bei Nutzern landen anonym in der Tabelle `client_errors` (Table Editor), 30 Tage |
 | **Mails** | täglicher Lauf um 7:00 UTC: Erinnerungen (14 und 3 Tage vorher) und Reservierungs-Zusammenfassung |
+| **Dependabot** | nur für Sicherheitslücken eingeschaltet (`.github/dependabot.yml`). Vorschläge **nicht übernehmen**, sondern ins nächste Update-Paket einbauen lassen, sonst überschreibt das nächste Paket sie wieder |
 | **Zugangsanfragen** | Administratoren bekommen eine Mail und geben in den Einstellungen frei |
 
 ---
@@ -185,6 +194,7 @@ Sicherheitsregeln (CSP), Geschwindigkeit, Offline-Start und Touch-Bedienung.
   durch einen Administrator.
 - **Geheimnisse als Hash:** Reservierungscodes und Einladungen werden nur als SHA-256 gespeichert.
 - **Bremsklotz** gegen Missbrauch: Reservierungen, Code-Versuche, Abfragen und Anfragen sind begrenzt.
+- **Kein Einbetten:** In fremden Seiten (iframe) zeigt Päckli nur einen Hinweis statt der App (Schutz vor Clickjacking).
 - **Content-Security-Policy:** Der Browser führt nur Code von Päckli aus; beim Öffnen gehen keine
   Anfragen an fremde Server (Schriften werden mitgeliefert).
 - **Datensparsamkeit:** Von Gästen nur der Name; Reservierungen werden 60 Tage nach dem Anlass gelöscht;
