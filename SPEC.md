@@ -489,6 +489,7 @@ SQL Editor ausgeführt; `schema.sql` enthält immer den vollständigen Stand fü
 
 | Ebene | Werkzeug | Umfang |
 |---|---|---|
+| Code | ESLint | TypeScript- und React-Regeln; auch Warnungen stoppen die Veröffentlichung |
 | Logik | Vitest | Preise, Link-Erkennung, Statistik, Sortieren, Countdown, Schwärzen im Fehlerprotokoll |
 | Datenbank | SQL gegen frische PostgreSQL | Zugriffsschutz, Doppelbuchung (auch gleichzeitig), Gruppengeschenke, Bremsklotz, Benachrichtigungen, Freigaben, Funktionsrechte |
 | Oberfläche | Playwright im Handyformat | alle Hauptabläufe für Gäste und Eltern, Touch-Gesten, Offline mit echtem Service Worker, Geschwindigkeit, CSP-Verstöße |

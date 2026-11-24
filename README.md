@@ -74,7 +74,9 @@ Die genaue Beschreibung aller Funktionen, Rollen und Abläufe steht in der **[Sp
 src/
   pages/            Seiten (Übersicht, Liste, Gästeansicht, Statistik, Einstellungen, …)
   components/       Bausteine (Wunsch-Formular, Kacheln, Dialoge, Platzhalter, …)
-  lib/              Logik (Supabase, Zwischenspeicher, Gruppengeschenke, Sortieren, Ziehen, Rückgängig, …)
+  components/list/  Bausteine der Listenseite (Beiträge, Formulare, „Zuletzt“)
+  components/guest/ Bausteine der Gästeansicht (Formulare, Hinweise)
+  lib/              Logik (Supabase, Gerätespeicher, Zwischenspeicher, Gruppengeschenke, Sortieren, …)
 supabase/
   schema.sql        komplette Datenbank in einer Datei (für neue Projekte)
   02_…22_*.sql      einzelne Ergänzungen in der Reihenfolge ihrer Entstehung (für bestehende Projekte)
@@ -149,12 +151,13 @@ Nach etwa zwei Minuten läuft die vorherige Version wieder (betrifft nur die App
 
 ```bash
 npm ci
+npm run lint                # Linter (ESLint, auch Warnungen zählen)
 npm test                    # Logik (Vitest)
 npm run test:e2e            # Oberfläche (Playwright, baut die App selbst)
 ./supabase/tests/run.sh     # Datenbank (braucht PostgreSQL; PGHOST, PGUSER, PGPASSWORD, PGDATABASE)
 ```
 
-Bei jeder Veröffentlichung laufen alle drei automatisch (`deploy.yml`). Die Datenbank-Tests bauen das
+Bei jeder Veröffentlichung laufen Linter, Sicherheitsprüfung der Bibliotheken und alle drei Testebenen automatisch (`deploy.yml`). Die Datenbank-Tests bauen das
 komplette Schema in einer leeren Datenbank auf und prüfen unter anderem Zugriffsschutz, Doppelbuchungen,
 Gruppengeschenke, Bremsklotz und Freigaben. Die Oberflächentests laufen im Handyformat und prüfen auch
 Sicherheitsregeln (CSP), Geschwindigkeit, Offline-Start und Touch-Bedienung.
