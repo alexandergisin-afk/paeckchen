@@ -50,11 +50,6 @@ Bisher laden Gäste Bilder direkt von den Shop-Servern, die dabei die IP-Adresse
 ## Kleine Gestaltungsfehler (bewusst nicht im Refactoring behoben)
 - **Anmeldecode-Feld:** Laut CSS soll es die runde Überschriften-Schrift (Bricolage) mit fetter Stärke haben. Die allgemeine Regel für Eingabefelder überschreibt das aber, sodass die normale Schrift erscheint. Beheben hieße eine sichtbare Änderung, deshalb gesondert entscheiden.
 
-## Wartung (beim nächsten Update erledigen)
-- **typescript-eslint 8.74.0** (oder neuer) übernehmen, sobald mindestens zwei Wochen alt (ab ca. 7. Dezember 2026). Behebt eine „mittlere“ Meldung in einem Hilfspaket des Linters (minimatch), betrifft nur die Entwicklungswerkzeuge.
-- **React 19** bewusst noch nicht: Alle Tests liefen, aber Päckli würde beim ersten Öffnen rund 12 KB (8 %) größer, ohne dass es eine Neuerung nutzt. Neu prüfen, wenn React 18 nicht mehr gepflegt wird oder eine React-19-Funktion gebraucht wird.
-- **npm:** vitest 4 lässt sich mit npm 10 nicht neu auflösen (npm-Fehler „edgesOut“). Die Versionsliste wird deshalb mit npm 11 erstellt (`npx npm@11 install`); installiert wird sie überall problemlos mit `npm ci`.
-
 ## Erledigt
 - **Datensicherung** (November 2026): nächtlich, verschlüsselt, 30 Tage, inklusive Bilder. Anleitung in `BACKUP.md`.
 - **Offline-Modus** (November 2026): App startet ohne Netz, zeigt den zuletzt geladenen Stand; Updates kommen trotzdem sofort an.

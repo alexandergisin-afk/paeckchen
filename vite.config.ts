@@ -33,8 +33,7 @@ function preloadCore(): Plugin {
         for (const [file, c] of Object.entries(bundle)) if (c.type === "chunk" && c.isEntry) chunks.delete(file);
         const fonts = Object.keys(bundle).filter((f) => f.endsWith(".woff2") && FONTS.some((r) => r.test(f)));
         const tags = [
-          // nur ergänzen, was Vite nicht schon selbst vorlädt
-          ...[...chunks].filter((f) => !html.includes(f)).map((f) => `<link rel="modulepreload" crossorigin href="./${f}">`),
+          ...[...chunks].map((f) => `<link rel="modulepreload" crossorigin href="./${f}">`),
           ...fonts.map((f) => `<link rel="preload" as="font" type="font/woff2" crossorigin href="./${f}">`),
         ];
         return html.replace("</head>", `    ${tags.join("\n    ")}\n  </head>`);
