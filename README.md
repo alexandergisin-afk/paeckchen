@@ -32,7 +32,7 @@ Die genaue Beschreibung aller Funktionen, Rollen und Abläufe steht in der **[Sp
 **Gäste (ohne Konto)**
 - Wunschliste über einen Link öffnen, als Kacheln oder Liste, mit Preisfilter
 - Wunsch antippen für alle Details, reservieren mit Namen, auf Wunsch „Bitte besorgt ihr es“
-- Bei Gruppengeschenken einen Betrag beisteuern oder das Geschenk ganz übernehmen
+- Bei Gruppengeschenken einen Betrag beisteuern oder das Geschenk ganz übernehmen und selbst besorgen
 - Eigene Reservierungen auf dem Gerät sehen und wieder aufheben
 - Als App speichern: „Deine Wunschlisten“ sammelt alle geöffneten Listen
 
@@ -40,7 +40,7 @@ Die genaue Beschreibung aller Funktionen, Rollen und Abläufe steht in der **[Sp
 - Mehrere Listen, sortieren und durch Gedrückthalten verschieben, abschließen, wiederverwenden
 - Wünsche in zwei Schritten: Produktsuche bei eBay, Link einfügen oder selbst eintragen; Teilen aus Shop-Apps
 - Priorität, Menge, Notiz, eigenes Foto, Gruppengeschenk, Verschieben und Kopieren zwischen Listen
-- Reservierungen sehen oder für sich ausblenden, für jemanden reservieren, freigeben (mit „Rückgängig“)
+- Reservierungen sehen oder für sich ausblenden, für jemanden reservieren, Reservierungen aufheben (mit „Rückgängig“)
 - Mitbearbeiter einladen, Rechte verwalten, Statistik pro Liste, tägliche Mail und Erinnerungen
 - Verlauf pro Liste: wer wann was geändert oder reserviert hat
 
@@ -79,7 +79,7 @@ src/
   lib/              Logik (Supabase, Gerätespeicher, Zwischenspeicher, Gruppengeschenke, Sortieren, …)
 supabase/
   schema.sql        komplette Datenbank in einer Datei (für neue Projekte)
-  02_…22_*.sql      einzelne Ergänzungen in der Reihenfolge ihrer Entstehung (für bestehende Projekte)
+  02_…23_*.sql      einzelne Ergänzungen in der Reihenfolge ihrer Entstehung (für bestehende Projekte)
   functions/        Edge Functions: link-vorschau, produkt-suche, erinnerungen, zugang
   emails/           Mail-Vorlagen für die Anmeldung
   tests/            Datenbank-Tests (run.sh)

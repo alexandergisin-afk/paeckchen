@@ -4,7 +4,7 @@
 --
 -- Diese Datei enthält jede Funktion, jeden Trigger und jede Zugriffsregel genau einmal in der
 -- aktuellen Fassung. Bestehende Projekte werden stattdessen mit den nummerierten Dateien
--- 02_… bis 22_… schrittweise aktualisiert; das Ergebnis ist in beiden Fällen identisch
+-- 02_… bis 23_… schrittweise aktualisiert; das Ergebnis ist in beiden Fällen identisch
 -- (automatisch geprüft: gleicher Aufbau laut pg_dump).
 --
 -- Prinzipien
@@ -299,9 +299,9 @@ language sql stable security definer set search_path = public as $$
         'group_gift', w.group_gift,
         'target_cents', case when w.group_gift then gift_target(w) end,
         'funded_cents', case when w.group_gift then gift_funded(w.id) end,
-        'contributors', case when w.group_gift then (select count(*) from reservations r where r.wish_id = w.id) end,
+        'contributors', case when w.group_gift then (select count(*) from reservations r where r.wish_id = w.id and r.amount_cents is not null) end,
         'available', case
-          when w.group_gift then case when gift_funded(w.id) >= gift_target(w) then 0 else 1 end
+          when w.group_gift then case when gift_funded(w.id) >= gift_target(w) or gift_self_bought(w.id) then 0 else 1 end
           else w.quantity - coalesce((select sum(r.quantity) from reservations r where r.wish_id = w.id), 0) end
       ) order by w.priority, w.created_at)
       from wishes w where w.list_id = l.id), '[]'::jsonb))
@@ -498,7 +498,7 @@ language sql stable security definer set search_path = public as $$
     where l.archived_at is null and l.event_date in (p_today + 14, p_today + 3)
   ), wq as (
     select w.list_id, w.quantity, w.priority,
-           case when w.group_gift then case when gift_funded(w.id) >= gift_target(w) then w.quantity else 0 end
+           case when w.group_gift then case when gift_funded(w.id) >= gift_target(w) or gift_self_bought(w.id) then w.quantity else 0 end
                 else least(w.quantity, coalesce((select sum(r.quantity) from reservations r where r.wish_id = w.id), 0)) end as tq
     from wishes w where w.list_id in (select id from due)
   )
@@ -598,6 +598,12 @@ alter table public.notify_state enable row level security;   -- kein Zugriff aus
 -- Nicht direkt aufrufbar, nur über reserve_wish und reserve_for_guest.
 -- ---------------------------------------------------------------------
 -- Normales Reservieren ist bei Gruppengeschenken nicht möglich (dafür gibt es Beiträge)
+-- Hat jemand das Gruppengeschenk ganz übernommen? (Reservierung ohne Betrag; eingeführt mit 23_ganz_selbst.sql)
+create or replace function public.gift_self_bought(p_wish uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from reservations where wish_id = p_wish and amount_cents is null and quantity > 0)
+$$;
+
 create or replace function public.reserve_core(p_list uuid, p_event date, p_wish uuid, p_quantity int, p_name text,
                                                p_parents_buy boolean, p_entered_by uuid)
 returns jsonb language plpgsql security definer set search_path = public as $$
@@ -614,7 +620,15 @@ begin
   end if;
   select quantity, group_gift into v_qty, v_group from wishes where id = p_wish and list_id = p_list for update;
   if not found then return jsonb_build_object('ok', false, 'error', 'wish_not_found'); end if;
-  if v_group then return jsonb_build_object('ok', false, 'error', 'group_gift'); end if;
+  -- Gruppengeschenk ganz übernehmen = selbst besorgen; nur solange noch niemand beigesteuert hat
+  if v_group then
+    if exists (select 1 from reservations where wish_id = p_wish) then
+      return jsonb_build_object('ok', false, 'available', 0,
+        'error', case when gift_self_bought(p_wish) then 'already_taken' else 'group_gift_started' end);
+    end if;
+    p_quantity := v_qty;
+    p_parents_buy := false;
+  end if;
   select coalesce(sum(quantity), 0) into v_taken from reservations where wish_id = p_wish;
   if v_taken + p_quantity > v_qty then
     return jsonb_build_object('ok', false, 'error', 'already_taken', 'available', greatest(v_qty - v_taken, 0));
@@ -725,6 +739,8 @@ begin
   select * into v_w from wishes where id = p_wish and list_id = p_list for update;
   if not found then return jsonb_build_object('ok', false, 'error', 'wish_not_found'); end if;
   if not v_w.group_gift then return jsonb_build_object('ok', false, 'error', 'not_group_gift'); end if;
+  -- Hat jemand das Geschenk ganz übernommen (besorgt es selbst), sind keine Beiträge mehr möglich
+  if gift_self_bought(p_wish) then return jsonb_build_object('ok', false, 'error', 'already_taken', 'open_cents', 0); end if;
   v_target := gift_target(v_w);
   v_open := greatest(v_target - gift_funded(p_wish), 0);
   if v_open = 0 then return jsonb_build_object('ok', false, 'error', 'fully_funded', 'open_cents', 0); end if;
@@ -732,6 +748,10 @@ begin
     return jsonb_build_object('ok', false, 'error', 'too_little', 'open_cents', v_open);
   end if;
   if p_amount > v_open then return jsonb_build_object('ok', false, 'error', 'too_much', 'open_cents', v_open); end if;
+  -- Den vollen Betrag als ersten Beitrag gibt es nicht: Wer alles übernimmt, besorgt es selbst (reserve_core)
+  if v_open = v_target and p_amount = v_target then
+    return jsonb_build_object('ok', false, 'error', 'take_whole', 'open_cents', v_open);
+  end if;
   v_code := gen_code();
   insert into reservations (wish_id, quantity, amount_cents, guest_name, code_hash, forget_after, parents_buy, entered_by)
   values (p_wish, 0, p_amount, v_name, hash_code(v_code), coalesce(p_event, current_date) + 60, true, p_entered_by);
@@ -1400,5 +1420,7 @@ revoke execute on function public.decide_access(uuid, boolean, text, uuid[]), pu
 grant execute on function public.decide_access(uuid, boolean, text, uuid[]), public.pending_access_requests() to authenticated;
 revoke execute on function public.apply_list_assignments(uuid, text), public.audit_list_deleted(), public.audit_invites(),
   public.audit_renamed() from public, anon, authenticated;
+
+revoke execute on function public.gift_self_bought(uuid) from public, anon, authenticated;
 
 reset check_function_bodies;

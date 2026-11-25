@@ -14,7 +14,7 @@ import { cached, remember } from "../lib/cache";
 import { forgetGuestList, rememberGuestList } from "../lib/guestLists";
 import { syncDeviceToAccount } from "../lib/followed";
 import { addCode, getCodes, getName, keepCodes, removeCode, setName } from "../lib/device";
-import { IconCheck, IconExt, IconGift, IconGrid, IconRows } from "../components/Icons";
+import { IconBack, IconCheck, IconExt, IconGift, IconGrid, IconRows } from "../components/Icons";
 import { Sheet } from "../components/Sheet";
 import { PriorityBadge, WishTile } from "../components/WishRow";
 import { getItem, hasFlag, KEYS, setFlag, setItem } from "../lib/storage";
@@ -28,8 +28,8 @@ type Price = "all" | "20" | "50" | "more";
 type GSheet =
   | null
   | { kind: "details"; wish: GuestWish; mode: "open" | "mine" }
-  | { kind: "reserve"; wish: GuestWish }
-  | { kind: "contribute"; wish: GuestWish; full: boolean }
+  | { kind: "reserve"; wish: GuestWish; whole?: boolean }
+  | { kind: "contribute"; wish: GuestWish }
   | { kind: "contributed"; wish: GuestWish; amount: number; complete: boolean }
   | { kind: "giftInfo"; text: string }
   | { kind: "done"; wish: GuestWish; parentsBuy: boolean }
@@ -99,6 +99,16 @@ export function GuestPage() {
 
   useAppStartUrl(token);
 
+  // Angemeldet: Mitglieder der Liste sehen die Vorschau-Leiste mit „Zur Verwaltung“,
+  // alle anderen (z. B. Schenkende mit Konto) einen Weg zurück zu ihren Wunschlisten.
+  const [isMember, setIsMember] = useState<boolean | null>(null);
+  const listId = list?.id;
+  useEffect(() => {
+    if (!session || !listId) { setIsMember(null); return; }
+    db().from("list_members").select("list_id").eq("list_id", listId).eq("user_id", session.user.id).maybeSingle()
+      .then(({ data }) => setIsMember(!!data));
+  }, [session, listId]);
+
   useRefreshOnReturn(() => load());
 
   useEffect(() => {
@@ -147,6 +157,7 @@ export function GuestPage() {
       setSheet({ kind: "done", wish, parentsBuy });
       celebrate("small");
     } else if (r.error === "already_taken") setSheet({ kind: "taken", available: r.available ?? 0 });
+    else if (r.error === "group_gift_started") setSheet({ kind: "giftInfo", text: "Inzwischen hat jemand etwas zu diesem Geschenk beigesteuert. Ganz übernehmen geht deshalb nicht mehr, aber du kannst gern mitschenken." });
     else if (r.error === "name_required") return toast("Bitte gib deinen Namen an.");
     else if (r.error === "rate_limited") return toast("Gerade wurde auf dieser Liste sehr viel reserviert. Bitte versuch es in einer Minute noch einmal.");
     else setState("invalid");
@@ -167,6 +178,8 @@ export function GuestPage() {
       setSheet({ kind: "contributed", wish, amount, complete });
       celebrate(complete ? "big" : "small");
     } else if (r.error === "too_much") setSheet({ kind: "giftInfo", text: `Inzwischen fehlen nur noch ${euroShort(r.open_cents ?? 0)}. Du kannst gern diesen Rest übernehmen.` });
+    else if (r.error === "take_whole") setSheet({ kind: "reserve", wish, whole: true });
+    else if (r.error === "already_taken") setSheet({ kind: "giftInfo", text: "Inzwischen hat jemand dieses Geschenk ganz übernommen und besorgt es selbst." });
     else if (r.error === "fully_funded") setSheet({ kind: "giftInfo", text: "Gerade ist der letzte Betrag zusammengekommen. Das Geschenk ist komplett, danke trotzdem!" });
     else if (r.error === "too_little") return toast(`Bitte mindestens ${euroShort(Math.min(500, r.open_cents ?? 500))}.`);
     else if (r.error === "rate_limited") return toast("Gerade ist hier sehr viel los. Bitte versuch es in einer Minute noch einmal.");
@@ -204,7 +217,7 @@ export function GuestPage() {
           <div className="body">
             <h3>{w.title}</h3>
             {w.price_cents != null && <p className="note">{formatPrice(w.price_cents)}</p>}
-            <p className="taken-tag">{group ? "Komplett zusammen" : "Schon vergeben"}</p>
+            <p className="taken-tag">{group && funded >= target ? "Komplett zusammen" : "Schon vergeben"}</p>
           </div>
         </article>
       );
@@ -219,7 +232,7 @@ export function GuestPage() {
             <span className="gtitle">{w.title}</span>
             {w.note && <span className="note">{w.note}</span>}
             {w.price_cents != null && <span className="price">{formatPrice(w.price_cents)}</span>}
-            {group && (
+            {group && !(mode === "mine" && myAmount === 0) && (
               <span className="gift-box">
                 <span className="gift-sum"><span><b>{euroShort(funded)}</b> von {euroShort(target)}</span>{!tiles && (w.contributors ?? 0) > 0 && <small>{w.contributors} {w.contributors === 1 ? "Person macht" : "Personen machen"} mit</small>}</span>
                 <span className="progress" aria-hidden="true"><span style={{ width: `${target ? Math.min(100, Math.round((funded / target) * 100)) : 0}%` }} /></span>
@@ -245,8 +258,8 @@ export function GuestPage() {
     return (
       <>
         {mode === "open" && !group && <button className="btn ribbon big" onClick={() => setSheet({ kind: "reserve", wish: w })}><IconGift /> Reservieren</button>}
-        {mode === "open" && group && <button className="btn ribbon big" onClick={() => setSheet({ kind: "contribute", wish: w, full: false })}><IconGift /> Mitschenken</button>}
-        {mode === "open" && group && funded === 0 && where !== "tile" && <button className="btn quiet" onClick={() => setSheet({ kind: "contribute", wish: w, full: true })}>Ich schenke es ganz</button>}
+        {mode === "open" && group && <button className="btn ribbon big" onClick={() => setSheet({ kind: "contribute", wish: w })}><IconGift /> Mitschenken</button>}
+        {mode === "open" && group && funded === 0 && where !== "tile" && <button className="btn quiet" onClick={() => setSheet({ kind: "reserve", wish: w, whole: true })}>Ich schenke es ganz</button>}
         {mode === "mine" && my.map((m) => (
           <button key={m.code || m.id} className="btn quiet" onClick={() => setSheet({ kind: "cancel", wish: w, code: m.code, id: m.id })}>{m.amount_cents != null ? "Beitrag zurückziehen" : "Reservierung aufheben"}</button>
         ))}
@@ -261,12 +274,13 @@ export function GuestPage() {
   return (
     <div className="wrap">
       <PullIndicator {...ptr} />
-      {session && (
+      {session && isMember === true && (
         <div className="preview">
           <span><b>Vorschau:</b> So sehen Gäste diese Liste. Namen von Schenkenden sind hier nie sichtbar.</span>
           <Link className="btn small soft" to={`/liste/${list.id}`}>Zur Verwaltung</Link>
         </div>
       )}
+      {session && isMember === false && <Link className="back" to="/"><IconBack /> Deine Wunschlisten</Link>}
       <section className="guest-head">
         <span className={`hero-cover t${c.t}`} aria-hidden="true">{c.e}</span>
         <div>
@@ -322,13 +336,13 @@ export function GuestPage() {
       )}
 
       <p className="hint mt-34 ta-center">
-        Auf einem anderen Gerät reserviert oder umentschieden? Sag einfach der Familie Bescheid, dann wird die Reservierung freigegeben.
+        Auf einem anderen Gerät reserviert oder umentschieden? Sag einfach der Familie Bescheid, dann wird die Reservierung aufgehoben.
       </p>
 
       <GuestFooter token={token} signedIn={!!session} />
 
       <Sheet open={sheet?.kind === "reserve"} onClose={close} label="Wunsch reservieren">
-        {sheet?.kind === "reserve" && <ReserveForm wish={sheet.wish} allowParentsBuy={!!list?.allow_parents_buy} busy={busy} onSubmit={(q, n, pb) => reserve(sheet.wish, q, n, pb)} />}
+        {sheet?.kind === "reserve" && <ReserveForm wish={sheet.wish} whole={!!sheet.whole} allowParentsBuy={!!list?.allow_parents_buy} busy={busy} onSubmit={(q, n, pb) => reserve(sheet.wish, q, n, pb)} />}
       </Sheet>
 
       <Sheet open={sheet?.kind === "details"} onClose={close} label="Wunsch im Detail">
@@ -347,7 +361,7 @@ export function GuestPage() {
               <h2>{w.title}</h2>
               {w.price_cents != null && <p className="price">{formatPrice(w.price_cents)}{w.quantity > 1 && !group ? ` pro Stück` : ""}</p>}
               {w.note && <p className="gdetail-note">{w.note}</p>}
-              {group && (
+              {group && !(mode === "mine" && myAmount === 0) && (
                 <div className="gift-box">
                   <div className="gift-sum"><span><b>{euroShort(funded)}</b> von {euroShort(target)}</span>{(w.contributors ?? 0) > 0 && <small>{w.contributors} {w.contributors === 1 ? "Person macht" : "Personen machen"} mit</small>}</div>
                   <span className="progress big" aria-hidden="true"><span style={{ width: `${target ? Math.min(100, Math.round((funded / target) * 100)) : 0}%` }} /></span>
@@ -367,7 +381,7 @@ export function GuestPage() {
 
       <Sheet open={sheet?.kind === "contribute"} onClose={close} label="Mitschenken">
         {sheet?.kind === "contribute" && (
-          <ContributeForm wish={sheet.wish} full={sheet.full} busy={busy} onSubmit={(a, n) => contribute(sheet.wish, a, n)} />
+          <ContributeForm wish={sheet.wish} busy={busy} onSubmit={(a, n) => contribute(sheet.wish, a, n)} onTakeWhole={() => setSheet({ kind: "reserve", wish: sheet.wish, whole: true })} />
         )}
       </Sheet>
 

@@ -176,7 +176,7 @@ function RolesTable() {
     ["Wünsche hinzufügen, bearbeiten, löschen", true, true, false],
     ["Liste bearbeiten, abschließen, wiederverwenden", true, true, false],
     ["Sehen, wer was reserviert hat", true, true, false],
-    ["Reservierungen freigeben", true, true, false],
+    ["Reservierungen aufheben", true, true, false],
     ["Mitbearbeiter einladen und entfernen", true, false, false],
     ["Gast-Link erneuern", true, false, false],
     ["Liste löschen", true, false, false],

@@ -142,7 +142,7 @@ export function TeamPage() {
         <section className="panel roles">
           <h2>Wer darf was?</h2>
           <div><b>Besitzer</b><span className="hint">Alles, auch einladen, Zugang entziehen, Gast-Link erneuern und die Liste löschen.</span></div>
-          <div><b>Mitbearbeiter</b><span className="hint">Wünsche hinzufügen, bearbeiten, löschen, die Liste teilen und Reservierungen freigeben.</span></div>
+          <div><b>Mitbearbeiter</b><span className="hint">Wünsche hinzufügen, bearbeiten, löschen, die Liste teilen und Reservierungen aufheben.</span></div>
           <div><b>Gäste</b><span className="hint">Brauchen kein Konto. Sehen die Wünsche und reservieren. Die Namen anderer Schenkender sehen sie nie.</span></div>
         </section>
       </div>

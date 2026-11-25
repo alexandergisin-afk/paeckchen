@@ -242,3 +242,62 @@ test("Angemeldet: kein Hinweis aufs Konto in der Gästeansicht", async ({ page }
   await expect(page.getByRole("heading", { name: "Emmas 9. Geburtstag" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Mit Konto schenken" })).toHaveCount(0);
 });
+
+const emptyGroupGift = {
+  id: "x", title: "Emmas 9. Geburtstag", recipient_name: "Emma", occasion: "birthday", event_date: "2026-12-14", description: null, cover: 0,
+  wishes: [{ id: "a", title: "Laufrad gemeinsam", url: null, shop: null, image_path: null, price_cents: 30000, quantity: 1, priority: "heart", note: null, group_gift: true, target_cents: 30000, funded_cents: 0, contributors: 0, available: 1 }],
+};
+
+test("Gruppengeschenk ganz übernehmen: wird reserviert, die Person besorgt es selbst", async ({ page }) => {
+  const calls = await mockSupabase(page);
+  await page.route(/rpc\/guest_list/, (r) => r.fulfill({ json: emptyGroupGift }));
+  await page.goto("/#/w/TOK");
+  await page.getByRole("button", { name: "Laufrad gemeinsam: alle Details" }).click();
+  await page.locator("dialog.sheet[open]").getByRole("button", { name: "Ich schenke es ganz" }).click();
+  const dlg = page.locator("dialog.sheet[open]");
+  await expect(dlg.getByRole("heading", { name: "„Laufrad gemeinsam“ ganz übernehmen" })).toBeVisible();
+  await expect(dlg).toContainText("besorgst es selbst");
+  await expect(dlg.getByText("Bitte besorgt ihr das Geschenk")).toHaveCount(0);
+  await dlg.getByLabel("Dein Name").fill("Tante Sabine");
+  await dlg.getByRole("button", { name: "Ganz übernehmen" }).click();
+  await expect.poll(() => calls.bodies.find((b) => b.fn === "reserve_wish")).toMatchObject({ p_wish: "a", p_name: "Tante Sabine", p_parents_buy: false });
+  expect(calls.bodies.find((b) => b.fn === "contribute")).toBeUndefined();
+});
+
+test("Mitschenken bei leerem Gruppengeschenk: „Ganz“ und voller Betrag führen zum Übernehmen", async ({ page }) => {
+  await mockSupabase(page);
+  await page.route(/rpc\/guest_list/, (r) => r.fulfill({ json: emptyGroupGift }));
+  await page.goto("/#/w/TOK");
+  await page.locator(".gcard", { hasText: "Laufrad gemeinsam" }).getByRole("button", { name: "Mitschenken" }).click();
+  let dlg = page.locator("dialog.sheet[open]");
+  // „Ganz“ führt direkt zum ganz Übernehmen (selbst besorgen)
+  await dlg.getByRole("button", { name: /^Ganz/ }).click();
+  await expect(page.getByRole("heading", { name: "„Laufrad gemeinsam“ ganz übernehmen" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  // Voller Betrag von Hand: Hinweis mit Knopf
+  await page.locator(".gcard", { hasText: "Laufrad gemeinsam" }).getByRole("button", { name: "Mitschenken" }).click();
+  dlg = page.locator("dialog.sheet[open]");
+  await dlg.getByLabel("Anderer Betrag").fill("300");
+  await expect(dlg).toContainText("Mit dem ganzen Betrag übernimmst du das Geschenk komplett");
+  await expect(dlg.getByRole("button", { name: /beisteuern/ })).toBeDisabled();
+  await dlg.getByRole("button", { name: "Ganz übernehmen und selbst besorgen" }).click();
+  await expect(page.getByRole("heading", { name: "„Laufrad gemeinsam“ ganz übernehmen" })).toBeVisible();
+});
+
+test("Konto zum Schenken: statt „Zur Verwaltung“ ein Weg zurück zu den eigenen Wunschlisten", async ({ page }) => {
+  await mockSupabase(page, { signedIn: true, guestAccount: true });
+  await page.goto("/#/w/TOK");
+  await expect(page.getByRole("heading", { name: "Emmas 9. Geburtstag" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Deine Wunschlisten" }).first()).toBeVisible();
+  await expect(page.getByRole("link", { name: "Zur Verwaltung" })).toHaveCount(0);
+  await expect(page.getByText(/Vorschau:/)).toHaveCount(0);
+  await page.getByRole("link", { name: "Deine Wunschlisten" }).first().click();
+  await expect(page).toHaveURL(/#\/$/);
+});
+
+test("Mitglied der Liste: Vorschau-Leiste mit „Zur Verwaltung“ wie bisher", async ({ page }) => {
+  await mockSupabase(page, { signedIn: true });
+  await page.goto("/#/w/TOK");
+  await expect(page.getByText(/Vorschau:/)).toBeVisible();
+  await expect(page.getByRole("link", { name: "Zur Verwaltung" })).toBeVisible();
+});

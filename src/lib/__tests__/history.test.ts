@@ -29,7 +29,7 @@ group("Verlauf in Sätzen", () => {
   });
   it("Aufheben durch Gast und Freigeben durch Eltern", () => {
     expect(describe(E("reservation", "cancelled", { wish: "Brille", guest: "Oma" }, "Oma"))).toBe("Oma hat die Reservierung für „Brille“ aufgehoben.");
-    expect(describe(E("reservation", "released", { wish: "Brille", guest: "Oma" }))).toBe("Julia hat die Reservierung von Oma für „Brille“ freigegeben.");
+    expect(describe(E("reservation", "released", { wish: "Brille", guest: "Oma" }))).toBe("Julia hat die Reservierung von Oma für „Brille“ aufgehoben.");
   });
   it("Verschieben in beide Richtungen", () => {
     expect(describe(E("wish", "moved_out", { title: "Ball", to: "Leons Liste" }))).toBe("Julia hat „Ball“ nach „Leons Liste“ verschoben.");
@@ -91,5 +91,22 @@ group("Kurze Zeitangaben für „Zuletzt“", () => {
     expect(relTime("2026-11-13T12:00:00", now)).toBe("vor 3 Std.");
     expect(relTime("2026-11-12T20:00:00", now)).toBe("gestern");
     expect(relTime("2026-11-02T20:00:00", now)).toBe("am 2. Nov.");
+  });
+});
+
+import { giftSelfBought, reservedValue, takenQuantity } from "../gift";
+group("Gruppengeschenk ganz übernommen", () => {
+  const w = { group_gift: true, price_cents: 30000, quantity: 1 };
+  it("zählt als vergeben mit vollem Wert", () => {
+    const rs = [{ quantity: 1, amount_cents: null }];
+    expect(giftSelfBought(rs)).toBe(true);
+    expect(takenQuantity(w, rs)).toBe(1);
+    expect(reservedValue(w, rs)).toBe(30000);
+  });
+  it("Beiträge allein sind kein Übernehmen", () => {
+    const rs = [{ quantity: 0, amount_cents: 10000 }];
+    expect(giftSelfBought(rs)).toBe(false);
+    expect(takenQuantity(w, rs)).toBe(0);
+    expect(reservedValue(w, rs)).toBe(10000);
   });
 });

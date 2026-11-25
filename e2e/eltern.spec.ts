@@ -120,7 +120,7 @@ test("Gruppengeschenk: Eltern sehen Beiträge mit Namen und tragen einen Beitrag
   await page.goto(`/#/liste/${LID}`);
   await expect(page.getByText("100 € von 300 € von 1 Person")).toBeVisible();
   await page.locator(".wrow-btn", { hasText: "Laufrad gemeinsam" }).click();
-  await expect(page.getByRole("button", { name: "Beitrag von Onkel Tobias (100 €) freigeben" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Beitrag von Onkel Tobias (100 €) aufheben" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Für jemanden reservieren" })).toHaveCount(0);
   const panel = page.getByRole("region", { name: "Beiträge zum Gruppengeschenk" });
   await expect(panel).toContainText("Onkel Tobias");
@@ -444,12 +444,12 @@ test("Wunsch mit fremder Reservierung löschen: Rückfrage nennt die Person", as
   await expect(page.locator("dialog.sheet[open]")).toContainText("Oma Gisela hat diesen Wunsch schon reserviert");
 });
 
-test("Reservierung freigeben: sofort, mit „Rückgängig“", async ({ page }) => {
+test("Reservierung aufheben: sofort, mit „Rückgängig“", async ({ page }) => {
   const calls = await mockSupabase(page, { signedIn: true });
   await page.goto(`/#/liste/${LID}`);
   await page.locator(".wrow-btn", { hasText: "Schwimmbrille" }).click();
-  await page.getByRole("button", { name: /Reservierung von Oma Gisela freigeben/ }).click();
-  await expect(page.locator("#toast")).toContainText("Reservierung von Oma Gisela freigegeben");
+  await page.getByRole("button", { name: /Reservierung von Oma Gisela aufheben/ }).click();
+  await expect(page.locator("#toast")).toContainText("Reservierung von Oma Gisela aufgehoben");
   await page.locator("#toast").getByRole("button", { name: "Rückgängig" }).click();
   await page.waitForTimeout(6500);
   expect(calls.writes.some((w) => w.startsWith("DELETE reservations"))).toBe(false);
@@ -719,4 +719,17 @@ test("Schutz vor Clickjacking: eingebettet zeigt Päckli nur einen Hinweis", asy
   await expect(frame.getByText("Aus Sicherheitsgründen lässt sich Päckli nicht in anderen Seiten anzeigen.")).toBeVisible();
   await expect(frame.getByRole("link", { name: "Päckli direkt öffnen" })).toHaveAttribute("target", "_blank");
   await expect(frame.getByRole("button", { name: "Neue Liste" })).toHaveCount(0);
+});
+
+test("Gruppengeschenk ganz übernommen: Eltern sehen, wer es selbst besorgt", async ({ page }) => {
+  await mockSupabase(page, { signedIn: true, selfBought: true });
+  await page.goto(`/#/liste/${LID}`);
+  const row = page.locator(".wrow-btn", { hasText: "Laufrad gemeinsam" });
+  await expect(row).toContainText("Tante Sabine übernimmt es ganz und besorgt es selbst");
+  await expect(row.locator(".gift-progress")).toHaveCount(0);
+  await row.click();
+  const panel = page.getByRole("region", { name: "Beiträge zum Gruppengeschenk" });
+  await expect(panel).toContainText("übernimmt es ganz und besorgt es selbst");
+  await expect(panel.getByRole("button", { name: "Reservierung von Tante Sabine aufheben" })).toBeVisible();
+  await expect(panel.getByRole("button", { name: "Beitrag eintragen" })).toHaveCount(0);
 });

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { PRIORITIES, type Reservation, type Wish } from "../lib/types";
 import { formatPrice, guessEmoji, imageUrl, tintFor } from "../lib/wishes";
-import { euroShort, giftFunded, giftTarget, isGroupGift, takenQuantity } from "../lib/gift";
+import { euroShort, giftFunded, giftSelfBought, giftTarget, isGroupGift, takenQuantity } from "../lib/gift";
 import { Bow, IconChevron, IconExt } from "./Icons";
 
 /** Produktkachel. „wrapped“ legt die Geschenkschleife darum (= vergeben), „animate“ bindet sie sichtbar zu. */
@@ -41,6 +41,8 @@ export function PriorityBadge({ priority }: { priority: Wish["priority"] }) {
 /** Statuszeile für Eltern: „Noch frei“, „Reserviert von …“ oder „1 reserviert von …, noch 2 frei“. */
 export function reservationStatus(wish: Wish, reservations: Reservation[]): { text: string; free: boolean } {
   if (isGroupGift(wish)) {
+    const self = reservations.find((r) => r.amount_cents == null && r.quantity > 0);
+    if (self) return { text: `${self.guest_name} übernimmt es ganz und besorgt es selbst`, free: false };
     const funded = giftFunded(reservations), target = giftTarget(wish), n = reservations.length;
     if (n === 0) return { text: "Gemeinsam schenken: noch nichts zugesagt", free: true };
     const people = `${n} ${n === 1 ? "Person" : "Personen"}`;
@@ -82,8 +84,8 @@ export function WishRow({ wish, reservations, showReservations, onOpen }: {
         <span className="wrow-meta"><PriorityBadge priority={wish.priority} />{isGroupGift(wish) && <span className="badge group-badge">Gemeinsam</span>}{meta && <span>{meta}</span>}</span>
         {wish.note && <span className="wrow-note">{wish.note}</span>}
         {showReservations && <span className={`status-line ${status.free ? "is-free" : "is-res"}`}>{status.text}</span>}
-        {showReservations && isGroupGift(wish) && <GiftProgress wish={wish} reservations={reservations} />}
-        {showReservations && isGroupGift(wish) && reservations.length > 0 && (
+        {showReservations && isGroupGift(wish) && !giftSelfBought(reservations) && <GiftProgress wish={wish} reservations={reservations} />}
+        {showReservations && isGroupGift(wish) && !giftSelfBought(reservations) && reservations.length > 0 && (
           <span className="contrib-names">
             {[...reservations].sort((a, b) => (b.amount_cents ?? 0) - (a.amount_cents ?? 0)).map((r) => `${r.guest_name} ${euroShort(r.amount_cents ?? 0)}`).join(", ")}
           </span>
@@ -124,7 +126,7 @@ export function WishCard({ wish, reservations, showReservations, onOpen }: {
         <span className="wcard-title">{wish.title}</span>
         {wish.price_cents != null && <span className="wcard-price">{formatPrice(wish.price_cents)}{wish.quantity > 1 ? ` × ${wish.quantity}` : ""}</span>}
         {showReservations && <span className={`status-line ${status.free ? "is-free" : "is-res"}`}>{status.text}</span>}
-        {showReservations && isGroupGift(wish) && <GiftProgress wish={wish} reservations={reservations} />}
+        {showReservations && isGroupGift(wish) && !giftSelfBought(reservations) && <GiftProgress wish={wish} reservations={reservations} />}
       </span>
     </button>
     {wish.url && <ShopLink wish={wish} className="wcard-shop" />}

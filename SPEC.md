@@ -57,7 +57,7 @@ Päckli hilft Familien, Geschenkwünsche zu sammeln und doppelte Geschenke zu ve
 | Wünsche anlegen, bearbeiten, löschen, verschieben | ✓ | ✓ | – | – |
 | Liste bearbeiten, abschließen, wiederverwenden | ✓ | ✓ | – | – |
 | Sehen, wer was reserviert hat (eigener Schalter) | ✓ | ✓ | – | – |
-| Für jemanden reservieren oder Beitrag eintragen, freigeben | ✓ | ✓ | – | – |
+| Für jemanden reservieren oder Beitrag eintragen, Reservierungen aufheben | ✓ | ✓ | – | – |
 | Mitbearbeiter einladen und entfernen | ✓ | – | – | – |
 | Gast-Link erneuern, Liste löschen | ✓ | – | – | – |
 | Liste verlassen | – | ✓ | – | – |
@@ -127,10 +127,12 @@ Abrufen fremder Seiten und Mails.
 - **F-30** Erreichbar über den Gast-Link ohne Konto; Kacheln oder Liste, Preisfilter.
 - **F-31** Kacheln mit festem Aufbau (gleich hoch, Knöpfe auf einer Linie); ein Tipp zeigt alle Details.
 - **F-32** Reservieren mit Pflichtnamen und optional Stückzahl; „Bitte besorgt ihr es“, wenn die Liste es erlaubt.
-- **F-33** Gruppengeschenke: Summe und Anzahl der Beitragenden sichtbar, nie Namen oder Einzelbeträge. Beiträge ab 5 €, höchstens der offene Rest; „Ich schenke es ganz“, solange niemand beigetragen hat.
+- **F-33** Gruppengeschenke: Summe und Anzahl der Beitragenden sichtbar, nie Namen oder Einzelbeträge. Beiträge ab 5 €, höchstens der offene Rest; das Geld geht an die Eltern, die das Geschenk kaufen.
+- **F-33a** „Ich schenke es ganz“ (nur solange niemand beigetragen hat) reserviert das Gruppengeschenk wie einen normalen Wunsch: Die Person **besorgt es selbst**. Danach sind keine Beiträge mehr möglich. Im Mitschenken-Dialog führt „Ganz“ direkt dorthin; den vollen Betrag als ersten Beitrag gibt es nicht, wer ihn von Hand eingibt, wird ebenfalls zum ganz Übernehmen geführt.
 - **F-34** Das Gerät merkt sich die eigenen Reservierungscodes; Aufheben auf demselben Gerät.
 - **F-35** Erklärung beim ersten Besuch, danach eingeklappt.
 - **F-36** Das Gerät merkt sich geöffnete Wunschlisten. Ohne Link oder als App geöffnet erscheint „Deine Wunschlisten“ (bevorstehende Anlässe zuerst, einzeln entfernbar), mit Link zur Anmeldung für Eltern.
+- **F-41a** Angemeldete Mitglieder der Liste sehen in der Gästeansicht die Leiste „Vorschau“ mit „Zur Verwaltung“; alle anderen Angemeldeten (z. B. Schenkende mit Konto) stattdessen „‹ Deine Wunschlisten“.
 - **F-38** Angemeldet (Konto zum Schenken oder Familie): Wer einen Gast-Link öffnet, speichert die Liste am Konto („Wunschlisten zum Schenken“, auf jedem Gerät gleich). Eltern können ein Konto auch per E-Mail hinzufügen. Das ist keine Mitgliedschaft: weiterhin nur die Gästeansicht.
 - **F-39** Angemeldet reservierte Geschenke gehören dem Konto und lassen sich von jedem Gerät ohne Code aufheben. Beim ersten Anmelden werden Reservierungen und geöffnete Listen dieses Geräts ins Konto übernommen.
 - **F-40** Ohne Anmeldung zeigen Gästeansicht und „Deine Wunschlisten“ einen Hinweis aufs Konto („Anmelden oder Konto anlegen“). Nach der Anmeldung, per Code oder per Link aus der Mail, geht es zurück zur Wunschliste, von der man kam.
@@ -139,8 +141,9 @@ Abrufen fremder Seiten und Mails.
 ### 5.5 Reservierungen aus Elternsicht
 - **F-40** Pro Person schaltbar: Reservierungen anzeigen oder ausblenden (Überraschungsschutz).
 - **F-41** Für jemanden reservieren bzw. einen Beitrag eintragen (z. B. nach einem Anruf); „Rest selbst übernehmen“.
+- **F-44** Ganz übernommene Gruppengeschenke erscheinen bei den Eltern als „… übernimmt es ganz und besorgt es selbst“, mit „Aufheben“.
 - **F-43** Gruppengeschenke: Übersicht aller Beiträge mit Namen und Betrag, Summe, offener Rest, jeweils „Freigeben“; in der Liste stehen die Beitragenden direkt beim Wunsch.
-- **F-42** Freigeben mit „Rückgängig“.
+- **F-42** Reservierungen und Beiträge aufheben, mit „Rückgängig“.
 
 ### 5.6 Mitglieder und Zugriff
 - **F-50** Einladen per Link (einmalig, 7 Tage gültig) und Freischalten der Adresse.
@@ -408,14 +411,16 @@ stateDiagram-v2
     [*] --> offen
     state "teilfinanziert" as teil
     offen --> teil: Beitrag
-    offen --> komplett: Ich schenke es ganz
+    state "ganz übernommen" as ganz
+    offen --> ganz: Ich schenke es ganz, besorgt es selbst
+    ganz --> offen: Freigabe oder Aufheben
     teil --> komplett: Beiträge erreichen den Preis
     komplett --> teil: Beitrag zurückgezogen
     teil --> offen: alle Beiträge weg
   }
 ```
 
-„Vergeben“ und „komplett“ zählen in Übersicht, Statistik und Erinnerungen als vergeben; Gäste sehen den Wunsch dann im
+„Vergeben“, „komplett“ und „ganz übernommen“ zählen in Übersicht, Statistik und Erinnerungen als vergeben; Gäste sehen den Wunsch dann im
 Bereich „Schon vergeben“.
 
 ## 9. Schnittstellen
@@ -485,7 +490,7 @@ flowchart TD
   MONTAG["jeden Montag"] --> WACH["wachhalten.yml"]
 ```
 
-Datenbank-Änderungen werden als nummerierte SQL-Dateien geliefert (`supabase/02_…` bis `22_…`) und einmalig im
+Datenbank-Änderungen werden als nummerierte SQL-Dateien geliefert (`supabase/02_…` bis `23_…`) und einmalig im
 SQL Editor ausgeführt; `schema.sql` enthält immer den vollständigen Stand für neue Projekte.
 
 ## 12. Teststrategie

@@ -13,7 +13,7 @@ const write = setJSON;
 export const getCodes = () => read<string[]>(CODES, []);
 export const addCode = (code: string) => write(CODES, [...new Set([...getCodes(), code])].slice(-50));
 export const removeCode = (code: string) => write(CODES, getCodes().filter((c) => c !== code));
-/** Entfernt Codes, deren Reservierung nicht mehr existiert (z. B. von den Eltern freigegeben). */
+/** Entfernt Codes, deren Reservierung nicht mehr existiert (z. B. von den Eltern aufgehoben). */
 export const keepCodes = (valid: Set<string>) => write(CODES, getCodes().filter((c) => valid.has(c)));
 
 export const getName = () => read<string>(NAME, "");

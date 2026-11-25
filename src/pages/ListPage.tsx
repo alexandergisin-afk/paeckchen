@@ -186,7 +186,7 @@ export function ListPage() {
       hidden.current.res.delete(r.id);
       load();
     });
-    toastAction(`Reservierung von ${r.guest_name} freigegeben.`, "Rückgängig", () => {
+    toastAction(`Reservierung von ${r.guest_name} aufgehoben.`, "Rückgängig", () => {
       job.cancel();
       hidden.current.res.delete(r.id);
       load();
@@ -423,7 +423,7 @@ export function ListPage() {
               )}
               {showRes && !isGroupGift(sheet.wish) && resOf(sheet.wish).map((r) => (
                 <button type="button" key={r.id} onClick={() => release(r)}>
-                  <IconUndo /> {r.amount_cents != null ? `Beitrag von ${r.guest_name} (${euroShort(r.amount_cents)}) freigeben` : `Reservierung von ${r.guest_name} freigeben`}
+                  <IconUndo /> {r.amount_cents != null ? `Beitrag von ${r.guest_name} (${euroShort(r.amount_cents)}) aufheben` : `Reservierung von ${r.guest_name} aufheben`}
                 </button>
               ))}
               <button type="button" className="danger" onClick={() => askDeleteWish(sheet.wish)}><IconTrash /> Wunsch löschen</button>

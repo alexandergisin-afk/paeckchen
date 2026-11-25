@@ -162,7 +162,7 @@ select pg_temp.als(null);
 select id as gruppe from wishes where title = 'Kinderfahrrad gemeinsam' \gset
 delete from rate_events;
 select pg_temp.als('anon');
-select pg_temp.pruefe(reserve_wish(:'gast', :'gruppe', 1, 'Oma')->>'error' = 'group_gift', 'Gruppengeschenk lässt sich nicht normal reservieren');
+select pg_temp.pruefe(contribute(:'gast', :'gruppe', 34900, 'Oma')->>'error' = 'take_whole', 'Voller Betrag als erster Beitrag: stattdessen ganz übernehmen und selbst besorgen');
 select pg_temp.pruefe(contribute(:'gast', :'gruppe', 300, 'Klein')->>'error' = 'too_little', 'Beitrag unter 5 € wird abgelehnt');
 select pg_temp.pruefe(contribute(:'gast', :'gruppe', 40000, 'Viel')->>'error' = 'too_much', 'Mehr als der offene Rest wird abgelehnt');
 select contribute(:'gast', :'gruppe', 10000, 'Oma Gisela')->>'code' as beitrag \gset
@@ -516,6 +516,31 @@ select pg_temp.pruefe((select data->>'title' from audit_log where kind = 'access
   'Gelöschte Liste bleibt im Sicherheitsprotokoll, mit Namen');
 select pg_temp.als('22222222-2222-2222-2222-222222222222');
 select pg_temp.pruefe((select count(*) from audit_log where action = 'list_deleted') = 0, 'Gelöschte Listen sehen nur Administratoren');
+select pg_temp.als(null);
+
+
+-- Gruppengeschenk ganz übernehmen = selbst besorgen
+select pg_temp.als('11111111-1111-1111-1111-111111111111');
+select id as gl, guest_token as gt from lists where title = 'Emmas Geburtstag' \gset
+insert into wishes (list_id, title, price_cents, group_gift, created_by) values (:'gl', 'Puppenhaus gemeinsam', 12000, true, auth.uid());
+insert into wishes (list_id, title, price_cents, group_gift, created_by) values (:'gl', 'Roller gemeinsam', 8000, true, auth.uid());
+select pg_temp.als(null);
+select id as haus from wishes where title = 'Puppenhaus gemeinsam' \gset
+select id as roller from wishes where title = 'Roller gemeinsam' \gset
+delete from rate_events;
+select pg_temp.als('anon');
+select pg_temp.pruefe((reserve_wish(:'gt', :'haus', 1, 'Tante Sabine', true)->>'ok')::boolean, 'Leeres Gruppengeschenk lässt sich ganz übernehmen');
+select pg_temp.als(null);
+select pg_temp.pruefe((select not parents_buy and amount_cents is null and quantity = 1 from reservations where wish_id = :'haus'),
+  'Ganz übernommen heißt selbst besorgen (auch wenn „bitte besorgt ihr es“ mitgeschickt wurde)');
+select pg_temp.als('anon');
+select pg_temp.pruefe((select (w->>'available')::int = 0 and (w->>'contributors')::int = 0 from jsonb_array_elements(guest_list(:'gt')->'wishes') w where w->>'id' = :'haus'),
+  'Gästeansicht zeigt das Geschenk als vergeben, ohne Beitragende');
+select pg_temp.pruefe(contribute(:'gt', :'haus', 1000, 'Onkel')->>'error' = 'already_taken', 'Nach dem Übernehmen sind keine Beiträge mehr möglich');
+select pg_temp.pruefe(reserve_wish(:'gt', :'haus', 1, 'Opa')->>'error' = 'already_taken', 'Ein zweites Übernehmen ist nicht möglich');
+select pg_temp.pruefe((contribute(:'gt', :'roller', 2000, 'Onkel')->>'ok')::boolean, 'Beitrag zu einem anderen Gruppengeschenk');
+select pg_temp.pruefe(reserve_wish(:'gt', :'roller', 1, 'Opa')->>'error' = 'group_gift_started', 'Mit Beiträgen lässt sich ein Gruppengeschenk nicht mehr ganz übernehmen');
+select pg_temp.pruefe((contribute(:'gt', :'roller', 6000, 'Oma')->>'ok')::boolean, 'Rest beisteuern geht weiterhin (die Eltern besorgen es)');
 select pg_temp.als(null);
 
 \echo 'Alle Datenbank-Tests bestanden.'

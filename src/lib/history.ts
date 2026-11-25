@@ -90,8 +90,8 @@ export function describe(e: AuditEntry): string {
       return contribution ? `${guest} hat den Beitrag zu ${wish} zurückgezogen.` : `${guest} hat die Reservierung für ${wish} aufgehoben.`;
     case "reservation:released":
       return contribution
-        ? `${who} hat den Beitrag von ${guest} zu ${wish} freigegeben.`
-        : `${who} hat die Reservierung von ${guest} für ${wish} freigegeben.`;
+        ? `${who} hat den Beitrag von ${guest} zu ${wish} aufgehoben.`
+        : `${who} hat die Reservierung von ${guest} für ${wish} aufgehoben.`;
     // Mitglieder
     case "member:joined": return `${member} ist der Liste als Mitbearbeiter beigetreten.`;
     case "member:added": return e.actor_name ? `${who} hat ${member} als Mitbearbeiter hinzugefügt.` : `${member} wurde als Mitbearbeiter hinzugefügt.`;

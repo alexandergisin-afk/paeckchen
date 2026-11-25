@@ -30,7 +30,7 @@ const LIST2 = {
 export interface Calls { lists: string[]; rpc: string[]; writes: string[]; bodies: Record<string, unknown>[] }
 
 /** Beantwortet alle Supabase-Anfragen mit Testdaten und protokolliert sie. */
-export async function mockSupabase(page: Page, opts: { signedIn?: boolean; allowParentsBuy?: boolean; slowListMs?: number; recent?: string[]; admin?: boolean; loginBlocked?: boolean; invitePending?: boolean; emptyList?: boolean; guestAccount?: boolean; followed?: boolean; accountReservation?: boolean } = {}): Promise<Calls> {
+export async function mockSupabase(page: Page, opts: { signedIn?: boolean; allowParentsBuy?: boolean; slowListMs?: number; recent?: string[]; admin?: boolean; loginBlocked?: boolean; invitePending?: boolean; emptyList?: boolean; guestAccount?: boolean; followed?: boolean; accountReservation?: boolean; selfBought?: boolean } = {}): Promise<Calls> {
   const calls: Calls = { lists: [], rpc: [], writes: [], bodies: [] };
   const order = new Map<string, number>(); // gespeicherte Reihenfolge wie in der echten Datenbank
   const withOrder = <T extends { id: string; list_members: object[] }>(l: T): T =>
@@ -74,7 +74,11 @@ export async function mockSupabase(page: Page, opts: { signedIn?: boolean; allow
       ]);
     }
     if (url.includes("/rest/v1/list_followers")) { calls.writes.push(`${req.method()} list_followers ${url.split("?")[1] ?? ""}`); return route.fulfill({ status: 204 }); }
-    if (url.includes("/rest/v1/list_members")) return json([{ user_id: UID, role: "owner", profiles: { display_name: "Julia" } }]);
+    if (url.includes("/rest/v1/list_members")) {
+      // Konten zum Schenken sind nirgends Mitglied; einzelne Abfrage (maybeSingle) bekommt ein Objekt oder null
+      const rows = opts.guestAccount ? [] : [{ list_id: LID, user_id: UID, role: "owner", profiles: { display_name: "Julia" } }];
+      return (req.headers()["accept"] ?? "").includes("vnd.pgrst.object") ? json(rows[0] ?? null) : json(rows);
+    }
     if (url.includes("/rest/v1/app_admins")) return json(opts.admin ? { user_id: UID } : null);
     if (url.includes("/functions/v1/produkt-suche")) {
       calls.rpc.push("produkt-suche");
@@ -143,7 +147,9 @@ export async function mockSupabase(page: Page, opts: { signedIn?: boolean; allow
     if (url.includes("/rest/v1/profiles")) return json({ display_name: "Julia", reminder_emails: true, notify_reservations: "daily", list_sort: "custom", account_type: opts.guestAccount ? "guest" : "family" });
     if (url.includes("/rest/v1/lists")) {
       calls.lists.push(url);
-      const nested = { ...LIST, wishes: opts.emptyList ? [] : WISHES.map((w) => ({ ...w, reservations: RES.filter((r) => r.wish_id === w.id) })) };
+      // selfBought: Das Gruppengeschenk „Laufrad“ hat jemand ganz übernommen (Reservierung ohne Betrag)
+      const res = opts.selfBought ? RES.map((r) => (r.id === "r3" ? { ...r, quantity: 1, amount_cents: null, guest_name: "Tante Sabine" } : r)) : RES;
+      const nested = { ...LIST, wishes: opts.emptyList ? [] : WISHES.map((w) => ({ ...w, reservations: res.filter((r) => r.wish_id === w.id) })) };
       if (url.includes("id=eq.")) {
         if (opts.slowListMs) await new Promise((r) => setTimeout(r, opts.slowListMs));
         return json(req.headers()["accept"]?.includes("object") ? nested : [nested]);
