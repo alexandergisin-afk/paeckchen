@@ -10,20 +10,22 @@ import { Login } from "./pages/Login";
 import { GuestHome } from "./pages/GuestHome";
 import { getGuestLists } from "./lib/guestLists";
 import { getItem, KEYS, removeItem, setItem } from "./lib/storage";
+import { UpdateBanner } from "./components/UpdateBanner";
+import { importWithReload } from "./lib/versionCheck";
 
 // Seiten werden erst geladen, wenn man sie öffnet: Gäste laden so nur die Gästeansicht.
-const Dashboard = lazy(() => import("./pages/Dashboard").then((m) => ({ default: m.Dashboard })));
-const ListPage = lazy(() => import("./pages/ListPage").then((m) => ({ default: m.ListPage })));
-const GuestPage = lazy(() => import("./pages/GuestPage").then((m) => ({ default: m.GuestPage })));
-const TeamPage = lazy(() => import("./pages/TeamPage").then((m) => ({ default: m.TeamPage })));
-const InvitePage = lazy(() => import("./pages/InvitePage").then((m) => ({ default: m.InvitePage })));
-const AccountsPage = lazy(() => import("./pages/AccountsPage").then((m) => ({ default: m.AccountsPage })));
-const HistoryPage = lazy(() => import("./pages/HistoryPage").then((m) => ({ default: m.HistoryPage })));
-const RequestsPage = lazy(() => import("./pages/RequestsPage").then((m) => ({ default: m.RequestsPage })));
-const Settings = lazy(() => import("./pages/Settings").then((m) => ({ default: m.Settings })));
-const AccessPage = lazy(() => import("./pages/AccessPage").then((m) => ({ default: m.AccessPage })));
-const SharePage = lazy(() => import("./pages/SharePage").then((m) => ({ default: m.SharePage })));
-const StatsPage = lazy(() => import("./pages/StatsPage").then((m) => ({ default: m.StatsPage })));
+const Dashboard = lazy(importWithReload(() => import("./pages/Dashboard").then((m) => ({ default: m.Dashboard }))));
+const ListPage = lazy(importWithReload(() => import("./pages/ListPage").then((m) => ({ default: m.ListPage }))));
+const GuestPage = lazy(importWithReload(() => import("./pages/GuestPage").then((m) => ({ default: m.GuestPage }))));
+const TeamPage = lazy(importWithReload(() => import("./pages/TeamPage").then((m) => ({ default: m.TeamPage }))));
+const InvitePage = lazy(importWithReload(() => import("./pages/InvitePage").then((m) => ({ default: m.InvitePage }))));
+const AccountsPage = lazy(importWithReload(() => import("./pages/AccountsPage").then((m) => ({ default: m.AccountsPage }))));
+const HistoryPage = lazy(importWithReload(() => import("./pages/HistoryPage").then((m) => ({ default: m.HistoryPage }))));
+const RequestsPage = lazy(importWithReload(() => import("./pages/RequestsPage").then((m) => ({ default: m.RequestsPage }))));
+const Settings = lazy(importWithReload(() => import("./pages/Settings").then((m) => ({ default: m.Settings }))));
+const AccessPage = lazy(importWithReload(() => import("./pages/AccessPage").then((m) => ({ default: m.AccessPage }))));
+const SharePage = lazy(importWithReload(() => import("./pages/SharePage").then((m) => ({ default: m.SharePage }))));
+const StatsPage = lazy(importWithReload(() => import("./pages/StatsPage").then((m) => ({ default: m.StatsPage }))));
 
 /** Seltenere Seiten im Leerlauf vorladen, damit der Wechsel dorthin sofort geht (nicht für Gäste). */
 function prefetchPages() {
@@ -113,6 +115,7 @@ export function App({ linkError }: { linkError: string | null }) {
         <ReturnAfterLogin />
         <TopBar />
         <OfflineBanner />
+        <UpdateBanner />
         <main id="app">
           <RouteErrorBoundary>
           <Suspense fallback={<p className="loading">Einen Moment …</p>}>

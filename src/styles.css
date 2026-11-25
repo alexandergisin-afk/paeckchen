@@ -938,3 +938,7 @@ html, body { overscroll-behavior-y: contain; }
 .my-10-4 { margin: 10px 0 4px !important; }
 .p-12 { padding: 12px !important; }
 .ta-center { text-align: center !important; }
+
+/* Hinweis auf eine neue Version */
+.update-banner { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; padding: 8px 16px; background: var(--plum); color: var(--plum-ink); font-weight: 700; font-size: .92rem; }
+.update-banner .btn { background: var(--surface); color: var(--plum); }

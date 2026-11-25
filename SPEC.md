@@ -160,6 +160,7 @@ Abrufen fremder Seiten und Mails.
 
 ### 5.9 Allgemein
 - **F-80** Nach unten ziehen zum Aktualisieren; automatisches Aktualisieren bei Rückkehr in die App.
+- **F-84** Neue Versionen: Päckli sucht beim Zurückkehren in die App und alle 30 Minuten nach einer neuen Version und zeigt dann „Neue Version von Päckli verfügbar · Aktualisieren“. Fehlt nach einem Update ein Programmteil, lädt die App einmal von selbst neu (höchstens einmal pro Minute) statt eine Fehlermeldung zu zeigen.
 - **F-81** Offline: Start ohne Netz mit dem zuletzt geladenen Stand; Hinweis „Offline“.
 - **F-82** Kleine Freudenmomente (Konfetti) beim Reservieren, bei komplettem Gruppengeschenk und bei komplett vergebener Liste; nicht bei „Bewegung reduzieren“.
 - **F-83** Heller und dunkler Modus nach Geräteeinstellung.
@@ -468,7 +469,7 @@ Alle übrigen Lese- und Schreibzugriffe laufen direkt über die Tabellen, gesch�
 | | Keine Dritten beim Öffnen | Schriften lokal; keine Analyse- oder Werbedienste |
 | **Geschwindigkeit** | Schnelle Bedienung | Wichtige Programmteile und Schriften werden parallel vorgeladen; Listen im Leerlauf vorgeladen; Liste erscheint in unter 1 s auch bei langsamer Datenbank (Test) |
 | **Offline** | Start ohne Netz | Service Worker für die App-Hülle, zuletzt geladene Daten im Gerätespeicher; Startseite immer zuerst aus dem Netz, damit Updates sofort ankommen; gespeicherte Dateien werden unabhängig von Server-Kopfzeilen wie „Vary“ gefunden |
-| **Robustheit** | Netzaussetzer | Leseanfragen werden wiederholt, schreibende nicht (keine Doppelbuchungen); Absturzschutz mit „Neu laden“ |
+| **Robustheit** | Netzaussetzer und Updates | Leseanfragen werden wiederholt, schreibende nicht (keine Doppelbuchungen); fehlt nach einem Update ein Programmteil, lädt die App einmal neu; Hinweis auf neue Versionen; Absturzschutz mit „Neu laden“ |
 | **Barrierefreiheit** | Lesbar und bedienbar | Kontrast mindestens 4,5:1 in hell und dunkel (gemessen); Tippflächen ab 44 px; Tastaturbedienung inkl. Verschieben; Rücksicht auf „Bewegung reduzieren“ |
 | **Geräte** | Handy zuerst | Getestet auf 320, 360 und 390 px Breite; kein seitliches Scrollen |
 

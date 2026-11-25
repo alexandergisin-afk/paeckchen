@@ -7,7 +7,7 @@ Reservierungen ausblenden.
 - **Für Gäste** so einfach wie möglich: Link öffnen, Geschenk antippen, Namen eintragen, fertig.
 - **Für Eltern** alles an einem Ort: Wünsche per Produktsuche, Link oder von Hand, mehrere Listen,
   Mitbearbeiter, Statistik und Erinnerungen per Mail.
-- **Läuft als App** auf dem Startbildschirm, auch ohne Internet mit dem zuletzt geladenen Stand.
+- **Läuft als App** auf dem Startbildschirm, auch ohne Internet mit dem zuletzt geladenen Stand, und meldet neue Versionen von selbst.
 
 Die genaue Beschreibung aller Funktionen, Rollen und Abläufe steht in der **[Spezifikation](SPEC.md)**.
 

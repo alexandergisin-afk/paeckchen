@@ -733,3 +733,25 @@ test("Gruppengeschenk ganz übernommen: Eltern sehen, wer es selbst besorgt", as
   await expect(panel.getByRole("button", { name: "Reservierung von Tante Sabine aufheben" })).toBeVisible();
   await expect(panel.getByRole("button", { name: "Beitrag eintragen" })).toHaveCount(0);
 });
+
+test("Fehlt nach einem Update ein Programmteil, lädt Päckli einmal neu statt eine Fehlermeldung zu zeigen", async ({ page }) => {
+  await mockSupabase(page, { signedIn: true });
+  // Die Statistik-Seite ist beim ersten Abruf „weg“ (wie nach einer neuen Version), danach wieder da
+  let calls = 0;
+  await page.route(/assets\/StatsPage-[^/]+\.js$/, (r) => (calls++ === 0 ? r.fulfill({ status: 404, body: "" }) : r.continue()));
+  await page.goto("/#/statistik");
+  await expect(page.getByRole("heading", { name: "Statistik" })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText("Da ist etwas schiefgelaufen")).toHaveCount(0);
+  expect(calls).toBeGreaterThanOrEqual(2);
+  expect(await page.evaluate(() => sessionStorage.getItem("paeckli-neu-geladen"))).not.toBeNull();
+});
+
+test("Hinweis auf eine neue Version mit „Aktualisieren“", async ({ page }) => {
+  await mockSupabase(page, { signedIn: true });
+  await page.goto("/#/");
+  await expect(page.getByRole("button", { name: "Neue Liste" })).toBeVisible();
+  await expect(page.getByText("Neue Version von Päckli verfügbar.")).toHaveCount(0);
+  await page.evaluate(() => window.dispatchEvent(new Event("paeckli:neue-version")));
+  await expect(page.getByText("Neue Version von Päckli verfügbar.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Aktualisieren" })).toBeVisible();
+});

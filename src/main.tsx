@@ -11,6 +11,7 @@ import { forgetTextSize } from "./lib/device";
 import "./lib/install";
 import { captureShareFromLaunch } from "./lib/share";
 import { installErrorReporting } from "./lib/errorlog";
+import { setupVersionCheck } from "./lib/versionCheck";
 
 installErrorReporting();
 
@@ -58,9 +59,5 @@ createRoot(document.getElementById("root")!).render(
   ),
 );
 
-// Offline-Modus: Service Worker nur in der veröffentlichten Version (nicht beim Entwickeln)
-if ("serviceWorker" in navigator && import.meta.env.PROD) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js").catch(() => undefined);
-  });
-}
+// Offline-Modus und neue Versionen: Service Worker, Nachladen ohne Fehlermeldung, Hinweis auf Updates
+setupVersionCheck();
