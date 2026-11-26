@@ -12,7 +12,7 @@ import { SORT_LABELS, sortLists, type ListSort } from "../lib/listSort";
 import { useLongPressSort } from "../lib/useDragSort";
 import { cached, isFresh, load as loadCached, remember } from "../lib/cache";
 import { listKey, loadListPage } from "../lib/listData";
-import { daysUntil, friendlyError, toast } from "../lib/format";
+import { daysUntil, friendlyError, toast, toastError } from "../lib/format";
 import { IconChart, IconPlus } from "../components/Icons";
 import { FormSheet } from "../components/FormSheet";
 import { ListForm, toRow, type ListInput } from "../components/ListForm";
@@ -76,7 +76,7 @@ export function Dashboard() {
     if (sort !== "custom") chooseSort("custom");
     if (dragTip) { setDragTip(false); setFlag(KEYS.dragTip); }
     const { error } = await db().rpc("set_list_order", { p_ids: order });
-    if (error) { toast(friendlyError(error)); load(); return; }
+    if (error) { toastError(friendlyError(error)); load(); return; }
     toast("Reihenfolge gespeichert.");
   };
 
@@ -108,7 +108,7 @@ export function Dashboard() {
       p_event_date: r.event_date, p_cover: r.cover, p_description: r.description, p_allow_parents_buy: r.allow_parents_buy,
     });
     setBusy(false);
-    if (error) return toast(friendlyError(error));
+    if (error) return toastError(friendlyError(error));
     setCreating(false);
     toast("Liste angelegt.");
     navigate(`/liste/${(data as { id: string }).id}`);

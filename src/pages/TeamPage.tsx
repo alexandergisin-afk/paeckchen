@@ -5,7 +5,7 @@ import { db, guestLink, inviteLink } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { FollowersPanel } from "../components/FollowersPanel";
 import { LIST_SELECT, type Role, type WishList } from "../lib/types";
-import { friendlyError, toast } from "../lib/format";
+import { friendlyError, toast, toastError } from "../lib/format";
 import { IconBack, IconChat, IconMail, IconRefresh, IconUsers } from "../components/Icons";
 import { Sheet } from "../components/Sheet";
 
@@ -69,13 +69,13 @@ export function TeamPage() {
     setBusy(true);
     const { error } = await db().from("list_members").delete().eq("list_id", list.id).eq("user_id", m.user_id);
     setBusy(false);
-    if (error) return toast(friendlyError(error));
+    if (error) return toastError(friendlyError(error));
     close(); toast("Zugriff entzogen."); load();
   };
 
   const revoke = async (inv: Invite) => {
     const { error } = await db().from("invites").update({ revoked_at: new Date().toISOString() }).eq("id", inv.id);
-    if (error) return toast(friendlyError(error));
+    if (error) return toastError(friendlyError(error));
     toast("Einladung zurückgezogen."); load();
   };
 
@@ -83,8 +83,8 @@ export function TeamPage() {
     setBusy(true);
     const { error } = await db().rpc("rotate_guest_link", { p_list: list.id });
     setBusy(false);
-    if (error) return toast(friendlyError(error));
-    close(); toast("Neuer Link erstellt. Der alte funktioniert nicht mehr."); load();
+    if (error) return toastError(friendlyError(error));
+    close(); toast("Neuer Link erstellt. Der alte funktioniert nicht mehr.", "info"); load();
   };
 
   return (
@@ -197,7 +197,7 @@ function InviteFlow({ listId, listTitle, onDone }: { listId: string; listTitle: 
     setPending(res.status === "pending");
     const { data, error } = await db().rpc("create_invite", { p_list: listId });
     setBusy(false);
-    if (error) return toast(friendlyError(error));
+    if (error) return toastError(friendlyError(error));
     setLink(inviteLink(data as string));
     onDone();
   };

@@ -160,6 +160,7 @@ Abrufen fremder Seiten und Mails.
 
 ### 5.9 Allgemein
 - **F-80** Nach unten ziehen zum Aktualisieren; automatisches Aktualisieren bei Rückkehr in die App.
+- **F-85** Meldungen unten als helle Karte mit Symbol: Bestätigung (Haken), Hinweis mit „Rückgängig“ und ablaufendem Zeitbalken, Fehler (roter Rahmen, wird sofort vorgelesen). Anzeigedauer nach Textlänge (3 bis 10 s, Fehler mindestens 5 s); Finger oder Maus darauf hält sie an (außer bei „Rückgängig“); antippen oder nach unten wischen schließt sie. Lange Namen werden nach 40 Zeichen gekürzt.
 - **F-84** Neue Versionen: Päckli sucht beim Zurückkehren in die App und alle 30 Minuten nach einer neuen Version und zeigt dann „Neue Version von Päckli verfügbar · Aktualisieren“. Fehlt nach einem Update ein Programmteil, lädt die App einmal von selbst neu (höchstens einmal pro Minute) statt eine Fehlermeldung zu zeigen.
 - **F-81** Offline: Start ohne Netz mit dem zuletzt geladenen Stand; Hinweis „Offline“.
 - **F-82** Kleine Freudenmomente (Konfetti) beim Reservieren, bei komplettem Gruppengeschenk und bei komplett vergebener Liste; nicht bei „Bewegung reduzieren“.

@@ -666,7 +666,7 @@ test("Mitglieder: Schenkende mit Konto sehen, hinzufügen und Hinweis ohne Konto
   await expect(panel).toContainText("über den Link gespeichert");
   await panel.getByLabel("Konto per E-Mail hinzufügen").fill("oma@test.de");
   await panel.getByRole("button", { name: "Hinzufügen" }).click();
-  await expect(page.locator("#toast")).toContainText("Oma Gisela sieht die Liste jetzt im eigenen Konto.");
+  await expect(page.locator("#toast")).toContainText("Oma Gisela sieht die Liste jetzt im eigenen Konto");
   await panel.getByLabel("Konto per E-Mail hinzufügen").fill("neu@test.de");
   await panel.getByRole("button", { name: "Hinzufügen" }).click();
   await expect(panel).toContainText("Zu dieser Adresse gibt es noch kein Konto");
@@ -754,4 +754,49 @@ test("Hinweis auf eine neue Version mit „Aktualisieren“", async ({ page }) =
   await page.evaluate(() => window.dispatchEvent(new Event("paeckli:neue-version")));
   await expect(page.getByText("Neue Version von Päckli verfügbar.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Aktualisieren" })).toBeVisible();
+});
+
+test("Meldung mit Rückgängig: Hinweis mit Knopf und ablaufendem Zeitbalken", async ({ page }) => {
+  const calls = await mockSupabase(page, { signedIn: true });
+  await page.goto(`/#/liste/${LID}`);
+  await page.locator(".wrow-btn", { hasText: "Kinderfahrrad" }).click();
+  await page.getByRole("button", { name: "Wunsch löschen" }).click();
+  const t = page.locator("#toast");
+  await expect(t).toHaveClass(/toast-info/);
+  await expect(t.locator(".toast-text")).toContainText("„Kinderfahrrad 24 Zoll“ gelöscht");
+  await expect(t.locator(".toast-timer")).toHaveCount(1);
+  await t.getByRole("button", { name: "Rückgängig" }).click();
+  await expect(t).not.toHaveClass(/show/);
+  expect(calls.writes.some((w) => w.startsWith("DELETE wishes"))).toBe(false);
+});
+
+test("Bestätigung: mit Haken, ohne Satzpunkt", async ({ page }) => {
+  await mockSupabase(page, { signedIn: true });
+  await page.goto("/#/");
+  await page.locator(".list-row").first().focus();
+  await page.keyboard.press("Alt+ArrowDown");
+  const t = page.locator("#toast");
+  await expect(t).toHaveClass(/toast-success/);
+  await expect(t.locator(".toast-text")).toHaveText("Reihenfolge gespeichert");
+});
+
+test("Fehlermeldung ist als Fehler gekennzeichnet und wird sofort vorgelesen", async ({ page }) => {
+  await mockSupabase(page, { signedIn: true });
+  await page.route(/rpc\/set_list_order/, (r) => r.fulfill({ status: 500, json: { message: "boom" } }));
+  await page.goto("/#/");
+  await page.locator(".list-row").first().waitFor();
+  await page.locator(".list-row").first().focus();
+  await page.keyboard.press("Alt+ArrowDown");
+  const t = page.locator("#toast");
+  await expect(t).toHaveClass(/toast-error/);
+  await expect(t).toHaveAttribute("role", "alert");
+  await expect(t.locator(".toast-text")).toContainText("Das hat nicht geklappt.");
+});
+
+test("Beitrag aufheben: Meldung sagt „Beitrag“", async ({ page }) => {
+  await mockSupabase(page, { signedIn: true });
+  await page.goto(`/#/liste/${LID}`);
+  await page.locator(".wrow-btn", { hasText: "Laufrad" }).click();
+  await page.getByRole("button", { name: /Beitrag von Onkel Tobias/ }).click();
+  await expect(page.locator("#toast .toast-text")).toHaveText("Beitrag von Onkel Tobias aufgehoben");
 });

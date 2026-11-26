@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { db } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
-import { friendlyError, toast } from "../lib/format";
+import { friendlyError, toast, toastError } from "../lib/format";
 import { IconBack } from "../components/Icons";
 import { SkeletonRows } from "../components/Skeleton";
 
@@ -34,7 +34,7 @@ export function AccountsPage() {
     setBusyId(a.id);
     const { error } = await db().rpc("set_account_type", { p_user: a.id, p_type: type });
     setBusyId(null);
-    if (error) return toast(friendlyError(error));
+    if (error) return toastError(friendlyError(error));
     toast(type === "family" ? `${a.display_name} darf jetzt eigene Listen anlegen.` : `${a.display_name} hat jetzt ein Konto zum Schenken.`);
     if (a.id === session?.user.id) refreshProfile();
     load();

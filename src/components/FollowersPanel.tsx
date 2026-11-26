@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { db } from "../lib/supabase";
-import { friendlyError, toast } from "../lib/format";
+import { friendlyError, toast, toastError } from "../lib/format";
 
 interface Follower { user_id: string; display_name: string; source: "link" | "family"; created_at: string }
 
@@ -27,7 +27,7 @@ export function FollowersPanel({ listId }: { listId: string }) {
     setNote(null);
     const { data, error } = await db().rpc("add_follower", { p_list: listId, p_email: email.trim() });
     setBusy(false);
-    if (error) return toast(friendlyError(error));
+    if (error) return toastError(friendlyError(error));
     const r = data as { status: string; name?: string };
     if (r.status === "added") { toast(`${r.name} sieht die Liste jetzt im eigenen Konto.`); setEmail(""); load(); }
     else if (r.status === "member") setNote(`${r.name} bearbeitet diese Liste schon mit.`);
@@ -36,7 +36,7 @@ export function FollowersPanel({ listId }: { listId: string }) {
 
   const remove = async (f: Follower) => {
     const { error } = await db().from("list_followers").delete().eq("list_id", listId).eq("user_id", f.user_id);
-    if (error) return toast(friendlyError(error));
+    if (error) return toastError(friendlyError(error));
     toast(`${f.display_name} hat die Liste nicht mehr im Konto.`);
     load();
   };

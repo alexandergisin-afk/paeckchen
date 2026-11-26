@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { db } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { cover, type Role } from "../lib/types";
-import { friendlyError, toast } from "../lib/format";
+import { friendlyError, toast, toastError, short } from "../lib/format";
 import { IconBack } from "../components/Icons";
 import { Sheet } from "../components/Sheet";
 
@@ -23,7 +23,7 @@ export function AccessPage() {
 
   const load = useCallback(async () => {
     const { data, error } = await db().from("lists").select("id,title,cover,list_members(user_id,role,profiles(display_name))").order("created_at", { ascending: false });
-    if (error) return toast(friendlyError(error));
+    if (error) return toastError(friendlyError(error));
     setLists(data as unknown as AccessList[]);
   }, []);
   useEffect(() => { load(); }, [load]);
@@ -45,8 +45,8 @@ export function AccessPage() {
     setBusyKey(`${p.id}:${l.id}`);
     const { error } = await db().rpc("add_member", { p_list: l.id, p_user: p.id });
     setBusyKey(null);
-    if (error) return toast(friendlyError(error));
-    toast(`${p.name} kann jetzt „${l.title}“ mitbearbeiten.`);
+    if (error) return toastError(friendlyError(error));
+    toast(`${p.name} kann jetzt „${short(l.title)}“ mitbearbeiten.`);
     load();
   };
 
@@ -55,8 +55,8 @@ export function AccessPage() {
     const { error } = await db().from("list_members").delete().eq("list_id", l.id).eq("user_id", p.id);
     setBusyKey(null);
     setConfirm(null);
-    if (error) return toast(friendlyError(error));
-    toast(`${p.name} hat keinen Zugriff mehr auf „${l.title}“.`);
+    if (error) return toastError(friendlyError(error));
+    toast(`${p.name} hat keinen Zugriff mehr auf „${short(l.title)}“.`);
     load();
   };
 
@@ -70,8 +70,8 @@ export function AccessPage() {
   const leave = async (l: AccessList) => {
     const { error } = await db().from("list_members").delete().eq("list_id", l.id).eq("user_id", me);
     setConfirm(null);
-    if (error) return toast(friendlyError(error));
-    toast(`Du hast „${l.title}“ verlassen.`);
+    if (error) return toastError(friendlyError(error));
+    toast(`Du hast „${short(l.title)}“ verlassen.`);
     load();
   };
 
@@ -109,7 +109,7 @@ export function AccessPage() {
                       <span className="access-title">{l.title}<span className={`role-tag ${has ? "on" : ""}`}>{has ? "Mitbearbeiter" : "Kein Zugriff"}</span></span>
                       <span className="mini-switch">
                         <input type="checkbox" role="switch" checked={has} disabled={busyKey === `${p.id}:${l.id}`}
-                          onChange={(e) => toggle(p, l, e.target.checked)} aria-label={`${p.name} darf „${l.title}“ mitbearbeiten`} />
+                          onChange={(e) => toggle(p, l, e.target.checked)} aria-label={`${p.name} darf „${short(l.title)}“ mitbearbeiten`} />
                       </span>
                     </label>
                   </li>

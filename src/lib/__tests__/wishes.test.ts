@@ -59,3 +59,11 @@ describe("Countdown in der Übersicht", () => {
     expect(daysChip(null)).toBeNull();
   });
 });
+
+import { short } from "../format";
+describe("Lange Namen in Meldungen", () => {
+  it("kürzt nach 40 Zeichen mit …, kurze bleiben", () => {
+    expect(short("Hörspielfiguren für die Toniebox, Wissensreihe mit langem Namen")).toBe("Hörspielfiguren für die Toniebox, Wisse…");
+    expect(short("Kinderfahrrad 24 Zoll")).toBe("Kinderfahrrad 24 Zoll");
+  });
+});

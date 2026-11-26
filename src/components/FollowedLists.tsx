@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../lib/auth";
-import { friendlyError, toast } from "../lib/format";
+import { friendlyError, toast, toastError, short } from "../lib/format";
 import { cachedFollowed, loadFollowed, syncDeviceToAccount, unfollow, type FollowedList } from "../lib/followed";
 import { RemovableListRow } from "./ListRow";
 
@@ -31,9 +31,9 @@ export function FollowedLists({ always }: { always: boolean }) {
     try {
       await unfollow(l, session!.user.id);
       setLists((cur) => cur?.filter((x) => x.list_id !== l.list_id));
-      toast(`„${l.title}“ ist nicht mehr in deiner Übersicht.`);
+      toast(`„${short(l.title)}“ ist nicht mehr in deiner Übersicht.`);
     } catch (e) {
-      toast(friendlyError(e));
+      toastError(friendlyError(e));
     }
   };
 
@@ -46,7 +46,7 @@ export function FollowedLists({ always }: { always: boolean }) {
       <div className="list-rows">
         {(lists ?? []).map((l) => (
           <RemovableListRow key={l.list_id} to={`/w/${l.guest_token}`} list={l}
-            removeLabel={`„${l.title}“ aus deiner Übersicht entfernen`} onRemove={() => remove(l)} />
+            removeLabel={`„${short(l.title)}“ aus deiner Übersicht entfernen`} onRemove={() => remove(l)} />
         ))}
       </div>
     </section>

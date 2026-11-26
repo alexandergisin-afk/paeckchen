@@ -4,7 +4,7 @@ import { useAuth } from "../lib/auth";
 import { type Priority, type Wish } from "../lib/types";
 import { formatPrice, imageUrl, parsePrice, priceInput, removeImage, resizeImage, uploadImage } from "../lib/wishes";
 import type { Draft } from "../lib/linkPreview";
-import { friendlyError, toast } from "../lib/format";
+import { friendlyError, toast, toastError } from "../lib/format";
 import { IconExt } from "./Icons";
 
 /** Die drei Stufen, jeweils mit kurzer Erklärung: macht die wichtigste Entscheidung leichter. */
@@ -57,7 +57,7 @@ export function WishForm({ listId, wish, draft, formId, recipient, onSaved, onBu
       setDropImage(false);
       setPreview(URL.createObjectURL(blob));
     } catch {
-      toast("Dieses Bild konnte nicht gelesen werden. Versuch ein JPG oder PNG.");
+      toastError("Dieses Bild ließ sich nicht lesen. Versuch ein JPG oder PNG.");
     }
   };
 
@@ -66,7 +66,7 @@ export function WishForm({ listId, wish, draft, formId, recipient, onSaved, onBu
     if (!title.trim()) {
       setBasicsOpen(true);
       setTimeout(() => titleRef.current?.focus(), 0);
-      return toast("Bitte gib dem Wunsch einen Namen.");
+      return toastError("Gib dem Wunsch einen Namen.");
     }
     const cleanUrl = url.trim() ? (/^https?:\/\//i.test(url.trim()) ? url.trim() : `https://${url.trim()}`) : null;
     setBusy(true);

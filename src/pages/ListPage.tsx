@@ -6,7 +6,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { db } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { cover, type Reservation, type Wish, type WishList } from "../lib/types";
-import { countdownLabel, dateLabel, daysUntil, friendlyError, toast, toastAction, firstNameOf } from "../lib/format";
+import { countdownLabel, dateLabel, daysUntil, friendlyError, toast, toastAction, firstNameOf, toastError, short } from "../lib/format";
 import { deferred } from "../lib/undo";
 import { celebrate } from "../lib/celebrate";
 import { removeImage } from "../lib/wishes";
@@ -126,7 +126,7 @@ export function ListPage() {
 
   const toggleShow = async (on: boolean) => {
     const { error } = await db().rpc("set_show_reservations", { p_list: list.id, p_show: on });
-    if (error) return toast(friendlyError(error));
+    if (error) return toastError(friendlyError(error));
     load();
   };
 
@@ -134,7 +134,7 @@ export function ListPage() {
     setBusy(true);
     const { error } = await db().from("lists").update(toRow(v)).eq("id", list.id);
     setBusy(false);
-    if (error) return toast(friendlyError(error));
+    if (error) return toastError(friendlyError(error));
     close();
     toast("Gespeichert.");
     load();
@@ -145,7 +145,7 @@ export function ListPage() {
     const paths = wishes.map((w) => w.image_path).filter((p): p is string => !!p && !/^https?:/.test(p));
     const { error } = await db().from("lists").delete().eq("id", list.id);
     setBusy(false);
-    if (error) return toast(friendlyError(error));
+    if (error) return toastError(friendlyError(error));
     if (paths.length) await db().storage.from("wish-images").remove(paths);
     close();
     toast("Liste gelöscht.");
@@ -164,12 +164,12 @@ export function ListPage() {
     setWishes((ws) => ws.filter((x) => x.id !== w.id));
     const job = deferred(async () => {
       const { error } = await db().from("wishes").delete().eq("id", w.id);
-      if (error) toast(friendlyError(error));
+      if (error) toastError(friendlyError(error));
       else await removeImage(w.image_path);
       hidden.current.wishes.delete(w.id);
       load();
     });
-    toastAction(`„${w.title}“ gelöscht.`, "Rückgängig", () => {
+    toastAction(`„${short(w.title)}“ gelöscht.`, "Rückgängig", () => {
       job.cancel();
       hidden.current.wishes.delete(w.id);
       load();
@@ -182,11 +182,11 @@ export function ListPage() {
     setReservations((rs) => rs.filter((x) => x.id !== r.id));
     const job = deferred(async () => {
       const { error } = await db().from("reservations").delete().eq("id", r.id);
-      if (error) toast(friendlyError(error));
+      if (error) toastError(friendlyError(error));
       hidden.current.res.delete(r.id);
       load();
     });
-    toastAction(`Reservierung von ${r.guest_name} aufgehoben.`, "Rückgängig", () => {
+    toastAction(`${r.amount_cents != null ? "Beitrag" : "Reservierung"} von ${r.guest_name} aufgehoben.`, "Rückgängig", () => {
       job.cancel();
       hidden.current.res.delete(r.id);
       load();
@@ -194,10 +194,10 @@ export function ListPage() {
   };
 
   const openTransfer = async (wish: Wish, mode: "move" | "copy") => {
-    if (mode === "move" && resOf(wish).length) return toast("Reservierte Wünsche bleiben in ihrer Liste. Du kannst den Wunsch kopieren.");
+    if (mode === "move" && resOf(wish).length) return toast("Reservierte Wünsche bleiben in ihrer Liste. Du kannst den Wunsch kopieren.", "info");
     setSheet({ kind: "transfer", wish, mode, targets: null });
     const { data, error } = await db().from("lists").select("id,title,cover").is("archived_at", null).neq("id", list.id).order("created_at", { ascending: false });
-    if (error) return toast(friendlyError(error));
+    if (error) return toastError(friendlyError(error));
     setSheet({ kind: "transfer", wish, mode, targets: data as { id: string; title: string; cover: number }[] });
   };
 
@@ -220,7 +220,7 @@ export function ListPage() {
     setBusy(true);
     const { error } = await db().from("lists").update({ archived_at: on ? new Date().toISOString() : null }).eq("id", list.id);
     setBusy(false);
-    if (error) return toast(friendlyError(error));
+    if (error) return toastError(friendlyError(error));
     close();
     toast(on ? "Liste abgeschlossen. Der Gast-Link ist pausiert." : "Liste ist wieder aktiv.");
     load();
@@ -244,7 +244,7 @@ export function ListPage() {
       toast(`Neue Liste mit ${toCopy.length} ${toCopy.length === 1 ? "Wunsch" : "Wünschen"} angelegt.`);
       navigate(`/liste/${newId}`);
     } catch (e) {
-      toast(friendlyError(e));
+      toastError(friendlyError(e));
     } finally {
       setBusy(false);
     }
@@ -254,7 +254,7 @@ export function ListPage() {
     setBusy(true);
     const { data, error } = await db().rpc("contribute_for_guest", { p_wish: wish.id, p_amount_cents: amount, p_name: name });
     setBusy(false);
-    if (error) return toast(friendlyError(error));
+    if (error) return toastError(friendlyError(error));
     const r = data as { ok: boolean; error?: string; open_cents?: number };
     if (!r.ok) {
       const open = r.open_cents ?? 0;
@@ -270,7 +270,7 @@ export function ListPage() {
     setBusy(true);
     const { data, error } = await db().rpc("reserve_for_guest", { p_wish: wish.id, p_quantity: qty, p_name: name, p_parents_buy: parentsBuy });
     setBusy(false);
-    if (error) return toast(friendlyError(error));
+    if (error) return toastError(friendlyError(error));
     const r = data as { ok: boolean; error?: string; available?: number };
     if (!r.ok) {
       return toast(r.error === "already_taken" ? "Inzwischen hat jemand anderes reserviert." : r.error === "name_required" ? "Bitte gib einen Namen an." : "Das hat nicht geklappt.");

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { db } from "../lib/supabase";
 import { clearShare, firstUrl, pendingShare, rememberShare } from "../lib/share";
-import { friendlyError, toast } from "../lib/format";
+import { friendlyError, toastError } from "../lib/format";
 import { IconBack } from "../components/Icons";
 import { ListRowBody } from "../components/ListRow";
 
@@ -30,7 +30,7 @@ export function SharePage() {
     if (fromQuery) rememberShare(fromQuery);
     setUrl(fromQuery ?? pendingShare());
     db().from("lists").select("id,title,cover,archived_at").is("archived_at", null).order("created_at", { ascending: false })
-      .then(({ data, error }) => (error ? toast(friendlyError(error)) : setLists(data as Row[])));
+      .then(({ data, error }) => (error ? toastError(friendlyError(error)) : setLists(data as Row[])));
   }, [params]);
 
   const pick = (id: string) => {

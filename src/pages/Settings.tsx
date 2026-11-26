@@ -3,7 +3,7 @@ import { canPrompt, isInstalled, isIOS, onInstallChange, promptInstall } from ".
 import { appUrl, db } from "../lib/supabase";
 import { clearCache } from "../lib/cache";
 import { useAuth } from "../lib/auth";
-import { friendlyError, toast } from "../lib/format";
+import { friendlyError, toast, toastError } from "../lib/format";
 import { IconBack, IconChevron, IconHistory, IconLogout, IconMail, IconUsers } from "../components/Icons";
 import { Link } from "react-router-dom";
 
@@ -41,14 +41,14 @@ export function Settings() {
   const toggleNotify = async (on: boolean) => {
     setNotify(on);
     const { error } = await db().from("profiles").update({ notify_reservations: on ? "daily" : "off" }).eq("id", session!.user.id);
-    if (error) { setNotify(!on); return toast(friendlyError(error)); }
+    if (error) { setNotify(!on); return toastError(friendlyError(error)); }
     toast(on ? "Du bekommst morgens eine Zusammenfassung." : "Keine Mails mehr bei Reservierungen.");
   };
 
   const toggleReminders = async (on: boolean) => {
     setReminders(on);
     const { error } = await db().from("profiles").update({ reminder_emails: on }).eq("id", session!.user.id);
-    if (error) { setReminders(!on); return toast(friendlyError(error)); }
+    if (error) { setReminders(!on); return toastError(friendlyError(error)); }
     toast(on ? "Erinnerungen sind an." : "Erinnerungen sind aus.");
   };
   useEffect(() => onInstallChange(() => setInstallable(canPrompt())), []);
@@ -73,7 +73,7 @@ export function Settings() {
     const t = window.setTimeout(async () => {
       setNameState("saving");
       const { error } = await db().from("profiles").update({ display_name: n.slice(0, 60) }).eq("id", session!.user.id);
-      if (error) { setNameState("idle"); return toast(friendlyError(error)); }
+      if (error) { setNameState("idle"); return toastError(friendlyError(error)); }
       lastSaved.current = n;
       setNameState("saved");
       refreshProfile();

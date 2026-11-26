@@ -6,7 +6,7 @@ import { Link, useParams } from "react-router-dom";
 import { db } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { OCCASIONS, cover, type GuestList, type GuestWish } from "../lib/types";
-import { dateLabel, friendlyError, toast } from "../lib/format";
+import { dateLabel, friendlyError, toast, toastError } from "../lib/format";
 import { formatPrice } from "../lib/wishes";
 import { euroShort } from "../lib/gift";
 import { celebrate } from "../lib/celebrate";
@@ -148,7 +148,7 @@ export function GuestPage() {
     setBusy(true);
     const { data, error } = await db().rpc("reserve_wish", { p_token: token, p_wish: wish.id, p_quantity: qty, p_name: name, p_parents_buy: parentsBuy });
     setBusy(false);
-    if (error) return toast(friendlyError(error));
+    if (error) return toastError(friendlyError(error));
     const r = data as { ok: boolean; code?: string; error?: string; available?: number };
     if (r.ok && r.code) {
       addCode(r.code);
@@ -158,8 +158,8 @@ export function GuestPage() {
       celebrate("small");
     } else if (r.error === "already_taken") setSheet({ kind: "taken", available: r.available ?? 0 });
     else if (r.error === "group_gift_started") setSheet({ kind: "giftInfo", text: "Inzwischen hat jemand etwas zu diesem Geschenk beigesteuert. Ganz übernehmen geht deshalb nicht mehr, aber du kannst gern mitschenken." });
-    else if (r.error === "name_required") return toast("Bitte gib deinen Namen an.");
-    else if (r.error === "rate_limited") return toast("Gerade wurde auf dieser Liste sehr viel reserviert. Bitte versuch es in einer Minute noch einmal.");
+    else if (r.error === "name_required") return toastError("Gib deinen Namen an.");
+    else if (r.error === "rate_limited") return toastError("Gerade wurde auf dieser Liste sehr viel reserviert. Versuch es in einer Minute noch einmal.");
     else setState("invalid");
     load();
   };
@@ -168,7 +168,7 @@ export function GuestPage() {
     setBusy(true);
     const { data, error } = await db().rpc("contribute", { p_token: token, p_wish: wish.id, p_amount_cents: amount, p_name: name });
     setBusy(false);
-    if (error) return toast(friendlyError(error));
+    if (error) return toastError(friendlyError(error));
     const r = data as { ok: boolean; code?: string; error?: string; open_cents?: number };
     if (r.ok && r.code) {
       addCode(r.code);
@@ -181,9 +181,9 @@ export function GuestPage() {
     else if (r.error === "take_whole") setSheet({ kind: "reserve", wish, whole: true });
     else if (r.error === "already_taken") setSheet({ kind: "giftInfo", text: "Inzwischen hat jemand dieses Geschenk ganz übernommen und besorgt es selbst." });
     else if (r.error === "fully_funded") setSheet({ kind: "giftInfo", text: "Gerade ist der letzte Betrag zusammengekommen. Das Geschenk ist komplett, danke trotzdem!" });
-    else if (r.error === "too_little") return toast(`Bitte mindestens ${euroShort(Math.min(500, r.open_cents ?? 500))}.`);
-    else if (r.error === "rate_limited") return toast("Gerade ist hier sehr viel los. Bitte versuch es in einer Minute noch einmal.");
-    else if (r.error === "name_required") return toast("Bitte gib deinen Namen an.");
+    else if (r.error === "too_little") return toastError(`Mindestens ${euroShort(Math.min(500, r.open_cents ?? 500))}.`);
+    else if (r.error === "rate_limited") return toastError("Gerade ist hier sehr viel los. Versuch es in einer Minute noch einmal.");
+    else if (r.error === "name_required") return toastError("Gib deinen Namen an.");
     else setState("invalid");
     load();
   };
@@ -195,8 +195,8 @@ export function GuestPage() {
       ? await db().rpc("cancel_my_reservation", { p_id: m.id })
       : await db().rpc("cancel_reservation", { p_code: m.code });
     setBusy(false);
-    if (error) return toast(friendlyError(error));
-    if ((data as { error?: string } | null)?.error === "rate_limited") return toast("Zu viele Versuche. Bitte warte ein paar Minuten.");
+    if (error) return toastError(friendlyError(error));
+    if ((data as { error?: string } | null)?.error === "rate_limited") return toastError("Zu viele Versuche. Warte ein paar Minuten.");
     if (m.code) removeCode(m.code);
     close();
     toast("Reservierung aufgehoben.");

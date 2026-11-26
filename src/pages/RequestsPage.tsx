@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { db } from "../lib/supabase";
-import { friendlyError, toast } from "../lib/format";
+import { friendlyError, toast, toastError } from "../lib/format";
 import { IconBack } from "../components/Icons";
 
 interface Request { id: string; email: string; created_at: string; invited_by_name: string | null; list_title: string | null; list_id?: string | null }
@@ -41,7 +41,7 @@ export function RequestsPage() {
     const { data, error } = await db().functions.invoke("zugang", { body: { action: "decide", id: r.id, approve, type: typeOf(r), lists: approve ? assignedOf(r) : [] } });
     setBusyId(null);
     const res = data as { ok?: boolean; mail_sent?: boolean } | null;
-    if (error || !res?.ok) return toast("Das hat gerade nicht geklappt. Bitte versuch es noch einmal.");
+    if (error || !res?.ok) return toastError("Das hat gerade nicht geklappt. Versuch es noch einmal.");
     toast(approve
       ? res.mail_sent ? `${r.email} ist freigegeben und bekommt jetzt die Mail mit dem Code.` : `${r.email} ist freigegeben. Die Mail konnte nicht verschickt werden, die Person kann sich aber jetzt selbst anmelden.`
       : `Anfrage von ${r.email} abgelehnt.`);

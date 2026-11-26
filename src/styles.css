@@ -205,9 +205,6 @@ dialog.sheet[open]{animation:rise .28s cubic-bezier(.2,.8,.2,1); display: flex; 
 .gens ul{margin:0;padding-left:1.1em;display:grid;gap:10px}
 @media (max-width:760px){.hero{grid-template-columns:1fr;gap:28px}.steps,.gens{grid-template-columns:1fr}}
 
-#toast{position:fixed;left:50%;bottom:calc(86px + env(safe-area-inset-bottom,0px));transform:translate(-50%,16px);opacity:0;pointer-events:none;background:var(--ink);color:var(--bg);padding:12px 20px;border-radius:999px;display:flex;gap:14px;align-items:center;z-index:30;transition:opacity .25s,transform .25s;font-weight:700; width: max-content; max-width: min(520px, calc(100vw - 32px))}
-#toast.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
-#toast button{background:none;border:0;color:var(--ribbon-soft);font:inherit;cursor:pointer;text-decoration:underline;padding:4px; flex: none}
 
 @media (max-width:520px){
   .wrow{grid-template-columns:70px 1fr auto;gap:10px}
@@ -785,8 +782,6 @@ html, body { overscroll-behavior-y: contain; }
 .start-secondary { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-weight: 700; font-size: .95rem; }
 .start-secondary svg { width: 18px; height: 18px; }
 .settings-more summary::before { content: none; display: none; }
-/* Meldungen unten: so breit wie nötig, höchstens Bildschirmbreite (vorher auf halbe Breite begrenzt) */
-#toast span { min-width: 0; }
 
 /* ===== Dunkelmodus: Farben der neueren Bausteine an den Modus koppeln ===== */
 /* Rosa Knöpfe und Zähler: weiße Schrift auch im Dunkeln gut lesbar (5,9:1 statt 3,2:1) */
@@ -942,3 +937,35 @@ html, body { overscroll-behavior-y: contain; }
 /* Hinweis auf eine neue Version */
 .update-banner { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; padding: 8px 16px; background: var(--plum); color: var(--plum-ink); font-weight: 700; font-size: .92rem; }
 .update-banner .btn { background: var(--surface); color: var(--plum); }
+
+/* =====================================================================
+   Meldungen unten (Toast): helle Karte mit Symbol; Erfolg, Hinweis, Fehler
+   ===================================================================== */
+#toast { position: fixed; left: 16px; right: 16px; bottom: calc(86px + env(safe-area-inset-bottom, 0px)); z-index: 30;
+  max-width: 520px; margin: 0 auto; border-radius: 16px; overflow: hidden;
+  background: var(--surface); color: var(--ink); border: 1px solid var(--line);
+  box-shadow: 0 10px 30px rgba(35, 26, 49, .16), 0 2px 6px rgba(35, 26, 49, .08);
+  opacity: 0; transform: translateY(16px); pointer-events: none; transition: opacity .2s, transform .25s cubic-bezier(.2, .8, .2, 1);
+  touch-action: pan-x; cursor: default; }
+#toast.show { opacity: 1; transform: translateY(0); pointer-events: auto; }
+#toast:empty { display: none; }
+.toast-body { display: flex; flex-wrap: nowrap; align-items: flex-start; gap: 8px 10px; padding: 10px 12px; }
+/* langer Text: Knopf rückt unter den Text */
+.toast-body.stack { flex-wrap: wrap; }
+.toast-body.stack .toast-text { flex-basis: calc(100% - 40px); }
+.toast-icon { flex: none; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; }
+.toast-text { flex: 1 1 auto; min-width: 0; padding-top: 5px; font-size: .95rem; line-height: 1.4; overflow-wrap: anywhere; }
+.toast-action { flex: none; margin-left: auto; align-self: center; min-height: 36px; padding: 6px 14px; border: 0; border-radius: 999px;
+  background: var(--plum-soft); color: var(--plum); font: 700 .9rem var(--font-ui); cursor: pointer; }
+.toast-action:focus-visible { outline: 3px solid var(--plum); outline-offset: 2px; }
+.toast-success .toast-icon { background: var(--mint-soft); color: var(--mint); }
+.toast-info .toast-icon { background: var(--plum-soft); color: var(--plum); }
+#toast.toast-error { border-color: var(--danger); }
+.toast-error .toast-icon { background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--danger); }
+/* Zeitbalken bei „Rückgängig“: so lange lässt sich noch rückgängig machen */
+.toast-timer { display: block; height: 3px; background: var(--plum-soft); }
+.toast-timer > span { display: block; height: 100%; background: var(--plum); transform-origin: left; animation: toast-timer linear forwards; }
+@keyframes toast-timer { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+@media (prefers-reduced-motion: reduce) { #toast { transition: opacity .15s; transform: none; } #toast.show { transform: none; } .toast-timer { display: none; } }
+/* Seiten ohne untere Leiste: Meldung weiter unten */
+body:not(:has(.bottom-bar)) #toast { bottom: calc(20px + env(safe-area-inset-bottom, 0px)); }
